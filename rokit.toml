@@ -1,0 +1,4 @@
+# Optional: pins the Rojo version if you install tools with Rokit (https://github.com/rojo-rbx/rokit).
+# Beginners can ignore this file and use the Rojo VS Code extension instead.
+[tools]
+rojo = "rojo-rbx/rojo@7.4.4"
