@@ -202,13 +202,32 @@ function ColonyService:Create(player: Player)
 		nextId = 0,
 		gridDirty = true,
 	}
+	local SaveService = services.SaveService
+	local data, canSave = SaveService:Load(player)
+	if not player.Parent then
+		return -- left while loading
+	end
+	colony.canSave = canSave
 	colonies[player] = colony
 
-	services.BuildingService:PlaceStarting(colony)
+	if data then
+		SaveService:Restore(colony, data)
+	else
+		services.BuildingService:PlaceStarting(colony)
+		services.VillagerService:SpawnStarting(colony)
+	end
 	services.ResourceNodeService:SpawnInitial(colony)
-	services.VillagerService:SpawnStarting(colony)
 
-	self:Notify(colony, "Your people have landed. Build a farm and a woodcutter to get started!", "good")
+	if data then
+		self:Notify(colony, "Welcome back! Your village is as you left it (day " .. colony.day .. ").", "good")
+	else
+		self:Notify(colony, "Your people have landed. Build a farm and a woodcutter to get started!", "good")
+	end
+	if not canSave then
+		task.delay(4, function()
+			self:Notify(colony, SaveService:WhyOff(), "bad")
+		end)
+	end
 	self:Sync(colony)
 end
 
@@ -224,6 +243,7 @@ function ColonyService:Start()
 	Players.PlayerRemoving:Connect(function(player)
 		local colony = colonies[player]
 		if colony then
+			services.SaveService:Save(colony)
 			services.VillagerService:Cleanup(colony)
 		end
 		colonies[player] = nil

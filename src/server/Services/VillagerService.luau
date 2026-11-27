@@ -102,13 +102,18 @@ local function makeModel(colony, v, groundPos: Vector3)
 	updateLabel(colony, v)
 end
 
+-- Redraws the name tag (after a name or age is restored from a save).
+function VillagerService:RefreshLabel(colony, v)
+	updateLabel(colony, v)
+end
+
 -- Adding / removing ---------------------------------------------------------
 
-function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?)
+function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?, name: string?)
 	local id = services.ColonyService:NewId(colony)
 	local v = {
 		id = id,
-		name = Config.Names[rng:NextInteger(1, #Config.Names)],
+		name = name or Config.Names[rng:NextInteger(1, #Config.Names)],
 		isChild = isChild,
 		age = 0,
 		job = nil,

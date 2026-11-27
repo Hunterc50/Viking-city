@@ -88,6 +88,8 @@ Config.Nodes = {
 }
 Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
 
+Config.AutosaveSeconds = 60 -- how often villages are saved
+
 -- Buildings ---------------------------------------------------------------
 --[[
 	Size      = footprint in cells {x, z} before rotation
@@ -2793,13 +2795,32 @@ function ColonyService:Create(player: Player)
 		nextId = 0,
 		gridDirty = true,
 	}
+	local SaveService = services.SaveService
+	local data, canSave = SaveService:Load(player)
+	if not player.Parent then
+		return -- left while loading
+	end
+	colony.canSave = canSave
 	colonies[player] = colony
 
-	services.BuildingService:PlaceStarting(colony)
+	if data then
+		SaveService:Restore(colony, data)
+	else
+		services.BuildingService:PlaceStarting(colony)
+		services.VillagerService:SpawnStarting(colony)
+	end
 	services.ResourceNodeService:SpawnInitial(colony)
-	services.VillagerService:SpawnStarting(colony)
 
-	self:Notify(colony, "Your people have landed. Build a farm and a woodcutter to get started!", "good")
+	if data then
+		self:Notify(colony, "Welcome back! Your village is as you left it (day " .. colony.day .. ").", "good")
+	else
+		self:Notify(colony, "Your people have landed. Build a farm and a woodcutter to get started!", "good")
+	end
+	if not canSave then
+		task.delay(4, function()
+			self:Notify(colony, SaveService:WhyOff(), "bad")
+		end)
+	end
 	self:Sync(colony)
 end
 
@@ -2815,6 +2836,7 @@ function ColonyService:Start()
 	Players.PlayerRemoving:Connect(function(player)
 		local colony = colonies[player]
 		if colony then
+			services.SaveService:Save(colony)
 			services.VillagerService:Cleanup(colony)
 		end
 		colonies[player] = nil
@@ -3838,6 +3860,206 @@ return ResourceNodeService
         </Item>
         <Item class="ModuleScript" referent="19">
           <Properties>
+            <string name="Name">SaveService</string>
+            <string name="Source"><![CDATA[--[[
+	SaveService
+	Saves each player's village with a DataStore, so it's still there next
+	time: buildings (type and spot), resources, research, villagers (name,
+	age, child or adult), happiness and the day count.
+
+	Saves every Config.AutosaveSeconds, when the player leaves, and when the
+	server shuts down. Loading happens in ColonyService:Create.
+
+	DataStores only work in a PUBLISHED place with API access turned on
+	(Studio: File > Publish to Roblox, then Game Settings > Security >
+	"Enable Studio Access to API Services"). Without that, the game runs
+	normally and simply tells the player that saving is off.
+
+	If loading fails (DataStores down), saving is switched off for that
+	player for the session, so a fresh village can never overwrite a good save.
+]]
+
+local DataStoreService = game:GetService("DataStoreService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local SaveService = {}
+
+local services
+local store = nil
+local storeError = nil
+local SAVE_VERSION = 1
+
+function SaveService:Init(allServices)
+	services = allServices
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore("VikingCity_Villages_v1")
+	end)
+	if ok then
+		store = result
+	else
+		storeError = tostring(result)
+	end
+end
+
+local function keyFor(player: Player): string
+	return "village_" .. player.UserId
+end
+
+-- Loads a player's saved village. Returns data or nil, and whether saving is safe.
+function SaveService:Load(player: Player): (any, boolean)
+	if not store then
+		return nil, false
+	end
+	local data
+	local ok, err
+	for attempt = 1, 3 do
+		ok, err = pcall(function()
+			data = store:GetAsync(keyFor(player))
+		end)
+		if ok then
+			break
+		end
+		task.wait(attempt)
+	end
+	if not ok then
+		warn("[SaveService] couldn't load " .. player.Name .. ": " .. tostring(err))
+		storeError = tostring(err)
+		return nil, false
+	end
+	if type(data) ~= "table" or data.version ~= SAVE_VERSION then
+		return nil, true
+	end
+	return data, true
+end
+
+-- Turns a colony into plain data a DataStore can hold.
+function SaveService:Snapshot(colony)
+	local buildings = {}
+	for _, b in colony.buildings do
+		table.insert(buildings, { t = b.type, x = b.cx, z = b.cz, r = b.rot })
+	end
+	local villagers = {}
+	for _, v in colony.villagers do
+		table.insert(villagers, { n = v.name, c = v.isChild, a = v.age })
+	end
+	local resources = {}
+	for name, amount in colony.resources do
+		resources[name] = math.floor(amount)
+	end
+	local tech = {}
+	for id in colony.tech do
+		table.insert(tech, id)
+	end
+	return {
+		version = SAVE_VERSION,
+		savedAt = os.time(),
+		resources = resources,
+		tech = tech,
+		buildings = buildings,
+		villagers = villagers,
+		happiness = colony.happiness,
+		day = colony.day,
+	}
+end
+
+-- Rebuilds a colony from saved data (called on a fresh, empty colony).
+function SaveService:Restore(colony, data)
+	for name, amount in data.resources or {} do
+		if type(amount) == "number" then
+			colony.resources[name] = amount
+		end
+	end
+	for _, id in data.tech or {} do
+		if Config.Tech[id] then
+			colony.tech[id] = true
+		end
+	end
+	colony.happiness = tonumber(data.happiness) or colony.happiness
+	colony.day = tonumber(data.day) or colony.day
+
+	local placed = 0
+	for _, b in data.buildings or {} do
+		if Config.Buildings[b.t] then
+			local ok, err = pcall(function()
+				services.BuildingService:Create(colony, b.t, b.x, b.z, b.r)
+			end)
+			if ok then
+				placed += 1
+			else
+				warn("[SaveService] skipped a " .. tostring(b.t) .. ": " .. tostring(err))
+			end
+		end
+	end
+	if placed == 0 then
+		services.BuildingService:PlaceStarting(colony)
+	end
+
+	local villagers = data.villagers or {}
+	for _, saved in villagers do
+		local v = services.VillagerService:Add(colony, saved.c == true, nil, type(saved.n) == "string" and saved.n or nil)
+		v.age = tonumber(saved.a) or 0
+		services.VillagerService:RefreshLabel(colony, v)
+	end
+	if #villagers == 0 then
+		services.VillagerService:SpawnStarting(colony)
+	end
+	task.defer(function()
+		services.ToolService:ApplyArmor(colony.player)
+	end)
+end
+
+function SaveService:Save(colony)
+	if not store or not colony.canSave then
+		return
+	end
+	local data = self:Snapshot(colony)
+	local key = keyFor(colony.player)
+	task.spawn(function()
+		local ok, err = pcall(function()
+			store:SetAsync(key, data)
+		end)
+		if not ok then
+			warn("[SaveService] save failed: " .. tostring(err))
+		end
+	end)
+end
+
+-- Explains in the message feed why saving is off.
+function SaveService:WhyOff(): string
+	local e = (storeError or ""):lower()
+	if e:find("403") or e:find("publish") or e:find("api") then
+		return "Saving is off: publish the game and turn on API access in Game Settings > Security (see README)."
+	end
+	return "Saving is off right now (DataStores unavailable). Your village won't be saved this time."
+end
+
+function SaveService:Start()
+	game:BindToClose(function()
+		for _, colony in services.ColonyService:All() do
+			if colony.canSave then
+				pcall(function()
+					store:SetAsync(keyFor(colony.player), self:Snapshot(colony))
+				end)
+			end
+		end
+	end)
+
+	while true do
+		task.wait(Config.AutosaveSeconds)
+		for _, colony in services.ColonyService:All() do
+			self:Save(colony)
+		end
+	end
+end
+
+return SaveService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="20">
+          <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
 	SeasonService
@@ -4027,7 +4249,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">TechService</string>
             <string name="Source"><![CDATA[--[[
@@ -4114,7 +4336,7 @@ return TechService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -4286,7 +4508,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -4393,13 +4615,18 @@ local function makeModel(colony, v, groundPos: Vector3)
 	updateLabel(colony, v)
 end
 
+-- Redraws the name tag (after a name or age is restored from a save).
+function VillagerService:RefreshLabel(colony, v)
+	updateLabel(colony, v)
+end
+
 -- Adding / removing ---------------------------------------------------------
 
-function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?)
+function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?, name: string?)
 	local id = services.ColonyService:NewId(colony)
 	local v = {
 		id = id,
-		name = Config.Names[rng:NextInteger(1, #Config.Names)],
+		name = name or Config.Names[rng:NextInteger(1, #Config.Names)],
 		isChild = isChild,
 		age = 0,
 		job = nil,
@@ -4675,7 +4902,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -4840,7 +5067,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -5540,15 +5767,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="25">
+  <Item class="StarterPlayer" referent="26">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="26">
+    <Item class="StarterPlayerScripts" referent="27">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="27">
+      <Item class="LocalScript" referent="28">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -5581,11 +5808,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="28">
+        <Item class="Folder" referent="29">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="29">
+          <Item class="ModuleScript" referent="30">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -5695,7 +5922,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="30">
+          <Item class="ModuleScript" referent="31">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -5753,7 +5980,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="31">
+          <Item class="ModuleScript" referent="32">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -6031,7 +6258,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="32">
+          <Item class="ModuleScript" referent="33">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -6121,7 +6348,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="33">
+          <Item class="ModuleScript" referent="34">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -6721,7 +6948,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="34">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -6802,7 +7029,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -6893,7 +7120,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -6945,7 +7172,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -7267,7 +7494,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="38">
+          <Item class="ModuleScript" referent="39">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -7358,12 +7585,12 @@ return ToolController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="39">
+  <Item class="Workspace" referent="40">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="40">
+    <Item class="Part" referent="41">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -7384,13 +7611,13 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="41">
+    <Item class="BoolValue" referent="42">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="42">
+    <Item class="SpawnLocation" referent="43">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -7410,7 +7637,7 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="43">
+    <Item class="Part" referent="44">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -7427,13 +7654,13 @@ return ToolController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="44">
+      <Item class="SurfaceGui" referent="45">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="45">
+        <Item class="TextLabel" referent="46">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -7465,13 +7692,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="46">
+      <Item class="SurfaceGui" referent="47">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="47">
+        <Item class="TextLabel" referent="48">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

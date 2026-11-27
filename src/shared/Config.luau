@@ -59,6 +59,8 @@ Config.Nodes = {
 }
 Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
 
+Config.AutosaveSeconds = 60 -- how often villages are saved
+
 -- Buildings ---------------------------------------------------------------
 --[[
 	Size      = footprint in cells {x, z} before rotation

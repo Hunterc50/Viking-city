@@ -78,6 +78,23 @@ Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Ea
 
 ---
 
+## Saving your village
+
+Your village (buildings, resources, research and villagers) saves automatically every minute and when you leave. Next time you play, it's all back.
+
+Roblox only allows saving in a game that is **published** with **API access** turned on. Do this once:
+
+1. In Studio, click **File > Publish to Roblox**. Pick **Create new game**, give it a name (like "Viking City"), and click **Create**. It can stay private.
+2. Click **Game Settings** (Home tab, or File > Game Settings in newer Studio).
+3. Click **Security**, then turn on **Enable Studio Access to API Services**. Click **Save**.
+4. Press Play. You'll see "Welcome back!" the second time you play.
+
+Until you do this, the game still works. It just says "Saving is off" in the message feed and starts fresh each time.
+
+From then on, after you download a new `VikingCity.rbxl`, open it and use **File > Publish to Roblox** again, picking your existing game, so it keeps using the same saves.
+
+---
+
 ## Editing the world and models yourself (no coding)
 
 Normally the valley and every building are made by code when you press Play, so in edit mode you only see a flat grey plate. One command turns them into real models you can click on, move, recolour and save.
@@ -182,6 +199,7 @@ src/
       BuildingService.luau      validates and places / demolishes buildings
       ResourceNodeService.luau  trees, rocks, bushes, hand gathering, regrowth
       VillagerService.luau      jobs, food, happiness, births, immigrants, walking
+      SaveService.luau          saves and loads each village with a DataStore
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau    loads every controller in Controllers/
     Controllers/
@@ -199,7 +217,6 @@ docs/DESIGN.md          the full game design and roadmap
 
 ## Known limits of this first version
 
-- Progress isn't saved yet (coming with DataStores in Phase 1).
 - Buildings appear instantly; construction time comes later.
 - Models are made from parts in code; edit them or swap in real meshes (see "Editing the world and models yourself").
 - The rival village layout, villagers and guards are still made by code each time (its buildings do use your edited models).
