@@ -19,7 +19,7 @@ local controllers
 local player = Players.LocalPlayer
 
 local ACCENT = Color3.fromRGB(214, 170, 92)
-local PANEL = Color3.fromRGB(34, 28, 22)
+local PANEL = Color3.fromRGB(20, 20, 22)
 
 local function new(className, props)
 	local inst = Instance.new(className)

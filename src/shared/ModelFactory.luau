@@ -458,6 +458,40 @@ local function campfire(model, pos: Vector3)
 end
 ModelFactory.campfire = campfire
 
+-- A tall iron fire basket on three legs, for halls and gates. Its parts are
+-- marked KeepWithMesh, so they stay when a mesh replaces the building.
+local function brazier(model, pos: Vector3, height: number?)
+	local h = height or 4.2
+	local parts = {}
+	for i = 1, 3 do
+		local a = i / 3 * math.pi * 2
+		local foot = pos + V3(math.cos(a) * 1.1, 0, math.sin(a) * 1.1)
+		local top = pos + V3(0, h, 0)
+		local mid = (foot + top) / 2
+		table.insert(parts, addPart(model, { Name = "BrazierLeg", Size = V3(0.22, (top - foot).Magnitude, 0.22), CFrame = CFrame.lookAt(mid, top) * CFrame.Angles(math.rad(90), 0, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	end
+	table.insert(parts, addPart(model, { Name = "BrazierBowl", Shape = Enum.PartType.Cylinder, Size = V3(0.7, 2.2, 2.2), CFrame = CFrame.new(pos + V3(0, h + 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(46, 44, 44), Material = Enum.Material.Metal, CanCollide = false }))
+	local coals = addPart(model, { Name = "BrazierCoals", Size = V3(1.5, 0.3, 1.5), Position = pos + V3(0, h + 0.6, 0), Color = Color3.fromRGB(255, 110, 40), Material = Enum.Material.Neon, CanCollide = false })
+	table.insert(parts, coals)
+	local fire = Instance.new("Fire")
+	fire.Size = 3.5
+	fire.Heat = 9
+	fire.Color = Color3.fromRGB(255, 140, 50)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fire.Parent = coals
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 70)
+	light.Range = 26
+	light.Brightness = 2.2
+	light.Shadows = true
+	light.Parent = coals
+	for _, part in parts do
+		part:SetAttribute("KeepWithMesh", true)
+	end
+	return coals
+end
+ModelFactory.brazier = brazier
+
 function Builders.Longhouse(model, w, d)
 	hall(model, CFrame.new(), { w = w - 4, d = d - 5, wallH = 7, roof = "thatch", smoke = true })
 	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 1.2))
@@ -833,8 +867,18 @@ function Builders.GreatHall(model, w, d)
 		post(model, V3(x, 0, -d / 2 + 2), 12, 1.1, Colors.DarkWood)
 		addPart(model, { Name = "Carving", Size = V3(1.4, 1.4, 1.4), Position = V3(x, 12.4, -d / 2 + 2), Color = Color3.fromRGB(170, 130, 50), Material = Enum.Material.Wood })
 	end
-	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 2))
-	campfire(model, V3(w / 2 - 4, 0, -d / 2 + 2))
+	brazier(model, V3(-9, 0, -d / 2 + 1.5), 4.6)
+	brazier(model, V3(9, 0, -d / 2 + 1.5), 4.6)
+	-- banners on poles beside the door
+	for _, x in { -12.5, 12.5 } do
+		local pole = addPart(model, { Name = "BannerPole", Size = V3(0.35, 10, 0.35), Position = V3(x, 5, -d / 2 + 1.5), Color = Colors.DarkWood, Material = Enum.Material.Wood })
+		local bar = addPart(model, { Name = "BannerPole", Size = V3(2.6, 0.25, 0.25), Position = V3(x, 9.6, -d / 2 + 1.5), Color = Colors.DarkWood, Material = Enum.Material.Wood, CanCollide = false })
+		local cloth = addPart(model, { Name = "BannerCloth", Size = V3(2.3, 4.6, 0.1), Position = V3(x, 7.2, -d / 2 + 1.4), Color = Color3.fromRGB(122, 30, 30), Material = Enum.Material.Fabric, CanCollide = false })
+		local stripe = addPart(model, { Name = "BannerCloth", Size = V3(0.5, 4.6, 0.12), Position = V3(x, 7.2, -d / 2 + 1.38), Color = Color3.fromRGB(196, 160, 80), Material = Enum.Material.Fabric, CanCollide = false })
+		for _, part in { pole, bar, cloth, stripe } do
+			part:SetAttribute("KeepWithMesh", true)
+		end
+	end
 	-- red and gold banners along the long wall
 	for i = -2, 2 do
 		addPart(model, { Name = "Banner", Size = V3(1.8, 3.4, 0.12), Position = V3(i * 6, 6.5, -(d - 6) / 2 - 0.5), Color = i % 2 == 0 and Color3.fromRGB(150, 40, 36) or Color3.fromRGB(190, 150, 60), Material = Enum.Material.Fabric, CanCollide = false })
@@ -2064,6 +2108,7 @@ for slot in SettlerRig do
 	slotSet[slot] = true
 end
 
+local dressMaterials
 local function assetsFolder(): Instance?
 	local folder = ReplicatedStorage:FindFirstChild("Assets")
 	local pack = workspace:FindFirstChild("VikingAssets")
@@ -2107,6 +2152,36 @@ local function findInPack(pack: Instance, name: string): Instance?
 	return pack:FindFirstChild(name) or pack:FindFirstChild(name .. "_Node") or pack:FindFirstChild(name, true) or pack:FindFirstChild(name .. "_Node", true)
 end
 
+-- Mesh pieces named Mat_<Material>_<rrggbb> (tools/meshgen/materials.py) get
+-- Roblox's own textured material in that shade: wood grain, rough slate,
+-- woven fabric. The flat palette texture they were imported with goes.
+local MESH_MATERIALS = {
+	Wood = Enum.Material.Wood,
+	Stone = Enum.Material.Slate,
+	Thatch = Enum.Material.Fabric,
+	Leaves = Enum.Material.LeafyGrass,
+	Cloth = Enum.Material.Fabric,
+	Metal = Enum.Material.Metal,
+}
+dressMaterials = function(root: Instance)
+	for _, d in root:GetDescendants() do
+		if d:IsA("MeshPart") then
+			local kind, hex = string.match(d.Name, "^Mat_(%a+)_(%x%x%x%x%x%x)")
+			local material = kind and MESH_MATERIALS[kind]
+			if material then
+				d.Material = material
+				d.Color = Color3.fromHex(hex)
+				pcall(function()
+					d.TextureID = ""
+				end)
+				if kind == "Metal" then
+					d.Reflectance = 0.05
+				end
+			end
+		end
+	end
+end
+
 local function customAsset(name: string): Instance?
 	local folder = assetsFolder() -- always, so an imported pack never sits in the world
 	local workshop = workspace:FindFirstChild("ModelWorkshop")
@@ -2131,6 +2206,7 @@ local function customAsset(name: string): Instance?
 		return nil
 	end
 	local clone = item:Clone()
+	dressMaterials(clone)
 	-- never bring along another slot that the importer nested inside this one
 	if fromPack then
 		for _, d in clone:GetDescendants() do
@@ -2277,7 +2353,7 @@ end
 local function keepGlow(custom: Model, reference: Model)
 	for _, d in reference:GetDescendants() do
 		-- crop rows stay the game's own too, so fields still change with the seasons
-		if d:IsA("BasePart") and (d.Name == "Barley" or d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
+		if d:IsA("BasePart") and (d.Name == "Barley" or d:GetAttribute("KeepWithMesh") or d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
 			d.Parent = custom
 		end
 	end

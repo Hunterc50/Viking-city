@@ -481,11 +481,11 @@ local function scatterScenery()
 			return false
 		end
 		local model
-		local s = rng:NextNumber(1, 2.1) * (1 - hit.Position.Y / 400) -- smaller trees higher up
+		local s = rng:NextNumber(1.15, 2.4) * (1 - hit.Position.Y / 400) -- smaller trees higher up
 		local r = rng:NextNumber()
-		if r < 0.38 then
+		if r < 0.42 then
 			model = ModelFactory.pine(rng, s)
-		elseif r < 0.8 then
+		elseif r < 0.89 then
 			model = ModelFactory.spruce(rng, s * 1.1)
 		else
 			model = ModelFactory.birch(rng, s * 0.8)
@@ -498,7 +498,7 @@ local function scatterScenery()
 	-- Forests grow in patches: noise decides where the woods are dense.
 	local planted, tries = 0, 0
 	local budget = os.clock()
-	while planted < 950 and tries < 9000 do
+	while planted < 1300 and tries < 12000 do
 		tries += 1
 		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(MIN_Z + 40, 640)
 		local density = fbm(x, z, 1 / 220, 3, 29) + 0.15
@@ -714,31 +714,34 @@ local function dayNightCycle()
 		end
 		local golden = math.clamp(1 - math.abs(clock - 18) / 2, 0, 1) + math.clamp(1 - math.abs(clock - 7) / 1.5, 0, 1)
 		local season = workspace:GetAttribute("Season")
-		local seasonTint = Color3.fromRGB(255, 244, 228)
+		-- a cold northern light all year, warmer only in autumn
+		local seasonTint = Color3.fromRGB(238, 244, 255)
 		if season == "Winter" then
-			seasonTint = Color3.fromRGB(222, 234, 255)
+			seasonTint = Color3.fromRGB(212, 228, 255)
 		elseif season == "Autumn" then
-			seasonTint = Color3.fromRGB(255, 230, 196)
+			seasonTint = Color3.fromRGB(252, 238, 220)
 		elseif season == "Spring" then
-			seasonTint = Color3.fromRGB(246, 255, 236)
+			seasonTint = Color3.fromRGB(234, 246, 246)
 		end
+		local winter = season == "Winter" and 1 or 0
 		-- weather (WeatherService): fog thickens the air, storms darken it
 		local fog = workspace:GetAttribute("FogLevel") or 0
 		local storm = workspace:GetAttribute("StormLevel") or 0
 		golden *= 1 - math.max(fog, storm) * 0.8
 		if grade then
-			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night):Lerp(Color3.fromRGB(196, 206, 214), storm * 0.5)
-			grade.Brightness = 0.02 + night * 0.05 - storm * 0.06
-			grade.Saturation = 0.08 - storm * 0.2 - fog * 0.12
+			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.35):Lerp(Color3.fromRGB(170, 190, 255), night):Lerp(Color3.fromRGB(196, 206, 214), storm * 0.5)
+			grade.Brightness = 0.01 + night * 0.04 - storm * 0.06
+			grade.Saturation = -0.1 - winter * 0.06 - storm * 0.2 - fog * 0.12
 		end
 		if atmosphere then
-			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
-			atmosphere.Decay = Color3.fromRGB(96, 106, 122):Lerp(Color3.fromRGB(150, 156, 160), fog)
-			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6 + fog * 2.4 + storm * 1.2
-			atmosphere.Density = 0.38 + fog * 0.4 + storm * 0.16
+			atmosphere.Color = Color3.fromRGB(184, 196, 210):Lerp(Color3.fromRGB(214, 176, 140), golden * 0.35):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
+			atmosphere.Decay = Color3.fromRGB(88, 102, 124):Lerp(Color3.fromRGB(150, 158, 168), fog)
+			-- blue-grey haze that swallows the far mountains, thicker in winter
+			atmosphere.Haze = 2.3 + golden * 0.5 - night * 0.6 + winter * 0.6 + fog * 2.4 + storm * 1.2
+			atmosphere.Density = 0.43 + winter * 0.06 + fog * 0.4 + storm * 0.16
 		end
-		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
-		Lighting.Brightness = 3 * (1 - storm * 0.45 - fog * 0.2)
+		Lighting.OutdoorAmbient = Color3.fromRGB(116, 122, 134):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
+		Lighting.Brightness = 2.6 * (1 - storm * 0.45 - fog * 0.2)
 	end
 end
 
@@ -751,21 +754,21 @@ local function setupLighting()
 
 	Lighting.ClockTime = 15.6
 	Lighting.GeographicLatitude = 58
-	Lighting.Brightness = 3
-	Lighting.Ambient = Color3.fromRGB(58, 60, 68)
-	Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114)
+	Lighting.Brightness = 2.6
+	Lighting.Ambient = Color3.fromRGB(52, 56, 66)
+	Lighting.OutdoorAmbient = Color3.fromRGB(116, 122, 134)
 	Lighting.EnvironmentDiffuseScale = 1
 	Lighting.EnvironmentSpecularScale = 1 -- wet stone, metal and water catch the light
 	Lighting.ShadowSoftness = 0.25
 	Lighting.GlobalShadows = true
 
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.38
-	atmosphere.Offset = 0.3
-	atmosphere.Color = Color3.fromRGB(200, 190, 170)
-	atmosphere.Decay = Color3.fromRGB(96, 106, 122)
-	atmosphere.Glare = 0.35
-	atmosphere.Haze = 1.7
+	atmosphere.Density = 0.43
+	atmosphere.Offset = 0.25
+	atmosphere.Color = Color3.fromRGB(184, 196, 210)
+	atmosphere.Decay = Color3.fromRGB(88, 102, 124)
+	atmosphere.Glare = 0.2
+	atmosphere.Haze = 2.3
 	atmosphere.Parent = Lighting
 
 	local sky = Instance.new("Sky")
@@ -773,27 +776,28 @@ local function setupLighting()
 	sky.Parent = Lighting
 
 	local grade = Instance.new("ColorCorrectionEffect")
-	grade.Brightness = 0.02
-	grade.Contrast = 0.14
-	grade.Saturation = 0.08
-	grade.TintColor = Color3.fromRGB(255, 244, 228)
+	grade.Brightness = 0.01
+	grade.Contrast = 0.2
+	grade.Saturation = -0.1
+	grade.TintColor = Color3.fromRGB(238, 244, 255)
 	grade.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.5
-	bloom.Size = 24
-	bloom.Threshold = 0.9
+	-- fires and lanterns glow warm against the cold
+	bloom.Intensity = 0.8
+	bloom.Size = 28
+	bloom.Threshold = 0.82
 	bloom.Parent = Lighting
 
 	local clouds = Terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
-	clouds.Cover = 0.55
-	clouds.Density = 0.55
-	clouds.Color = Color3.fromRGB(245, 240, 232)
+	clouds.Cover = 0.68
+	clouds.Density = 0.62
+	clouds.Color = Color3.fromRGB(212, 218, 228)
 	clouds.Parent = Terrain
 
 	-- a gentle cinematic blur on the far distance
 	local dof = Instance.new("DepthOfFieldEffect")
-	dof.FarIntensity = 0.12
+	dof.FarIntensity = 0.16
 	dof.NearIntensity = 0
 	dof.FocusDistance = 140
 	dof.InFocusRadius = 180

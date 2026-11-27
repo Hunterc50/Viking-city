@@ -1203,6 +1203,40 @@ local function campfire(model, pos: Vector3)
 end
 ModelFactory.campfire = campfire
 
+-- A tall iron fire basket on three legs, for halls and gates. Its parts are
+-- marked KeepWithMesh, so they stay when a mesh replaces the building.
+local function brazier(model, pos: Vector3, height: number?)
+	local h = height or 4.2
+	local parts = {}
+	for i = 1, 3 do
+		local a = i / 3 * math.pi * 2
+		local foot = pos + V3(math.cos(a) * 1.1, 0, math.sin(a) * 1.1)
+		local top = pos + V3(0, h, 0)
+		local mid = (foot + top) / 2
+		table.insert(parts, addPart(model, { Name = "BrazierLeg", Size = V3(0.22, (top - foot).Magnitude, 0.22), CFrame = CFrame.lookAt(mid, top) * CFrame.Angles(math.rad(90), 0, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	end
+	table.insert(parts, addPart(model, { Name = "BrazierBowl", Shape = Enum.PartType.Cylinder, Size = V3(0.7, 2.2, 2.2), CFrame = CFrame.new(pos + V3(0, h + 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(46, 44, 44), Material = Enum.Material.Metal, CanCollide = false }))
+	local coals = addPart(model, { Name = "BrazierCoals", Size = V3(1.5, 0.3, 1.5), Position = pos + V3(0, h + 0.6, 0), Color = Color3.fromRGB(255, 110, 40), Material = Enum.Material.Neon, CanCollide = false })
+	table.insert(parts, coals)
+	local fire = Instance.new("Fire")
+	fire.Size = 3.5
+	fire.Heat = 9
+	fire.Color = Color3.fromRGB(255, 140, 50)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fire.Parent = coals
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 70)
+	light.Range = 26
+	light.Brightness = 2.2
+	light.Shadows = true
+	light.Parent = coals
+	for _, part in parts do
+		part:SetAttribute("KeepWithMesh", true)
+	end
+	return coals
+end
+ModelFactory.brazier = brazier
+
 function Builders.Longhouse(model, w, d)
 	hall(model, CFrame.new(), { w = w - 4, d = d - 5, wallH = 7, roof = "thatch", smoke = true })
 	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 1.2))
@@ -1578,8 +1612,18 @@ function Builders.GreatHall(model, w, d)
 		post(model, V3(x, 0, -d / 2 + 2), 12, 1.1, Colors.DarkWood)
 		addPart(model, { Name = "Carving", Size = V3(1.4, 1.4, 1.4), Position = V3(x, 12.4, -d / 2 + 2), Color = Color3.fromRGB(170, 130, 50), Material = Enum.Material.Wood })
 	end
-	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 2))
-	campfire(model, V3(w / 2 - 4, 0, -d / 2 + 2))
+	brazier(model, V3(-9, 0, -d / 2 + 1.5), 4.6)
+	brazier(model, V3(9, 0, -d / 2 + 1.5), 4.6)
+	-- banners on poles beside the door
+	for _, x in { -12.5, 12.5 } do
+		local pole = addPart(model, { Name = "BannerPole", Size = V3(0.35, 10, 0.35), Position = V3(x, 5, -d / 2 + 1.5), Color = Colors.DarkWood, Material = Enum.Material.Wood })
+		local bar = addPart(model, { Name = "BannerPole", Size = V3(2.6, 0.25, 0.25), Position = V3(x, 9.6, -d / 2 + 1.5), Color = Colors.DarkWood, Material = Enum.Material.Wood, CanCollide = false })
+		local cloth = addPart(model, { Name = "BannerCloth", Size = V3(2.3, 4.6, 0.1), Position = V3(x, 7.2, -d / 2 + 1.4), Color = Color3.fromRGB(122, 30, 30), Material = Enum.Material.Fabric, CanCollide = false })
+		local stripe = addPart(model, { Name = "BannerCloth", Size = V3(0.5, 4.6, 0.12), Position = V3(x, 7.2, -d / 2 + 1.38), Color = Color3.fromRGB(196, 160, 80), Material = Enum.Material.Fabric, CanCollide = false })
+		for _, part in { pole, bar, cloth, stripe } do
+			part:SetAttribute("KeepWithMesh", true)
+		end
+	end
 	-- red and gold banners along the long wall
 	for i = -2, 2 do
 		addPart(model, { Name = "Banner", Size = V3(1.8, 3.4, 0.12), Position = V3(i * 6, 6.5, -(d - 6) / 2 - 0.5), Color = i % 2 == 0 and Color3.fromRGB(150, 40, 36) or Color3.fromRGB(190, 150, 60), Material = Enum.Material.Fabric, CanCollide = false })
@@ -2809,6 +2853,7 @@ for slot in SettlerRig do
 	slotSet[slot] = true
 end
 
+local dressMaterials
 local function assetsFolder(): Instance?
 	local folder = ReplicatedStorage:FindFirstChild("Assets")
 	local pack = workspace:FindFirstChild("VikingAssets")
@@ -2852,6 +2897,36 @@ local function findInPack(pack: Instance, name: string): Instance?
 	return pack:FindFirstChild(name) or pack:FindFirstChild(name .. "_Node") or pack:FindFirstChild(name, true) or pack:FindFirstChild(name .. "_Node", true)
 end
 
+-- Mesh pieces named Mat_<Material>_<rrggbb> (tools/meshgen/materials.py) get
+-- Roblox's own textured material in that shade: wood grain, rough slate,
+-- woven fabric. The flat palette texture they were imported with goes.
+local MESH_MATERIALS = {
+	Wood = Enum.Material.Wood,
+	Stone = Enum.Material.Slate,
+	Thatch = Enum.Material.Fabric,
+	Leaves = Enum.Material.LeafyGrass,
+	Cloth = Enum.Material.Fabric,
+	Metal = Enum.Material.Metal,
+}
+dressMaterials = function(root: Instance)
+	for _, d in root:GetDescendants() do
+		if d:IsA("MeshPart") then
+			local kind, hex = string.match(d.Name, "^Mat_(%a+)_(%x%x%x%x%x%x)")
+			local material = kind and MESH_MATERIALS[kind]
+			if material then
+				d.Material = material
+				d.Color = Color3.fromHex(hex)
+				pcall(function()
+					d.TextureID = ""
+				end)
+				if kind == "Metal" then
+					d.Reflectance = 0.05
+				end
+			end
+		end
+	end
+end
+
 local function customAsset(name: string): Instance?
 	local folder = assetsFolder() -- always, so an imported pack never sits in the world
 	local workshop = workspace:FindFirstChild("ModelWorkshop")
@@ -2876,6 +2951,7 @@ local function customAsset(name: string): Instance?
 		return nil
 	end
 	local clone = item:Clone()
+	dressMaterials(clone)
 	-- never bring along another slot that the importer nested inside this one
 	if fromPack then
 		for _, d in clone:GetDescendants() do
@@ -3022,7 +3098,7 @@ end
 local function keepGlow(custom: Model, reference: Model)
 	for _, d in reference:GetDescendants() do
 		-- crop rows stay the game's own too, so fields still change with the seasons
-		if d:IsA("BasePart") and (d.Name == "Barley" or d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
+		if d:IsA("BasePart") and (d.Name == "Barley" or d:GetAttribute("KeepWithMesh") or d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
 			d.Parent = custom
 		end
 	end
@@ -6088,6 +6164,10 @@ local function newHold(R)
 			local fallen = frame * CFrame.new(x, 0.9, -H / 2 - 0.5) * CFrame.Angles(math.rad(-88), math.rad(side * 6), 0)
 			table.insert(leaves, { part = leaf, closed = closed, fallen = fallen })
 		end
+		-- fire baskets either side of the gate, outside
+		for _, side in { -1, 1 } do
+			ModelFactory.brazier(model, (frame * CFrame.new(side * (half + 6), 0, -5)).Position, 4.4)
+		end
 		model.Parent = folder
 
 		-- health over the gate
@@ -7825,8 +7905,31 @@ local function base(part: BasePart): Color3
 	return c
 end
 
+-- Imported mesh pieces are named Mat_<Material>_<rrggbb> (see ModelFactory):
+-- leaves on a birch fall like Leaves, conifer needles frost like Needles,
+-- and thatch and turf roofs take snow like Roof.
+local function meshRole(part: BasePart): string?
+	local kind = string.match(part.Name, "^Mat_(%a+)_")
+	if not kind then
+		return nil
+	end
+	local model = part:FindFirstAncestorOfClass("Model")
+	local owner = model and model.Name or ""
+	if kind == "Leaves" then
+		if string.find(owner, "Birch") then
+			return "Leaves"
+		elseif string.find(owner, "Tree") or string.find(owner, "Bush") then
+			return "Needles"
+		end
+		return "Moss" -- turf on roofs
+	elseif kind == "Thatch" and not string.find(owner, "Ship") then
+		return "Roof"
+	end
+	return nil
+end
+
 local function paint(part: BasePart, season: string)
-	local name = part.Name
+	local name = meshRole(part) or part.Name
 	if name == "Needles" or name == "Tip" then
 		local c = base(part)
 		if season == "Winter" then
@@ -7867,6 +7970,9 @@ local function paint(part: BasePart, season: string)
 	elseif name == "Roof" then
 		local c = base(part)
 		part.Color = season == "Winter" and c:Lerp(SNOW, 0.8) or c
+		if string.sub(part.Name, 1, 4) == "Mat_" then
+			part.Material = season == "Winter" and Enum.Material.Snow or Enum.Material.Fabric
+		end
 	elseif name == "Barley" then
 		local c = base(part)
 		if season == "Spring" then
@@ -7892,12 +7998,71 @@ function SeasonService:ApplyTo(root: Instance)
 	end
 end
 
+-- Ice floes drifting out on the open fjord in winter.
+local floes
+local function makeFloes(): Folder
+	local folder = Instance.new("Folder")
+	folder.Name = "IceFloes"
+	local rng = Random.new(1203)
+	local avoid = {}
+	for _, rival in Config.Rivals do
+		if rival.Sea then
+			table.insert(avoid, rival)
+		end
+	end
+	local made, tries = 0, 0
+	while made < 90 and tries < 600 do
+		tries += 1
+		local x = rng:NextNumber(-900, 2900)
+		local z = rng:NextNumber(-500, -130)
+		local clear = math.abs(z + 300) > 45 -- leave the trading ship's lane open
+		for _, rival in avoid do
+			if (Vector3.new(x, 0, z) - Vector3.new(rival.Center.X, 0, rival.Center.Z)).Magnitude < rival.Radius + 90 then
+				clear = false
+			end
+		end
+		if clear then
+			made += 1
+			local w, d = rng:NextNumber(6, 24), rng:NextNumber(5, 18)
+			local spin = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+			local floe = Instance.new("Part")
+			floe.Name = "IceFloe"
+			floe.Anchored = true
+			floe.CanCollide = false
+			floe.CanQuery = false
+			floe.Size = Vector3.new(w, 1.4, d)
+			floe.CFrame = CFrame.new(x, 0.15, z) * spin * CFrame.Angles(rng:NextNumber(-0.04, 0.04), 0, rng:NextNumber(-0.04, 0.04))
+			floe.Material = M.Glacier
+			floe.Color = Color3.fromRGB(206, 226, 238)
+			floe.Parent = folder
+			-- a crust of snow and a broken chunk or two on top
+			local crust = floe:Clone()
+			crust.Name = "IceSnow"
+			crust.Size = Vector3.new(w * rng:NextNumber(0.5, 0.85), 0.5, d * rng:NextNumber(0.5, 0.85))
+			crust.CFrame = floe.CFrame * CFrame.new(rng:NextNumber(-w, w) * 0.1, 0.9, rng:NextNumber(-d, d) * 0.1)
+			crust.Material = M.Snow
+			crust.Color = Color3.fromRGB(240, 244, 250)
+			crust.Parent = folder
+			if rng:NextNumber() < 0.4 then
+				local chunk = floe:Clone()
+				chunk.Name = "IceChunk"
+				chunk.Size = Vector3.new(rng:NextNumber(2, 5), rng:NextNumber(1.5, 3.5), rng:NextNumber(2, 5))
+				chunk.CFrame = floe.CFrame * CFrame.new(rng:NextNumber(-w, w) * 0.3, 1.4, rng:NextNumber(-d, d) * 0.3) * CFrame.Angles(rng:NextNumber(-0.5, 0.5), rng:NextNumber(0, 3), rng:NextNumber(-0.5, 0.5))
+				chunk.Parent = folder
+			end
+		end
+	end
+	return folder
+end
+
 local frozen = false
 local function setIce(on: boolean)
 	if on == frozen then
 		return
 	end
 	frozen = on
+	floes = floes or makeFloes()
+	floes.Parent = on and (Workspace:FindFirstChild("Scenery") or Workspace) or nil
 	-- freeze a band of shallow water along both shores
 	local from, to = M.Water, M.Glacier
 	if not on then
@@ -11476,11 +11641,11 @@ local function scatterScenery()
 			return false
 		end
 		local model
-		local s = rng:NextNumber(1, 2.1) * (1 - hit.Position.Y / 400) -- smaller trees higher up
+		local s = rng:NextNumber(1.15, 2.4) * (1 - hit.Position.Y / 400) -- smaller trees higher up
 		local r = rng:NextNumber()
-		if r < 0.38 then
+		if r < 0.42 then
 			model = ModelFactory.pine(rng, s)
-		elseif r < 0.8 then
+		elseif r < 0.89 then
 			model = ModelFactory.spruce(rng, s * 1.1)
 		else
 			model = ModelFactory.birch(rng, s * 0.8)
@@ -11493,7 +11658,7 @@ local function scatterScenery()
 	-- Forests grow in patches: noise decides where the woods are dense.
 	local planted, tries = 0, 0
 	local budget = os.clock()
-	while planted < 950 and tries < 9000 do
+	while planted < 1300 and tries < 12000 do
 		tries += 1
 		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(MIN_Z + 40, 640)
 		local density = fbm(x, z, 1 / 220, 3, 29) + 0.15
@@ -11709,31 +11874,34 @@ local function dayNightCycle()
 		end
 		local golden = math.clamp(1 - math.abs(clock - 18) / 2, 0, 1) + math.clamp(1 - math.abs(clock - 7) / 1.5, 0, 1)
 		local season = workspace:GetAttribute("Season")
-		local seasonTint = Color3.fromRGB(255, 244, 228)
+		-- a cold northern light all year, warmer only in autumn
+		local seasonTint = Color3.fromRGB(238, 244, 255)
 		if season == "Winter" then
-			seasonTint = Color3.fromRGB(222, 234, 255)
+			seasonTint = Color3.fromRGB(212, 228, 255)
 		elseif season == "Autumn" then
-			seasonTint = Color3.fromRGB(255, 230, 196)
+			seasonTint = Color3.fromRGB(252, 238, 220)
 		elseif season == "Spring" then
-			seasonTint = Color3.fromRGB(246, 255, 236)
+			seasonTint = Color3.fromRGB(234, 246, 246)
 		end
+		local winter = season == "Winter" and 1 or 0
 		-- weather (WeatherService): fog thickens the air, storms darken it
 		local fog = workspace:GetAttribute("FogLevel") or 0
 		local storm = workspace:GetAttribute("StormLevel") or 0
 		golden *= 1 - math.max(fog, storm) * 0.8
 		if grade then
-			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night):Lerp(Color3.fromRGB(196, 206, 214), storm * 0.5)
-			grade.Brightness = 0.02 + night * 0.05 - storm * 0.06
-			grade.Saturation = 0.08 - storm * 0.2 - fog * 0.12
+			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.35):Lerp(Color3.fromRGB(170, 190, 255), night):Lerp(Color3.fromRGB(196, 206, 214), storm * 0.5)
+			grade.Brightness = 0.01 + night * 0.04 - storm * 0.06
+			grade.Saturation = -0.1 - winter * 0.06 - storm * 0.2 - fog * 0.12
 		end
 		if atmosphere then
-			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
-			atmosphere.Decay = Color3.fromRGB(96, 106, 122):Lerp(Color3.fromRGB(150, 156, 160), fog)
-			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6 + fog * 2.4 + storm * 1.2
-			atmosphere.Density = 0.38 + fog * 0.4 + storm * 0.16
+			atmosphere.Color = Color3.fromRGB(184, 196, 210):Lerp(Color3.fromRGB(214, 176, 140), golden * 0.35):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
+			atmosphere.Decay = Color3.fromRGB(88, 102, 124):Lerp(Color3.fromRGB(150, 158, 168), fog)
+			-- blue-grey haze that swallows the far mountains, thicker in winter
+			atmosphere.Haze = 2.3 + golden * 0.5 - night * 0.6 + winter * 0.6 + fog * 2.4 + storm * 1.2
+			atmosphere.Density = 0.43 + winter * 0.06 + fog * 0.4 + storm * 0.16
 		end
-		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
-		Lighting.Brightness = 3 * (1 - storm * 0.45 - fog * 0.2)
+		Lighting.OutdoorAmbient = Color3.fromRGB(116, 122, 134):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
+		Lighting.Brightness = 2.6 * (1 - storm * 0.45 - fog * 0.2)
 	end
 end
 
@@ -11746,21 +11914,21 @@ local function setupLighting()
 
 	Lighting.ClockTime = 15.6
 	Lighting.GeographicLatitude = 58
-	Lighting.Brightness = 3
-	Lighting.Ambient = Color3.fromRGB(58, 60, 68)
-	Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114)
+	Lighting.Brightness = 2.6
+	Lighting.Ambient = Color3.fromRGB(52, 56, 66)
+	Lighting.OutdoorAmbient = Color3.fromRGB(116, 122, 134)
 	Lighting.EnvironmentDiffuseScale = 1
 	Lighting.EnvironmentSpecularScale = 1 -- wet stone, metal and water catch the light
 	Lighting.ShadowSoftness = 0.25
 	Lighting.GlobalShadows = true
 
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.38
-	atmosphere.Offset = 0.3
-	atmosphere.Color = Color3.fromRGB(200, 190, 170)
-	atmosphere.Decay = Color3.fromRGB(96, 106, 122)
-	atmosphere.Glare = 0.35
-	atmosphere.Haze = 1.7
+	atmosphere.Density = 0.43
+	atmosphere.Offset = 0.25
+	atmosphere.Color = Color3.fromRGB(184, 196, 210)
+	atmosphere.Decay = Color3.fromRGB(88, 102, 124)
+	atmosphere.Glare = 0.2
+	atmosphere.Haze = 2.3
 	atmosphere.Parent = Lighting
 
 	local sky = Instance.new("Sky")
@@ -11768,27 +11936,28 @@ local function setupLighting()
 	sky.Parent = Lighting
 
 	local grade = Instance.new("ColorCorrectionEffect")
-	grade.Brightness = 0.02
-	grade.Contrast = 0.14
-	grade.Saturation = 0.08
-	grade.TintColor = Color3.fromRGB(255, 244, 228)
+	grade.Brightness = 0.01
+	grade.Contrast = 0.2
+	grade.Saturation = -0.1
+	grade.TintColor = Color3.fromRGB(238, 244, 255)
 	grade.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity = 0.5
-	bloom.Size = 24
-	bloom.Threshold = 0.9
+	-- fires and lanterns glow warm against the cold
+	bloom.Intensity = 0.8
+	bloom.Size = 28
+	bloom.Threshold = 0.82
 	bloom.Parent = Lighting
 
 	local clouds = Terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
-	clouds.Cover = 0.55
-	clouds.Density = 0.55
-	clouds.Color = Color3.fromRGB(245, 240, 232)
+	clouds.Cover = 0.68
+	clouds.Density = 0.62
+	clouds.Color = Color3.fromRGB(212, 218, 228)
 	clouds.Parent = Terrain
 
 	-- a gentle cinematic blur on the far distance
 	local dof = Instance.new("DepthOfFieldEffect")
-	dof.FarIntensity = 0.12
+	dof.FarIntensity = 0.16
 	dof.NearIntensity = 0
 	dof.FocusDistance = 140
 	dof.InFocusRadius = 180
@@ -12665,13 +12834,13 @@ local controllers
 local player = Players.LocalPlayer
 
 local THEME = {
-	Panel = Color3.fromRGB(28, 23, 18),
-	Card = Color3.fromRGB(52, 42, 32),
-	Button = Color3.fromRGB(86, 66, 34),
-	ButtonOff = Color3.fromRGB(44, 38, 32),
-	Accent = Color3.fromRGB(214, 170, 92),
-	Text = Color3.fromRGB(245, 235, 215),
-	Muted = Color3.fromRGB(170, 156, 134),
+	Panel = Color3.fromRGB(20, 20, 22),
+	Card = Color3.fromRGB(38, 38, 41),
+	Button = Color3.fromRGB(60, 55, 48),
+	ButtonOff = Color3.fromRGB(30, 30, 32),
+	Accent = Color3.fromRGB(226, 206, 160),
+	Text = Color3.fromRGB(238, 234, 226),
+	Muted = Color3.fromRGB(156, 152, 146),
 	Good = Color3.fromRGB(130, 200, 110),
 	Bad = Color3.fromRGB(230, 110, 96),
 }
@@ -13132,11 +13301,11 @@ local controllers
 local player = Players.LocalPlayer
 
 local THEME = {
-	Panel = Color3.fromRGB(34, 28, 22),
-	PanelLight = Color3.fromRGB(58, 47, 36),
-	Accent = Color3.fromRGB(214, 170, 92),
-	Text = Color3.fromRGB(245, 235, 215),
-	Muted = Color3.fromRGB(180, 165, 140),
+	Panel = Color3.fromRGB(20, 20, 22),
+	PanelLight = Color3.fromRGB(44, 44, 47),
+	Accent = Color3.fromRGB(226, 206, 160),
+	Text = Color3.fromRGB(238, 234, 226),
+	Muted = Color3.fromRGB(156, 152, 146),
 	Good = Color3.fromRGB(130, 200, 110),
 	Bad = Color3.fromRGB(230, 100, 90),
 }
@@ -14276,14 +14445,14 @@ local controllers
 local player = Players.LocalPlayer
 
 local THEME = {
-	Panel = Color3.fromRGB(28, 23, 18),
-	Card = Color3.fromRGB(52, 42, 32),
+	Panel = Color3.fromRGB(20, 20, 22),
+	Card = Color3.fromRGB(38, 38, 41),
 	Done = Color3.fromRGB(46, 72, 44),
-	Ready = Color3.fromRGB(86, 66, 34),
-	Locked = Color3.fromRGB(40, 36, 32),
-	Accent = Color3.fromRGB(214, 170, 92),
-	Text = Color3.fromRGB(245, 235, 215),
-	Muted = Color3.fromRGB(170, 156, 134),
+	Ready = Color3.fromRGB(74, 62, 42),
+	Locked = Color3.fromRGB(32, 32, 34),
+	Accent = Color3.fromRGB(226, 206, 160),
+	Text = Color3.fromRGB(238, 234, 226),
+	Muted = Color3.fromRGB(156, 152, 146),
 	Bad = Color3.fromRGB(230, 110, 96),
 }
 
@@ -14685,7 +14854,7 @@ local controllers
 local player = Players.LocalPlayer
 
 local ACCENT = Color3.fromRGB(214, 170, 92)
-local PANEL = Color3.fromRGB(34, 28, 22)
+local PANEL = Color3.fromRGB(20, 20, 22)
 
 local function new(className, props)
 	local inst = Instance.new(className)
@@ -14870,11 +15039,11 @@ local controllers
 local player = Players.LocalPlayer
 
 local THEME = {
-	Panel = Color3.fromRGB(28, 23, 18),
-	Row = Color3.fromRGB(52, 42, 32),
-	Accent = Color3.fromRGB(214, 170, 92),
-	Text = Color3.fromRGB(245, 235, 215),
-	Muted = Color3.fromRGB(170, 156, 134),
+	Panel = Color3.fromRGB(20, 20, 22),
+	Row = Color3.fromRGB(38, 38, 41),
+	Accent = Color3.fromRGB(226, 206, 160),
+	Text = Color3.fromRGB(238, 234, 226),
+	Muted = Color3.fromRGB(156, 152, 146),
 	Good = Color3.fromRGB(130, 200, 110),
 	Bad = Color3.fromRGB(230, 110, 96),
 }

@@ -25,13 +25,13 @@ local controllers
 local player = Players.LocalPlayer
 
 local THEME = {
-	Panel = Color3.fromRGB(28, 23, 18),
-	Card = Color3.fromRGB(52, 42, 32),
-	Button = Color3.fromRGB(86, 66, 34),
-	ButtonOff = Color3.fromRGB(44, 38, 32),
-	Accent = Color3.fromRGB(214, 170, 92),
-	Text = Color3.fromRGB(245, 235, 215),
-	Muted = Color3.fromRGB(170, 156, 134),
+	Panel = Color3.fromRGB(20, 20, 22),
+	Card = Color3.fromRGB(38, 38, 41),
+	Button = Color3.fromRGB(60, 55, 48),
+	ButtonOff = Color3.fromRGB(30, 30, 32),
+	Accent = Color3.fromRGB(226, 206, 160),
+	Text = Color3.fromRGB(238, 234, 226),
+	Muted = Color3.fromRGB(156, 152, 146),
 	Good = Color3.fromRGB(130, 200, 110),
 	Bad = Color3.fromRGB(230, 110, 96),
 }

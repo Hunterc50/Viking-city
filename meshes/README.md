@@ -36,6 +36,9 @@ To go back to a block-built model, delete its mesh from Assets.
 - Sizes and positions don't matter. The game scales each mesh to fit, so a
   building fills its plot and a tool sits in the hand.
 - Fire, lights and smoke, like the torch flame, still come from the game.
+- Each model comes in pieces named like `Mat_Wood_6a4b31`. The game reads those
+  names and gives each piece Roblox's own wood, slate, fabric or metal texture,
+  so keep the names as they are.
 - Want a Blender version? Run `python3 tools/meshgen/build.py --obj` to get .obj files.
 
 ## Slot names

@@ -21,14 +21,14 @@ local controllers
 local player = Players.LocalPlayer
 
 local THEME = {
-	Panel = Color3.fromRGB(28, 23, 18),
-	Card = Color3.fromRGB(52, 42, 32),
+	Panel = Color3.fromRGB(20, 20, 22),
+	Card = Color3.fromRGB(38, 38, 41),
 	Done = Color3.fromRGB(46, 72, 44),
-	Ready = Color3.fromRGB(86, 66, 34),
-	Locked = Color3.fromRGB(40, 36, 32),
-	Accent = Color3.fromRGB(214, 170, 92),
-	Text = Color3.fromRGB(245, 235, 215),
-	Muted = Color3.fromRGB(170, 156, 134),
+	Ready = Color3.fromRGB(74, 62, 42),
+	Locked = Color3.fromRGB(32, 32, 34),
+	Accent = Color3.fromRGB(226, 206, 160),
+	Text = Color3.fromRGB(238, 234, 226),
+	Muted = Color3.fromRGB(156, 152, 146),
 	Bad = Color3.fromRGB(230, 110, 96),
 }
 

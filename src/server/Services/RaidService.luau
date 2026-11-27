@@ -361,6 +361,10 @@ local function newHold(R)
 			local fallen = frame * CFrame.new(x, 0.9, -H / 2 - 0.5) * CFrame.Angles(math.rad(-88), math.rad(side * 6), 0)
 			table.insert(leaves, { part = leaf, closed = closed, fallen = fallen })
 		end
+		-- fire baskets either side of the gate, outside
+		for _, side in { -1, 1 } do
+			ModelFactory.brazier(model, (frame * CFrame.new(side * (half + 6), 0, -5)).Position, 4.4)
+		end
 		model.Parent = folder
 
 		-- health over the gate

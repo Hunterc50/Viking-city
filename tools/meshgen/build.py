@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from assets import ASSETS, SLOTS  # noqa: E402
 from people import SETTLERS, settler  # noqa: E402
 from mesh import write_glb, write_obj  # noqa: E402
+from materials import split  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "meshes")
@@ -22,7 +23,8 @@ def main(args):
     built = []
     for name in names or ASSETS:
         mesh = ASSETS[name]()
-        n = write_glb(os.path.join(OUT, name + ".glb"), [(name, mesh)])
+        # one piece per Roblox material and shade (see materials.py)
+        n = write_glb(os.path.join(OUT, name + ".glb"), [(name, split(mesh, name))])
         if obj:
             write_obj(os.path.join(OUT, "obj", name), [(name, mesh)], name + ".png")
         built.append((name, mesh))
@@ -35,7 +37,7 @@ def main(args):
             write_glb(os.path.join(OUT, "settlers", slot + ".glb"), [(slot, pieces)])
         write_rig(people)
         # everything in one file: import once, every slot comes along
-        n = write_glb(os.path.join(OUT, "VikingAssets.glb"), [(name, mesh) for name, mesh in built if name in SLOTS] + people)
+        n = write_glb(os.path.join(OUT, "VikingAssets.glb"), [(name, split(mesh, name)) for name, mesh in built if name in SLOTS] + people)
         print(f"{'VikingAssets':20s} {n:6d} triangles (all slots and settlers)")
 
 

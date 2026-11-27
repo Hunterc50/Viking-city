@@ -60,8 +60,31 @@ local function base(part: BasePart): Color3
 	return c
 end
 
+-- Imported mesh pieces are named Mat_<Material>_<rrggbb> (see ModelFactory):
+-- leaves on a birch fall like Leaves, conifer needles frost like Needles,
+-- and thatch and turf roofs take snow like Roof.
+local function meshRole(part: BasePart): string?
+	local kind = string.match(part.Name, "^Mat_(%a+)_")
+	if not kind then
+		return nil
+	end
+	local model = part:FindFirstAncestorOfClass("Model")
+	local owner = model and model.Name or ""
+	if kind == "Leaves" then
+		if string.find(owner, "Birch") then
+			return "Leaves"
+		elseif string.find(owner, "Tree") or string.find(owner, "Bush") then
+			return "Needles"
+		end
+		return "Moss" -- turf on roofs
+	elseif kind == "Thatch" and not string.find(owner, "Ship") then
+		return "Roof"
+	end
+	return nil
+end
+
 local function paint(part: BasePart, season: string)
-	local name = part.Name
+	local name = meshRole(part) or part.Name
 	if name == "Needles" or name == "Tip" then
 		local c = base(part)
 		if season == "Winter" then
@@ -102,6 +125,9 @@ local function paint(part: BasePart, season: string)
 	elseif name == "Roof" then
 		local c = base(part)
 		part.Color = season == "Winter" and c:Lerp(SNOW, 0.8) or c
+		if string.sub(part.Name, 1, 4) == "Mat_" then
+			part.Material = season == "Winter" and Enum.Material.Snow or Enum.Material.Fabric
+		end
 	elseif name == "Barley" then
 		local c = base(part)
 		if season == "Spring" then
@@ -127,12 +153,71 @@ function SeasonService:ApplyTo(root: Instance)
 	end
 end
 
+-- Ice floes drifting out on the open fjord in winter.
+local floes
+local function makeFloes(): Folder
+	local folder = Instance.new("Folder")
+	folder.Name = "IceFloes"
+	local rng = Random.new(1203)
+	local avoid = {}
+	for _, rival in Config.Rivals do
+		if rival.Sea then
+			table.insert(avoid, rival)
+		end
+	end
+	local made, tries = 0, 0
+	while made < 90 and tries < 600 do
+		tries += 1
+		local x = rng:NextNumber(-900, 2900)
+		local z = rng:NextNumber(-500, -130)
+		local clear = math.abs(z + 300) > 45 -- leave the trading ship's lane open
+		for _, rival in avoid do
+			if (Vector3.new(x, 0, z) - Vector3.new(rival.Center.X, 0, rival.Center.Z)).Magnitude < rival.Radius + 90 then
+				clear = false
+			end
+		end
+		if clear then
+			made += 1
+			local w, d = rng:NextNumber(6, 24), rng:NextNumber(5, 18)
+			local spin = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+			local floe = Instance.new("Part")
+			floe.Name = "IceFloe"
+			floe.Anchored = true
+			floe.CanCollide = false
+			floe.CanQuery = false
+			floe.Size = Vector3.new(w, 1.4, d)
+			floe.CFrame = CFrame.new(x, 0.15, z) * spin * CFrame.Angles(rng:NextNumber(-0.04, 0.04), 0, rng:NextNumber(-0.04, 0.04))
+			floe.Material = M.Glacier
+			floe.Color = Color3.fromRGB(206, 226, 238)
+			floe.Parent = folder
+			-- a crust of snow and a broken chunk or two on top
+			local crust = floe:Clone()
+			crust.Name = "IceSnow"
+			crust.Size = Vector3.new(w * rng:NextNumber(0.5, 0.85), 0.5, d * rng:NextNumber(0.5, 0.85))
+			crust.CFrame = floe.CFrame * CFrame.new(rng:NextNumber(-w, w) * 0.1, 0.9, rng:NextNumber(-d, d) * 0.1)
+			crust.Material = M.Snow
+			crust.Color = Color3.fromRGB(240, 244, 250)
+			crust.Parent = folder
+			if rng:NextNumber() < 0.4 then
+				local chunk = floe:Clone()
+				chunk.Name = "IceChunk"
+				chunk.Size = Vector3.new(rng:NextNumber(2, 5), rng:NextNumber(1.5, 3.5), rng:NextNumber(2, 5))
+				chunk.CFrame = floe.CFrame * CFrame.new(rng:NextNumber(-w, w) * 0.3, 1.4, rng:NextNumber(-d, d) * 0.3) * CFrame.Angles(rng:NextNumber(-0.5, 0.5), rng:NextNumber(0, 3), rng:NextNumber(-0.5, 0.5))
+				chunk.Parent = folder
+			end
+		end
+	end
+	return folder
+end
+
 local frozen = false
 local function setIce(on: boolean)
 	if on == frozen then
 		return
 	end
 	frozen = on
+	floes = floes or makeFloes()
+	floes.Parent = on and (Workspace:FindFirstChild("Scenery") or Workspace) or nil
 	-- freeze a band of shallow water along both shores
 	local from, to = M.Water, M.Glacier
 	if not on then
