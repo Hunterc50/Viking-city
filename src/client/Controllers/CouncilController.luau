@@ -161,15 +161,15 @@ local function buildLand(body, state)
 	text(cc, "They fly on your banners, your Great Hall's standards and your longship's sail.", { TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 2 })
 	local cr = row(cc, 3)
 	local current = state.council.clan or "Blood"
-	for _, c in Config.ClanColours do
-		local on = c.Name == current
-		local b = button(cr, (on and "» " or "") .. c.Label, not on, function()
-			act("Colours", c.Name)
+	for _, clan in Config.ClanColours do
+		local on = clan.Name == current
+		local b = button(cr, (on and "» " or "") .. clan.Label, not on, function()
+			act("Colours", clan.Name)
 		end, 128)
 		local swatch = Instance.new("Frame")
 		swatch.Size = UDim2.new(0, 6, 1, -8)
 		swatch.Position = UDim2.fromOffset(4, 4)
-		swatch.BackgroundColor3 = c.Main
+		swatch.BackgroundColor3 = clan.Main
 		swatch.BorderSizePixel = 0
 		swatch.Parent = b
 	end
