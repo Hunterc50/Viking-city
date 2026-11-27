@@ -339,6 +339,7 @@ Config.Siege = {
 	GateHealth = 600,
 	ToolDamage = { Axe = 30, Pickaxe = 20, Sword = 18 }, -- per blow on the gate
 	WedgeRam = 2, -- warriors in a wedge hit gates this much harder
+	ChampionLoot = { Silver = 30, Lore = 15, Hides = 6 }, -- for felling the champion who steps out of a broken gate
 }
 
 -- War band formations (Jarl's Table > War band, or press G while they follow)

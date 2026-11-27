@@ -23,6 +23,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
 local Sounds = require(Shared.Sounds)
 local ModelFactory = require(Shared.ModelFactory)
 
@@ -273,6 +274,7 @@ local function newHold(R)
 	end
 
 	local buildGate
+	local spawnDefender
 	-- Gate ------------------------------------------------------------------------
 	-- A pair of heavy doors between two towers in the palisade gap. Raiders must
 	-- break it before they can plunder or burn anything inside.
@@ -441,7 +443,8 @@ local function newHold(R)
 			setGateOpen(true)
 			Sounds.play("Build", g.position)
 			Sounds.play("WarHorn", g.position)
-			notifyAll("The gate of " .. R.Name .. " is broken! Storm the hold!", "raid")
+			notifyAll("The gate of " .. R.Name .. " is broken! Its champion steps out to meet you!", "raid")
+			spawnDefender(g.position - g.out * 12, false, true)
 			if colony then
 				services.QuestService:Count(colony, "gate")
 			end
@@ -499,7 +502,7 @@ local function newHold(R)
 
 	local archerShoot -- defined below (archers use it from the guard loop)
 
-	local function spawnDefender(post: Vector3, archer: boolean?)
+	spawnDefender = function(post: Vector3, archer: boolean?, champion: boolean?)
 		local desc = Instance.new("HumanoidDescription")
 		local skin = Color3.fromRGB(226, 186, 150)
 		desc.HeadColor = skin
@@ -515,13 +518,15 @@ local function newHold(R)
 			warn("[RaidService] could not create guard: " .. tostring(model))
 			return
 		end
-		local title = archer and "Greywater Archer" or "Greywater Guard"
+		local folk = string.match(R.Name, "^(%S+)") or R.Name
+		local title = champion and (folk .. " Champion") or (archer and (folk .. " Archer") or (folk .. " Guard"))
 		model.Name = title
 		model:SetAttribute("Defender", true)
 		local humanoid = model:FindFirstChildOfClass("Humanoid")
 		humanoid.DisplayName = title
-		humanoid.MaxHealth = R.DefenderHealth
-		humanoid.Health = R.DefenderHealth
+		local health = R.DefenderHealth * (champion and 5 or 1)
+		humanoid.MaxHealth = health
+		humanoid.Health = health
 		humanoid.WalkSpeed = 13
 		humanoid.NameDisplayDistance = 60
 		humanoid.HealthDisplayDistance = 60
@@ -543,6 +548,22 @@ local function newHold(R)
 			gear(model, rightHand, "AxeHead", Vector3.new(0.2, 1, 1.1), CFrame.new(0, 0.1, -1.9), Color3.fromRGB(120, 122, 130))
 		end
 
+		if champion then
+			-- a head taller, in a gilded helm and a bear-fur cloak
+			model:SetAttribute("Champion", true)
+			pcall(function()
+				model:ScaleTo(1.35)
+			end)
+			local helm = model:FindFirstChild("Helmet", true)
+			if helm and helm:IsA("BasePart") then
+				helm.Color = Color3.fromRGB(196, 160, 72)
+			end
+			local torso = model:FindFirstChild("UpperTorso")
+			if torso then
+				gear(model, torso, "Cloak", Vector3.new(2.4, 2.6, 0.3), CFrame.new(0, -0.3, 0.75), Color3.fromRGB(70, 52, 38), Enum.Material.Fabric)
+			end
+			humanoid.WalkSpeed = 11
+		end
 		model:PivotTo(CFrame.new(post + Vector3.new(0, 3, 0)) * CFrame.Angles(0, math.pi / 2, 0))
 		model.Parent = folder.Guards
 		local root = model:FindFirstChild("HumanoidRootPart")
@@ -575,10 +596,24 @@ local function newHold(R)
 			end
 		end)
 
-		local guard = { model = model, humanoid = humanoid, root = root, post = post, home = post, lastHit = 0, rightHand = rightHand, archer = archer }
+		local guard = { model = model, humanoid = humanoid, root = root, post = post, home = post, lastHit = 0, rightHand = rightHand, archer = archer, champion = champion }
 		humanoid.Died:Connect(function()
 			guard.dead = true
 			markRaid()
+			if champion then
+				-- whoever struck last takes the champion's arm rings
+				local killer = Players:GetPlayerByUserId(model:GetAttribute("LastHitBy") or 0)
+				local colony = killer and services.ColonyService:Get(killer)
+				if colony then
+					for res, n in Config.Siege.ChampionLoot do
+						services.ColonyService:Add(colony, res, n)
+					end
+					services.QuestService:Count(colony, "champion")
+					services.ColonyService:Notify(colony, "You struck down the champion of " .. R.Name .. "! +" .. Grid.costText(Config.Siege.ChampionLoot), "gain")
+					services.ColonyService:Sync(colony)
+				end
+				notifyAll("The champion of " .. R.Name .. " has fallen!", "raid")
+			end
 			task.delay(6, function()
 				model:Destroy()
 			end)
@@ -605,6 +640,9 @@ local function newHold(R)
 			return
 		end
 		humanoid:TakeDamage(amount)
+		if attacker then
+			model:SetAttribute("LastHitBy", attacker.UserId)
+		end
 		local colony = attacker and services.ColonyService:Get(attacker)
 		if colony and services.DiplomacyService then
 			services.DiplomacyService:OnHostile(colony, R.Name)
@@ -745,7 +783,7 @@ local function newHold(R)
 							if hum then
 								local victim = Players:GetPlayerFromCharacter(target)
 								local colony = victim and services.ColonyService:Get(victim)
-								local damage = R.DefenderDamage
+								local damage = R.DefenderDamage * (g.champion and 2 or 1)
 								if services.ColonyService:Has(colony, "PathStorm") then
 									damage *= 0.7
 								end
