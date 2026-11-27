@@ -11838,6 +11838,15 @@ function WildlifeService:Start()
 				end
 				continue
 			end
+			-- deer also bolt from a wolf that comes close
+			for _, other in herd do
+				if other.wolf and other.area.plot == deer.area.plot then
+					local d = (other.body.Position - pos).Magnitude
+					if d < dist then
+						threat, dist = other.body.Position, d
+					end
+				end
+			end
 			if threat and dist < W.FleeDistance and not deer.fleeing then
 				-- bolt directly away
 				local away = Vector3.new(pos.X - threat.X, 0, pos.Z - threat.Z)
