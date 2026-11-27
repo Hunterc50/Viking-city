@@ -57,8 +57,8 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 
 | Action | How |
 | --- | --- |
-| Chop trees | Press **1** to hold the Axe, walk to a tree, hold **E** |
-| Mine rocks | Press **2** to hold the Pickaxe, walk to a rock, hold **E** |
+| Chop trees | Press **1** for the Axe, walk up to a tree and **click** to swing. Chips fly and a bar shows how many blows are left; after about 5 the tree topples. Iron Blades and Steel Edges need fewer swings |
+| Mine rocks | Press **2** for the Pickaxe, walk up to a rock and **click** to swing until it breaks apart (Masonry makes it faster) |
 | Hunt deer | Press **3** to hold the Bow, aim at a deer in the meadow and click (they run if you get too close) |
 | Forage berries | Walk to a berry bush and hold **E** |
 | Build | Pick a tab in the bottom menu (Housing, Production, Lore & Craft, Faith, War & Sea), hover a card to see what it does, click it, then click your land to place. Click the open tab again to fold the menu away |

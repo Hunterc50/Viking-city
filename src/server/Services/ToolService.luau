@@ -226,6 +226,9 @@ local function strike(player: Player)
 	end
 	lastStrike[player] = now
 	Sounds.play("Swing", root)
+	if held.Name ~= "Sword" then
+		services.ResourceNodeService:Hit(player, held.Name, root)
+	end
 	local colony = services.ColonyService:Get(player)
 	local damage = base
 	if held.Name == "Sword" then

@@ -56,8 +56,9 @@ Config.Tribes = { "Ravenfjord clan", "Ashvale folk", "Stormholm kin", "Elkmarsh 
 -- Wild resource nodes on each plot -----------------------------------------
 Config.Nodes = {
 	-- Tool = which tool must be held to gather it (nil = bare hands)
-	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8, Tool = "Axe" },
-	Rock = { Count = 12, Regrow = 4, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2, Tool = "Pickaxe" },
+	-- Hits = swings needed with the right tool (better tools need fewer)
+	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8, Tool = "Axe", Hits = 5 },
+	Rock = { Count = 12, Regrow = 4, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2, Tool = "Pickaxe", Hits = 6 },
 	Bush = { Count = 10, Regrow = 6, Gives = "Food", Amount = 6, Action = "Forage", Hold = 0.6 },
 }
 Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
@@ -297,10 +298,10 @@ Config.Trade = {
 -- Kind: "stat" (something you did, counted), "building", "population",
 -- "tech" (number researched). Rewards are added when a goal is done.
 Config.Quests = {
-	{ Title = "Fell your first trees", Text = "Press 1 for the Axe, walk to a tree and hold E.", Kind = "stat", Stat = "chop", Goal = 3, Reward = { Wood = 15 } },
+	{ Title = "Fell your first trees", Text = "Press 1 for the Axe, walk up to a tree and click to swing until it falls.", Kind = "stat", Stat = "chop", Goal = 3, Reward = { Wood = 15 } },
 	{ Title = "Plant barley", Text = "Open the Production tab and build a Barley Farm so nobody starves.", Kind = "building", Building = "Farm", Goal = 1, Reward = { Food = 20 } },
 	{ Title = "A woodcutter's hut", Text = "Build a Woodcutter. Idle villagers will take the jobs.", Kind = "building", Building = "Woodcutter", Goal = 1, Reward = { Wood = 20 } },
-	{ Title = "Break some stone", Text = "Press 2 for the Pickaxe and hold E on a rock.", Kind = "stat", Stat = "mine", Goal = 2, Reward = { Stone = 15 } },
+	{ Title = "Break some stone", Text = "Press 2 for the Pickaxe, walk up to a rock and click to swing until it breaks.", Kind = "stat", Stat = "mine", Goal = 2, Reward = { Stone = 15 } },
 	{ Title = "The hunt", Text = "Press 3 for the Bow and shoot a deer in the meadow behind your plot.", Kind = "stat", Stat = "deer", Goal = 1, Reward = { Food = 20 } },
 	{ Title = "Strike a bargain", Text = "Visit Ottar's stall on your beach (hold E) and make a trade.", Kind = "stat", Stat = "trade", Goal = 1, Reward = { Silver = 5 } },
 	{ Title = "Room to grow", Text = "Build an A-frame Cottage (Housing tab). Free beds bring babies and newcomers.", Kind = "building", Building = "Cottage", Goal = 1, Reward = { Wood = 20, Stone = 10 } },
@@ -392,11 +393,11 @@ Config.TechBranches = { "Buildings", "Gear", "Boats", "Culture", "Religion" }
 Config.Tech = {
 	-- Buildings
 	CropRotation = { Branch = "Buildings", Name = "Crop Rotation", Description = "Farms grow 25% more.", Cost = { Lore = 15 } },
-	Masonry = { Branch = "Buildings", Name = "Masonry", Description = "Quarries cut 30% more stone.", Cost = { Lore = 20 } },
+	Masonry = { Branch = "Buildings", Name = "Masonry", Description = "Quarries cut 30% more stone, and you break rocks faster.", Cost = { Lore = 20 } },
 	Trapping = { Branch = "Buildings", Name = "Trapping", Description = "Unlocks the Hunting Lodge.", Cost = { Lore = 20 } },
 	Chieftainship = { Branch = "Buildings", Name = "Chieftainship", Description = "Unlocks the Great Hall.", Cost = { Lore = 60, Silver = 20 }, Requires = { "Masonry" } },
 	-- Gear (needs a Smithy)
-	IronAxes = { Branch = "Gear", Name = "Iron Blades", Description = "Chop 50% more wood, and your Sword hits 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
+	IronAxes = { Branch = "Gear", Name = "Iron Blades", Description = "Chop 50% more wood with fewer swings, and your Sword hits 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
 	Longbows = { Branch = "Gear", Name = "Yew Longbows", Description = "Arrows hit 50% harder and fly further.", Cost = { Lore = 25, Wood = 40 }, Building = "Smithy" },
 	ChainMail = { Branch = "Gear", Name = "Ring Mail", Description = "You have 150 health instead of 100.", Cost = { Lore = 40, Silver = 25 }, Building = "Smithy", Requires = { "IronAxes" } },
 	SteelEdges = { Branch = "Gear", Name = "Steel Edges", Description = "Sword blows hit twice as hard.", Cost = { Lore = 60, Silver = 30 }, Building = "Smithy", Requires = { "IronAxes" } },

@@ -3,7 +3,8 @@
 	Makes the tools feel alive on your side:
 	  Bow      click to shoot where the mouse points (the server checks the hit)
 	  Axe /
-	  Pickaxe  click to swing (just for show; gathering uses the E prompt)
+	  Pickaxe  click to swing at a tree or rock (or an enemy)
+	  Sword    click to fight
 ]]
 
 local Players = game:GetService("Players")
