@@ -3,6 +3,7 @@
 *.rbxlx
 # ...except the ready-to-open build, which is committed on purpose
 !/VikingCity.rbxlx
+!/VikingCity.rbxl
 *.rbxl.lock
 *.rbxlx.lock
 sourcemap.json

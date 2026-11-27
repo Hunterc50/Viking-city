@@ -2,9 +2,9 @@
 
 A Roblox Viking settlement builder. Start with a longhouse and three settlers, gather wood, stone and food, build up your village, and grow your population through births and newcomers from neighbouring tribes. Later phases add technology, religion, culture, boats, and raiding (see [docs/DESIGN.md](docs/DESIGN.md)).
 
-> **Easiest way:** download [VikingCity.rbxlx](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/VikingCity.rbxlx) from the repo and double-click it to open in Roblox Studio, then press Play.
+> **Easiest way:** download [VikingCity.rbxl](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/VikingCity.rbxl) (click the link, it downloads straight away), then double-click it in your Downloads folder to open it in Roblox Studio, and press Play.
 >
-> No VS Code, Git or Rojo needed. This file is rebuilt from the code every time the code changes, so download it again to get the latest version.
+> No VS Code, Git or Rojo needed. This file is rebuilt from the code every time the code changes, so download it again to get the latest version. (`VikingCity.rbxlx` is the same place in text form, handy for reading changes on GitHub.)
 
 This repository holds all the game's code. You edit it in **VS Code**, and **Rojo** syncs it live into **Roblox Studio** (setup below, only needed when you want to edit code yourself).
 
@@ -47,7 +47,7 @@ You need: **Roblox Studio**, **VS Code**, and **Git** (Windows: install from <ht
 
 Open the folder in VS Code, start Rojo (step 4), open your place in Studio, click **Connect** in the Rojo plugin, press Play. Any change you save in VS Code appears in Studio instantly. Stop and press Play again to test it.
 
-The `VikingCity.rbxlx` in the repo is generated from `src/` with `rojo build -o VikingCity.rbxlx` (or `scripts/build-place.sh`). Don't edit that file by hand; any place you save yourself under another name is ignored by Git.
+`VikingCity.rbxl` and `VikingCity.rbxlx` in the repo are generated from `src/` by `scripts/build-place.sh` (which runs `rojo build`). Don't edit that file by hand; any place you save yourself under another name is ignored by Git.
 
 ---
 
