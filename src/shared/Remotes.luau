@@ -13,6 +13,7 @@ local EVENTS = {
 	"ShootArrow", -- client -> server: (aimPosition) when the Bow is used
 	"Strike", -- client -> server: an Axe swing (server finds who it hits)
 	"BoatInput", -- client -> server: (throttle, steer) while sailing
+	"BoatFire", -- client -> server: loose a volley from your ship (F at the helm)
 }
 
 local FUNCTIONS = {

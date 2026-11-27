@@ -1,7 +1,7 @@
 --[[
 	BoatController
 	While you sit at a boat's helm, sends your W/A/S/D (or arrow keys) to the
-	server, which moves the boat.
+	server, which moves the boat. F looses a volley of arrows.
 ]]
 
 local Players = game:GetService("Players")
@@ -24,7 +24,20 @@ local function down(...)
 	return false
 end
 
+local function atHelm(): boolean
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local seat = humanoid and humanoid.SeatPart
+	return seat ~= nil and seat:GetAttribute("Boat") == true
+end
+
 function BoatController:Start()
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.F and atHelm() then
+			Remotes.BoatFire:FireServer()
+		end
+	end)
+
 	local last = { 0, 0 }
 	local timer = 0
 	RunService.Heartbeat:Connect(function(dt)

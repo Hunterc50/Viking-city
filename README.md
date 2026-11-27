@@ -70,6 +70,8 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | New villagers | When every guard has fallen, hold **E** on the hold's villagers to offer them a home (needs a free bed) |
 | Research | Press **T** (or the Research button). Build a **Lore Hall** to earn Lore, then unlock techs in Buildings, Gear, Boats, Culture and Religion. A Smithy, Shipyard or Shrine opens their branch |
 | Sail | Build a **Shipyard**, research **Karve**, then hold **E** at the end of your jetty. W/S row, A/D steer, Space jumps off. Beach it near Greywater Hold for a sea raid |
+| Sea battle | At the helm press **F** to loose a volley of arrows at the nearest enemy ship, or ram it at full speed. Every ship has a hull bar; at zero it sinks. A Greywater raider ship patrols the fjord: sink it for silver, food and wood. Moor by your own jetty to repair |
+| Raid another player | Walk to the **war horn post** on the west edge of their plot and hold **E**. Beat their militia in time, then plunder the chest by their longhouse for 20% of their stores. Villages are never destroyed; a raided village gets a 10-minute shield, and new villages are safe until day 3 |
 | Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
 
 The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
@@ -200,6 +202,8 @@ src/
       ResourceNodeService.luau  trees, rocks, bushes, hand gathering, regrowth
       VillagerService.luau      jobs, food, happiness, births, immigrants, walking
       SaveService.luau          saves and loads each village with a DataStore
+      BoatService.luau          sailing, ship health, volleys, ramming, the raider ship
+      TownRaidService.luau      raiding other players' villages (militia, plunder, shields)
   client/   -> StarterPlayer.StarterPlayerScripts.Client
     init.client.luau    loads every controller in Controllers/
     Controllers/

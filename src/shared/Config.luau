@@ -231,6 +231,43 @@ Config.Combat = {
 	StrikeCooldown = 0.6,
 }
 
+-- Raiding other players' villages (they must be in the same server).
+-- Villages are never destroyed: the raider fights the village militia and,
+-- if every militia falls, plunders a share of the stores.
+Config.TownRaid = {
+	MinDay = 3, -- both villages must have reached this day (newcomer protection)
+	ShieldSeconds = 600, -- a raided village can't be raided again for 10 minutes
+	FailedShieldSeconds = 120,
+	AttackerCooldown = 300, -- a raider must wait 5 minutes between raids
+	Duration = 150, -- seconds to win the raid
+	MilitiaPerAdult = 0.5,
+	MinMilitia = 2,
+	MaxMilitia = 6,
+	MilitiaHealth = 90,
+	MilitiaDamage = 8,
+	LootShare = 0.2, -- the victor takes 20% of each resource...
+	LootCap = 150, -- ...but at most this much of each
+}
+
+-- Sea battles: ship health, broadside volleys (F at the helm) and ramming.
+Config.Naval = {
+	KarveHull = 120,
+	LongshipHull = 220,
+	VolleyDamage = 14, -- per arrow hit on a ship; 5 arrows a volley
+	VolleyArrows = 5,
+	VolleyRange = 80,
+	VolleyCooldown = 3,
+	RamDamage = 60, -- at full speed (longships hit 1.5x harder)
+	RamSelfDamage = 12,
+	RepairPerSecond = 4, -- hull repaired while moored by your jetty
+	-- the Greywater raider ship that patrols the fjord
+	RaiderHull = 180,
+	RaiderSpeed = 26,
+	RaiderAggro = 150,
+	RaiderRespawn = 180,
+	RaiderLoot = { Silver = 25, Food = 30, Wood = 40 },
+}
+
 Config.Bow = {
 	Range = 140,
 	Cooldown = 0.9,
