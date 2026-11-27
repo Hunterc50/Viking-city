@@ -1985,9 +1985,14 @@ local function assetsFolder(): Instance?
 			folder.Parent = ReplicatedStorage
 		end
 		-- imported parts come in loose: pin them before physics knocks them over
+		-- and stand every piece upright (our meshes are modelled upright, so
+		-- any turn on a part is from the importer or from tumbling)
 		for _, d in pack:GetDescendants() do
 			if d:IsA("BasePart") then
 				d.Anchored = true
+				if d:IsA("MeshPart") then
+					d.CFrame = CFrame.new(d.Position)
+				end
 			end
 		end
 		-- Studio's importer wraps each slot in "<Slot>_Node": drop the suffix
@@ -2139,9 +2144,15 @@ local function standUp(custom: Model)
 	end
 end
 
-local function fitTo(custom: Model, reference: Model, mode: string, extraScale: number?)
+-- `floorY` (optional) is where the bottom goes, in the built-in model's own
+-- space: 0 = the ground line, so a mesh never sinks to the depth of a
+-- built-in model's buried footing.
+local function fitTo(custom: Model, reference: Model, mode: string, extraScale: number?, floorY: number?)
 	local refCF, refSize = reference:GetBoundingBox()
 	local refBottom = reference:GetPivot():PointToObjectSpace(refCF.Position - V3(0, refSize.Y / 2, 0))
+	if floorY then
+		refBottom = V3(refBottom.X, floorY, refBottom.Z)
+	end
 	if custom:GetAttribute("Template") then
 		-- keep its own pivot (the built-in one), just bring it home
 		custom:PivotTo(CFrame.new())
@@ -2207,7 +2218,7 @@ function ModelFactory.building(buildingType: string): Model
 	local reference = partBuilt.building(buildingType)
 	local model = wrap(custom)
 	setAnchored(model, true)
-	fitTo(model, reference, "footprint")
+	fitTo(model, reference, "footprint", nil, 0)
 	keepGlow(model, reference)
 	reference:Destroy()
 	model.Name = buildingType
@@ -2331,8 +2342,11 @@ function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 	local reference = partLongship(length, sailColor)
 	local model = wrap(custom)
 	setAnchored(model, true)
-	-- same length and the same depth in the water as the built-in ship
-	fitTo(model, reference, "footprint")
+	-- same length as the built-in ship, riding a little higher: a mesh hull
+	-- is solid all the way down, so it looked swamped at the keel's depth
+	local _, refSize = reference:GetBoundingBox()
+	local keel = reference:GetPivot():PointToObjectSpace(reference:GetBoundingBox().Position).Y - refSize.Y / 2
+	fitTo(model, reference, "footprint", nil, keel + 0.9)
 	reference:Destroy()
 	return model
 end
@@ -2347,7 +2361,7 @@ function ModelFactory.prepareProp(custom: Instance, kind: string): Model
 	local model = wrap(custom)
 	setAnchored(model, true)
 	if #reference:GetChildren() > 0 then
-		fitTo(model, reference, "footprint")
+		fitTo(model, reference, "footprint", nil, 0)
 	end
 	reference:Destroy()
 	model.Name = kind
