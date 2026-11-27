@@ -150,6 +150,14 @@ Config.Buildings = {
 		Cost = { Wood = 90, Stone = 20 },
 		Rank = 2, -- Chieftain
 	},
+	Fishery = {
+		Display = "Fishery",
+		Description = "2 fishers row out for herring and cod. Works all year, even in winter.",
+		Size = { 2, 2 },
+		Cost = { Wood = 35, Stone = 5 },
+		Workers = 2,
+		Produces = { Food = 0.22 },
+	},
 	HuntingLodge = {
 		Display = "Hunting Lodge",
 		Description = "2 hunters bring back meat and hides.",
@@ -188,7 +196,7 @@ Config.Buildings = {
 -- Icon is an emoji shown on the tab and on each building card.
 Config.BuildCategories = {
 	{ Name = "Housing", Icon = "🏠", Buildings = { "Longhouse", "Cottage", "GreatHall" } },
-	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
+	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
 	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
@@ -196,7 +204,7 @@ Config.BuildCategories = {
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
-	Farm = "🌾", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
+	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
 	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
 }
 

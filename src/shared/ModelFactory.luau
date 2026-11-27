@@ -860,6 +860,40 @@ function Builders.HuntingLodge(model, w, d)
 	end
 end
 
+function Builders.Fishery(model, w, d)
+	-- a small net shed, racks of drying fish and a boat pulled up beside them
+	hall(model, CFrame.new(-3, 0, 3), { w = 7, d = 6, wallH = 4.4, roof = "thatch" })
+	for _, z in { -5.5, -2.5 } do
+		post(model, V3(0.5, 0, z), 4.6, 0.35)
+		post(model, V3(6.5, 0, z), 4.6, 0.35)
+		noShadow(addPart(model, { Name = "RackBar", Size = V3(6.4, 0.25, 0.25), Position = V3(3.5, 4.4, z), Color = Colors.DarkWood }))
+		for i = 0, 4 do
+			noShadow(addPart(model, {
+				Name = "Fish",
+				Size = V3(0.5, 1.6, 0.18),
+				CFrame = CFrame.new(1.2 + i * 1.15, 3.4, z) * CFrame.Angles(0, 0, math.rad(detail:NextNumber(-8, 8))),
+				Color = vary(Color3.fromRGB(176, 170, 150), 0.08),
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+			}))
+		end
+	end
+	-- a net hung to dry over the shed wall
+	noShadow(addPart(model, { Name = "Net", Size = V3(5, 2.6, 0.1), Position = V3(-3, 3, -0.1), Color = Color3.fromRGB(96, 88, 70), Material = Enum.Material.Fabric, CanCollide = false }))
+	-- the boat
+	for i = -2, 2 do
+		local t = 1 - math.abs(i) / 3
+		addPart(model, { Name = "Hull", Size = V3(2.4 * t + 0.4, 0.8, 1.1), CFrame = CFrame.new(4, 0.4, 3 + i * 1.05), Color = vary(Color3.fromRGB(96, 68, 46), 0.08), Material = Enum.Material.WoodPlanks })
+	end
+	for _, x in { -1, 1 } do
+		noShadow(addPart(model, { Name = "Oar", Size = V3(0.2, 0.2, 4.4), CFrame = CFrame.new(4 + x * 0.5, 0.9, 3) * CFrame.Angles(0, x * 0.15, 0), Color = Colors.Wood, CanCollide = false }))
+	end
+	-- barrels of salted fish
+	for _, p in { V3(-6, 0, -1), V3(-5, 0, -2.2) } do
+		addPart(model, { Name = "Barrel", Shape = Enum.PartType.Cylinder, Size = V3(1.6, 1.2, 1.2), CFrame = CFrame.new(p + V3(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 76, 48), Material = Enum.Material.WoodPlanks })
+	end
+end
+
 function Builders.GreatHall(model, w, d)
 	hall(model, CFrame.new(), { w = w - 4, d = d - 6, wallH = 9, roof = "shingle", pitch = 42, smoke = true })
 	-- tall carved pillars at the entrance and a pair of braziers
