@@ -66,6 +66,7 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Cancel | **Q**, or click the same button again |
 | Demolish | Click **Demolish** (right end of the tabs), then click one of your buildings (50% refund) |
 | Raid a rival hold | **Greywater Hold** is west past your plot; **Ravensfell**, a smaller hold with stone and smithy loot, is at the far east end past the last plot. Sound the war horn at the gate (E) if you want a proper fight |
+| Sail to Skerholm | **Skerholm** is an island hold out in the middle of the fjord, straight across the water from your plots. You can only get there by longship: steer for the plank landing on its beach, jump off (Space) and storm the gate. Its guards are the toughest (10 axemen, 4 archers), but its stores hold the richest loot (160 food, 90 silver, wood, stone and hides). It never sends warbands to your village |
 | Fight | Hold the Sword (5) and click near a guard, or shoot with the Bow (3). The Axe and Pickaxe only do a little damage. Greywater Hold has 9 axemen and 4 archers on towers, so research Ring Mail and Iron Blades first |
 | Burn buildings | Hold the Torch (4) and press **F** at a rival building. Fire spreads and chars it |
 | Plunder | Hold **E** at the chests by their storehouses for food, silver and wood |

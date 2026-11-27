@@ -269,8 +269,39 @@ Config.Rival2 = {
 	},
 }
 
--- Every rival hold in the valley.
-Config.Rivals = { Config.Rival, Config.Rival2 }
+-- A sea-raider stronghold on an island out in the fjord. There is no way
+-- there on foot: sail a longship over, land on the beach and storm the gate.
+-- Tougher guards, but the longer voyage pays: its stores are far richer.
+-- Sea = true means it never sends warbands overland to your village.
+Config.Rival3 = {
+	Name = "Skerholm",
+	Sea = true,
+	Center = Vector3.new(math.floor((Config.MAX_PLOTS * (Config.PLOT_CELLS * Config.CELL + Config.PLOT_GAP) - Config.PLOT_GAP) / 2), 1, -400),
+	Radius = 70,
+	GateAngle = math.pi / 2, -- the gate faces the beach on your side of the water
+	Defenders = 10,
+	Archers = 4,
+	DefenderHealth = 180,
+	DefenderDamage = 16,
+	ArcherDamage = 10,
+	ArcherRange = 100,
+	ArcherCooldown = 2.4,
+	DefenderAggro = 65,
+	Villagers = 4,
+	ChestLoot = { Food = 160, Silver = 90, Wood = 80, Stone = 60, Hides = 8 },
+	BurnSeconds = 25,
+	RegenSeconds = 420,
+	Layout = {
+		{ "Longhouse", Vector3.new(0, 0, -30) },
+		{ "Cottage", Vector3.new(-36, 0, 10) },
+		{ "Cottage", Vector3.new(36, 0, 8) },
+		{ "Smithy", Vector3.new(-30, 0, -40) },
+		{ "Storehouse", Vector3.new(32, 0, -38) },
+	},
+}
+
+-- Every rival hold: two in the valley, one across the water.
+Config.Rivals = { Config.Rival, Config.Rival2, Config.Rival3 }
 
 Config.Combat = {
 	-- melee damage per blow by what you're holding: tools barely scratch,

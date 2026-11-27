@@ -120,6 +120,20 @@ local function heightAt(x: number, z: number): number
 		h = lerp(h, bed, lake)
 	end
 
+	-- islands for the sea holds: a flat top with a sandy shelf around it
+	for _, rival in Config.Rivals do
+		if rival.Sea then
+			local dx, dz = x - rival.Center.X, z - rival.Center.Z
+			local dist = math.sqrt(dx * dx + dz * dz) + fbm(x, z, 1 / 40, 2, 53) * 18
+			local land = smooth(rival.Radius + 95, rival.Radius + 25, dist)
+			h = lerp(h, TOP + fbm(x, z, 1 / 30, 2, 57) * 1.2 * smooth(rival.Radius + 25, rival.Radius + 60, dist), land)
+			-- a rocky knoll behind the hold, away from the gate
+			local back = rival.Center - Vector3.new(math.cos(rival.GateAngle or 0), 0, math.sin(rival.GateAngle or 0)) * (rival.Radius + 85)
+			local kd = math.sqrt((x - back.X) ^ 2 + (z - back.Z) ^ 2)
+			h += smooth(70, 10, kd) * (26 + ridged(x, z, 1 / 60, 3) * 30)
+		end
+	end
+
 	return lerp(h, TOP, flatMask(x, z))
 end
 
@@ -136,14 +150,19 @@ local function inPlotArea(x: number, z: number): boolean
 	return false
 end
 
-local function inRivalArea(x: number, z: number): boolean
+-- The rival hold whose walls cover x, z (nil if none).
+local function rivalAt(x: number, z: number)
 	for _, rival in Config.Rivals do
 		local dx, dz = x - rival.Center.X, z - rival.Center.Z
 		if dx * dx + dz * dz < (rival.Radius + 22) ^ 2 then
-			return true
+			return rival
 		end
 	end
-	return false
+	return nil
+end
+
+local function inRivalArea(x: number, z: number): boolean
+	return rivalAt(x, z) ~= nil
 end
 
 local function inApron(x: number, z: number): boolean
@@ -174,12 +193,21 @@ local function surfaceMaterial(x: number, z: number, h: number, slope: number)
 	if inPlotArea(x, z) then
 		return M.Grass
 	end
-	if inRivalArea(x, z) then
-		local dx, dz = x - RIVAL.Center.X, z - RIVAL.Center.Z
+	local rival = rivalAt(x, z)
+	if rival then
+		local dx, dz = x - rival.Center.X, z - rival.Center.Z
 		return (dx * dx + dz * dz < 36 * 36 or fbm(x, z, 1 / 25, 2, 41) > 0.2) and M.Ground or M.Grass
 	end
 	if h < -6 then
 		return M.Mud
+	end
+	for _, r in Config.Rivals do
+		if r.Sea and h > 0.4 and h < 6 then
+			local dx, dz = x - r.Center.X, z - r.Center.Z
+			if dx * dx + dz * dz < (r.Radius + 48) ^ 2 then
+				return fbm(x, z, 1 / 28, 2, 61) > 0.15 and M.Ground or M.LeafyGrass
+			end
+		end
 	end
 	if h < 3 and z < SHORE_Z + 12 then
 		return M.Sand
@@ -643,6 +671,51 @@ local function setupLighting()
 	rays.Parent = Lighting
 end
 
+-- A plank landing jetty on the beach of each island hold, so you know where
+-- to bring your longship in.
+local function buildLandings()
+	for _, rival in Config.Rivals do
+		if rival.Sea then
+			local a = rival.GateAngle or 0
+			local dir = Vector3.new(math.cos(a), 0, math.sin(a))
+			local side = Vector3.new(-dir.Z, 0, dir.X)
+			-- walk out from the gate until the water starts
+			local startD = rival.Radius + 20
+			local waterD = startD
+			for d = startD, rival.Radius + 160, 2 do
+				local p = rival.Center + dir * d
+				if heightAt(p.X, p.Z) < -0.5 then
+					waterD = d
+					break
+				end
+			end
+			local model = Instance.new("Model")
+			model.Name = "Landing_" .. rival.Name
+			local wood = Color3.fromRGB(104, 78, 54)
+			local from, to = waterD - 10, waterD + 34
+			for d = from, to, 2.2 do
+				local p = rival.Center + dir * d
+				local plank = ModelFactory.addPart(model, {
+					Name = "Plank",
+					Size = Vector3.new(9, 0.5, 2),
+					Color = wood:Lerp(Color3.new(0, 0, 0), rng:NextNumber(0, 0.15)),
+					Material = M.WoodPlanks,
+				})
+				plank.CFrame = CFrame.lookAt(Vector3.new(p.X, 1.6, p.Z), Vector3.new(p.X, 1.6, p.Z) + dir)
+					* CFrame.Angles(0, 0, math.rad(rng:NextNumber(-1.5, 1.5)))
+			end
+			for d = from + 6, to, 9 do
+				for s = -1, 1, 2 do
+					local p = rival.Center + dir * d + side * s * 4.6
+					local post = ModelFactory.addPart(model, { Name = "Post", Size = Vector3.new(0.9, 10, 0.9), Color = wood:Lerp(Color3.new(0, 0, 0), 0.3), Material = M.Wood })
+					post.CFrame = CFrame.new(p.X, -2.5, p.Z)
+				end
+			end
+			model.Parent = workspace:FindFirstChild("Scenery") or workspace
+		end
+	end
+end
+
 local function clearPlaceholders()
 	-- The flat Baseplate and welcome sign are only there so the place isn't
 	-- empty in edit mode; the real world replaces them.
@@ -665,6 +738,7 @@ function WorldService:Init()
 	setupLighting()
 	buildTerrain()
 	scatterScenery()
+	buildLandings()
 	print("[WorldService] valley built")
 end
 
@@ -682,6 +756,7 @@ function WorldService:Bake()
 	setupLighting()
 	buildTerrain()
 	scatterScenery()
+	buildLandings()
 	workspace:SetAttribute("WorldBaked", true)
 end
 

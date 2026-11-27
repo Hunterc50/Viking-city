@@ -246,8 +246,7 @@ local function breach(colony, near: Vector3): boolean
 	return false
 end
 
-local function startRaid(colony)
-	local hold = Config.Rivals[rng:NextInteger(1, #Config.Rivals)]
+local function startRaid(colony, hold)
 	local count = math.min(VR.BaseRaiders + math.floor(colony.day / 4), VR.MaxRaiders)
 	local raid = { colony = colony, raiders = {}, stolen = 0, hold = hold.Name, startedAt = os.clock() }
 	raids[colony] = raid
@@ -264,14 +263,22 @@ local function startRaid(colony)
 	notify(colony, "RAID! " .. count .. " " .. hold.Name .. " raiders storm your village!", "raid")
 end
 
+-- Warbands march overland, so only the valley holds send them.
+local landHolds = {}
+for _, r in Config.Rivals do
+	if not r.Sea then
+		table.insert(landHolds, r)
+	end
+end
+
 local function warnOf(colony)
-	local hold = Config.Rivals[rng:NextInteger(1, #Config.Rivals)]
+	local hold = landHolds[rng:NextInteger(1, #landHolds)]
 	colony.raidWarned = true
 	notify(colony, "Scouts report a " .. hold.Name .. " warband marching on your village! They arrive in " .. VR.WarningSeconds .. " seconds.", "raid")
 	task.delay(VR.WarningSeconds, function()
 		colony.raidWarned = false
 		if colony.player.Parent and services.ColonyService:Get(colony.player) == colony then
-			startRaid(colony)
+			startRaid(colony, hold)
 		end
 	end)
 end
