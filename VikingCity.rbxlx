@@ -2079,7 +2079,10 @@ local servicesFolder = script:WaitForChild("Services")
 
 -- Models you edited in Workspace > ModelWorkshop become the game's models.
 local ModelFactory = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ModelFactory"))
-ModelFactory.collectWorkshop()
+local okCollect, errCollect = pcall(ModelFactory.collectWorkshop)
+if not okCollect then
+	warn("[VikingCity] couldn't use ModelWorkshop: " .. tostring(errCollect))
+end
 
 local services = {}
 for _, module in servicesFolder:GetChildren() do
@@ -2088,9 +2091,13 @@ for _, module in servicesFolder:GetChildren() do
 	end
 end
 
-for _, service in services do
+-- Each service starts on its own, so one error can't stop the whole game.
+for name, service in services do
 	if service.Init then
-		service:Init(services)
+		local ok, err = pcall(service.Init, service, services)
+		if not ok then
+			warn("[VikingCity] " .. name .. " failed to set up: " .. tostring(err))
+		end
 	end
 end
 
@@ -2099,12 +2106,17 @@ end
 -- pressing Stop, where it can be edited and saved.
 local show = workspace:FindFirstChild("ShowModelWorkshop")
 if show and show:IsA("BoolValue") and show.Value then
-	ModelFactory.bakeTemplates()
-	for _, item in workspace.ModelWorkshop:GetChildren() do
-		local handle = item:IsA("Tool") and item:FindFirstChild("Handle")
-		if handle and handle:IsA("BasePart") then
-			handle.CanTouch = false -- so walking past doesn't pick the tool up
+	local ok, err = pcall(function()
+		ModelFactory.bakeTemplates()
+		for _, item in workspace.ModelWorkshop:GetChildren() do
+			local handle = item:IsA("Tool") and item:FindFirstChild("Handle")
+			if handle and handle:IsA("BasePart") then
+				handle.CanTouch = false -- so walking past doesn't pick the tool up
+			end
 		end
+	end)
+	if not ok then
+		warn("[VikingCity] couldn't lay out ModelWorkshop: " .. tostring(err))
 	end
 	print("[VikingCity] ModelWorkshop is in Workspace: copy it, press Stop, paste it into Workspace")
 end
