@@ -145,6 +145,7 @@ function ColonyService:Sync(colony)
 		housing = self:Housing(colony),
 		happiness = math.floor(colony.happiness + 0.5),
 		starving = colony.starving,
+		cold = colony.cold,
 		day = colony.day,
 		season = workspace:GetAttribute("Season") or "Summer",
 		tech = (function()

@@ -633,11 +633,14 @@ function HudController:Start()
 		local dailyFood = state.population * Config.Villagers.FoodPerAdultPerSecond * Config.DAY_LENGTH
 		if state.starving then
 			warnLabel.Text = "Starving! Hold E on berry bushes, hunt deer (3), build farms."
+		elseif state.cold then
+			warnLabel.Text = "Hearths are cold! Homes burn Wood in winter: chop trees or build a Woodcutter."
+			warnLabel.TextColor3 = THEME.Bad
 		elseif food < dailyFood then
 			warnLabel.Text = "Food is running low: forage berries or build a Barley Farm."
 			warnLabel.TextColor3 = THEME.Bad
 		elseif state.season == "Autumn" and food < dailyFood * 4 then
-			warnLabel.Text = "Winter is coming: fields slow down, so store food now."
+			warnLabel.Text = "Winter is coming: store food now, and Wood for the hearths."
 			warnLabel.TextColor3 = THEME.Bad
 		elseif state.population > state.housing then
 			warnLabel.Text = "Not enough housing!"

@@ -250,8 +250,8 @@ local function apply(index: number, announce: boolean)
 	if announce then
 		local lines = {
 			Summer = "Summer is here. Long days and golden fields.",
-			Autumn = "Autumn has come. Harvest what you can and fill your stores.",
-			Winter = "Winter has come! Farms lie frozen and your people eat more.",
+			Autumn = "Autumn has come. Fill your stores with food, and stack firewood: homes burn Wood all winter.",
+			Winter = "Winter has come! Farms lie frozen, your people eat more, homes burn Wood, and wolves prowl the meadow.",
 			Spring = "Spring thaw. The fields can be sown again.",
 		}
 		local ColonyService = services.ColonyService

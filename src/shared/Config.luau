@@ -41,6 +41,10 @@ Config.Villagers = {
 	ImmigrationMaxGroup = 3,
 
 	LeaveBelowHappiness = 25,
+
+	-- in winter every lived-in home burns firewood; with none left, people are cold and unhappy
+	FirewoodPerHomePerSecond = 0.04, -- about 2.4 Wood per home per day
+	ColdHappiness = 15,
 }
 
 Config.Names = {

@@ -70,6 +70,10 @@ Config.Villagers = {
 	ImmigrationMaxGroup = 3,
 
 	LeaveBelowHappiness = 25,
+
+	-- in winter every lived-in home burns firewood; with none left, people are cold and unhappy
+	FirewoodPerHomePerSecond = 0.04, -- about 2.4 Wood per home per day
+	ColdHappiness = 15,
 }
 
 Config.Names = {
@@ -5129,6 +5133,7 @@ function ColonyService:Sync(colony)
 		housing = self:Housing(colony),
 		happiness = math.floor(colony.happiness + 0.5),
 		starving = colony.starving,
+		cold = colony.cold,
 		day = colony.day,
 		season = workspace:GetAttribute("Season") or "Summer",
 		tech = (function()
@@ -8645,8 +8650,8 @@ local function apply(index: number, announce: boolean)
 	if announce then
 		local lines = {
 			Summer = "Summer is here. Long days and golden fields.",
-			Autumn = "Autumn has come. Harvest what you can and fill your stores.",
-			Winter = "Winter has come! Farms lie frozen and your people eat more.",
+			Autumn = "Autumn has come. Fill your stores with food, and stack firewood: homes burn Wood all winter.",
+			Winter = "Winter has come! Farms lie frozen, your people eat more, homes burn Wood, and wolves prowl the meadow.",
 			Spring = "Spring thaw. The fields can be sown again.",
 		}
 		local ColonyService = services.ColonyService
@@ -10437,6 +10442,39 @@ local function eat(colony, dt: number)
 	end
 end
 
+-- Winter hearths: each lived-in home burns firewood from the Wood store.
+local function burnFirewood(colony, dt: number)
+	local wasCold = colony.cold
+	if services.SeasonService:Current().Name ~= "Winter" then
+		colony.cold = false
+		return
+	end
+	local homes = 0
+	for _, b in colony.buildings do
+		local def = Config.Buildings[b.type]
+		if def and (def.Housing or 0) > 0 then
+			homes += 1
+		end
+	end
+	local adults, children = counts(colony)
+	if homes == 0 or adults + children == 0 then
+		colony.cold = false
+		return
+	end
+	local need = homes * V.FirewoodPerHomePerSecond * dt
+	local wood = colony.resources.Wood or 0
+	if wood >= need then
+		colony.resources.Wood = wood - need
+		colony.cold = false
+	else
+		colony.resources.Wood = 0
+		colony.cold = true
+	end
+	if colony.cold and not wasCold then
+		services.ColonyService:Notify(colony, "Your hearths have gone cold! Homes burn Wood in winter. Chop trees (1) or build a Woodcutter.", "bad")
+	end
+end
+
 local function updateHappiness(colony, dt: number)
 	local adults, children = counts(colony)
 	local pop = adults + children
@@ -10451,6 +10489,9 @@ local function updateHappiness(colony, dt: number)
 	end
 	local homeless = math.max(0, pop - housing)
 	target -= homeless * 8
+	if colony.cold then
+		target -= V.ColdHappiness
+	end
 	-- buildings and traits that cheer people up (each building type counts once)
 	local cheered = {}
 	for _, b in colony.buildings do
@@ -10699,6 +10740,7 @@ function VillagerService:Tick(colony, dt: number)
 	assignJobs(colony)
 	produce(colony, dt)
 	eat(colony, dt)
+	burnFirewood(colony, dt)
 	updateHappiness(colony, dt)
 
 	colony.dayTimer += dt
@@ -15053,11 +15095,14 @@ function HudController:Start()
 		local dailyFood = state.population * Config.Villagers.FoodPerAdultPerSecond * Config.DAY_LENGTH
 		if state.starving then
 			warnLabel.Text = "Starving! Hold E on berry bushes, hunt deer (3), build farms."
+		elseif state.cold then
+			warnLabel.Text = "Hearths are cold! Homes burn Wood in winter: chop trees or build a Woodcutter."
+			warnLabel.TextColor3 = THEME.Bad
 		elseif food < dailyFood then
 			warnLabel.Text = "Food is running low: forage berries or build a Barley Farm."
 			warnLabel.TextColor3 = THEME.Bad
 		elseif state.season == "Autumn" and food < dailyFood * 4 then
-			warnLabel.Text = "Winter is coming: fields slow down, so store food now."
+			warnLabel.Text = "Winter is coming: store food now, and Wood for the hearths."
 			warnLabel.TextColor3 = THEME.Bad
 		elseif state.population > state.housing then
 			warnLabel.Text = "Not enough housing!"

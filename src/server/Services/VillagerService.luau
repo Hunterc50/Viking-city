@@ -327,6 +327,39 @@ local function eat(colony, dt: number)
 	end
 end
 
+-- Winter hearths: each lived-in home burns firewood from the Wood store.
+local function burnFirewood(colony, dt: number)
+	local wasCold = colony.cold
+	if services.SeasonService:Current().Name ~= "Winter" then
+		colony.cold = false
+		return
+	end
+	local homes = 0
+	for _, b in colony.buildings do
+		local def = Config.Buildings[b.type]
+		if def and (def.Housing or 0) > 0 then
+			homes += 1
+		end
+	end
+	local adults, children = counts(colony)
+	if homes == 0 or adults + children == 0 then
+		colony.cold = false
+		return
+	end
+	local need = homes * V.FirewoodPerHomePerSecond * dt
+	local wood = colony.resources.Wood or 0
+	if wood >= need then
+		colony.resources.Wood = wood - need
+		colony.cold = false
+	else
+		colony.resources.Wood = 0
+		colony.cold = true
+	end
+	if colony.cold and not wasCold then
+		services.ColonyService:Notify(colony, "Your hearths have gone cold! Homes burn Wood in winter. Chop trees (1) or build a Woodcutter.", "bad")
+	end
+end
+
 local function updateHappiness(colony, dt: number)
 	local adults, children = counts(colony)
 	local pop = adults + children
@@ -341,6 +374,9 @@ local function updateHappiness(colony, dt: number)
 	end
 	local homeless = math.max(0, pop - housing)
 	target -= homeless * 8
+	if colony.cold then
+		target -= V.ColdHappiness
+	end
 	-- buildings and traits that cheer people up (each building type counts once)
 	local cheered = {}
 	for _, b in colony.buildings do
@@ -589,6 +625,7 @@ function VillagerService:Tick(colony, dt: number)
 	assignJobs(colony)
 	produce(colony, dt)
 	eat(colony, dt)
+	burnFirewood(colony, dt)
 	updateHappiness(colony, dt)
 
 	colony.dayTimer += dt
