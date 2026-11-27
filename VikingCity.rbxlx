@@ -177,6 +177,7 @@ Config.Buildings = {
 		Description = "Builds ships. Needed to research boats; launch them from your dock.",
 		Size = { 3, 4 },
 		Cost = { Wood = 90, Stone = 20 },
+		Rank = 2, -- Chieftain
 	},
 	HuntingLodge = {
 		Display = "Hunting Lodge",
@@ -195,6 +196,7 @@ Config.Buildings = {
 		Housing = 10,
 		Happiness = 5,
 		Requires = "Chieftainship",
+		Rank = 3, -- Hersir
 	},
 	Palisade = {
 		Display = "Palisade",
@@ -343,6 +345,17 @@ Config.Quests = {
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
 	{ Title = "Hold the line", Text = "Build a Watchtower, then beat off a raid on your village.", Kind = "stat", Stat = "defend", Goal = 1, Reward = { Silver = 15, Wood = 40 } },
 	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+}
+
+-- Ranks: your title grows with your village. Each rank raises how many
+-- people can live in your settlement and unlocks bigger buildings
+-- (a building's Rank field). You rise as soon as you meet the needs.
+Config.Ranks = {
+	{ Name = "Settler", PopCap = 10 },
+	{ Name = "Chieftain", PopCap = 16, Needs = { Population = 6, Buildings = 5 }, Reward = { Silver = 10 } },
+	{ Name = "Hersir", PopCap = 26, Needs = { Population = 12, Buildings = 10, Tech = 3 }, Reward = { Silver = 25, Lore = 15 } },
+	{ Name = "Jarl", PopCap = 40, Needs = { Population = 20, Buildings = 16, Tech = 7 }, Reward = { Silver = 50, Lore = 30 } },
+	{ Name = "King", PopCap = 70, Needs = { Population = 32, Buildings = 24, Tech = 12 }, Reward = { Silver = 100, Lore = 60 } },
 }
 
 -- Rival warbands raid YOUR village every few days. Fight them off, build
@@ -3302,6 +3315,9 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 	end
 
 	local def = Config.Buildings[buildingType]
+	if def.Rank and services.RankService:Rank(colony) < def.Rank then
+		return false, "Become a " .. Config.Ranks[def.Rank].Name .. " first (grow your village)"
+	end
 	if def.Requires and not ColonyService:Has(colony, def.Requires) then
 		return false, "Research " .. Config.Tech[def.Requires].Name .. " first (press T)"
 	end
@@ -3537,6 +3553,7 @@ function ColonyService:Sync(colony)
 		end)(),
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 		quest = services.QuestService:State(colony),
+		rank = services.RankService:State(colony),
 	}
 
 	if colony.gridDirty then
@@ -4763,6 +4780,115 @@ return RaidService
         </Item>
         <Item class="ModuleScript" referent="20">
           <Properties>
+            <string name="Name">RankService</string>
+            <string name="Source"><![CDATA[--[[
+	RankService
+	Your title: Settler -> Chieftain -> Hersir -> Jarl -> King (Config.Ranks).
+	You rise as soon as your village meets the next rank's needs (people,
+	buildings, research). Each rank raises the population cap and unlocks
+	bigger buildings (Config.Buildings[...].Rank).
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local RankService = {}
+
+local services
+
+function RankService:Init(allServices)
+	services = allServices
+end
+
+local function counts(colony)
+	local pop, buildings, tech = 0, 0, 0
+	for _ in colony.villagers do
+		pop += 1
+	end
+	for _, b in colony.buildings do
+		if b.type ~= "Palisade" then
+			buildings += 1
+		end
+	end
+	for _ in colony.tech do
+		tech += 1
+	end
+	return { Population = pop, Buildings = buildings, Tech = tech }
+end
+
+function RankService:Rank(colony): number
+	return colony.rank or 1
+end
+
+function RankService:PopCap(colony): number
+	return Config.Ranks[self:Rank(colony)].PopCap
+end
+
+-- What the HUD shows about your rank and the next one.
+function RankService:State(colony)
+	local r = self:Rank(colony)
+	local nextRank = Config.Ranks[r + 1]
+	local state = { index = r, name = Config.Ranks[r].Name, cap = Config.Ranks[r].PopCap }
+	if nextRank then
+		local have = counts(colony)
+		local bits = {}
+		for _, key in { "Population", "Buildings", "Tech" } do
+			local need = nextRank.Needs[key]
+			if need then
+				local word = ({ Population = "people", Buildings = "buildings", Tech = "research" })[key]
+				table.insert(bits, math.min(have[key], need) .. "/" .. need .. " " .. word)
+			end
+		end
+		state.nextName = nextRank.Name
+		state.nextText = table.concat(bits, ", ")
+	end
+	return state
+end
+
+function RankService:Check(colony)
+	local r = self:Rank(colony)
+	local nextRank = Config.Ranks[r + 1]
+	if not nextRank then
+		return
+	end
+	local have = counts(colony)
+	for key, need in nextRank.Needs do
+		if (have[key] or 0) < need then
+			return
+		end
+	end
+	colony.rank = r + 1
+	for res, n in nextRank.Reward or {} do
+		services.ColonyService:Add(colony, res, n)
+	end
+	local unlocked = {}
+	for _, id in Config.BuildOrder do
+		if Config.Buildings[id].Rank == colony.rank then
+			table.insert(unlocked, Config.Buildings[id].Display)
+		end
+	end
+	local extra = #unlocked > 0 and (" Unlocked: " .. table.concat(unlocked, ", ") .. ".") or ""
+	services.ColonyService:Notify(colony, "You are now " .. nextRank.Name .. "!", "raid")
+	services.ColonyService:Notify(colony, "Room for " .. nextRank.PopCap .. " people. +" .. Grid.costText(nextRank.Reward or {}) .. "." .. extra, "good")
+	self:Check(colony)
+end
+
+function RankService:Start()
+	while true do
+		task.wait(2)
+		for _, colony in services.ColonyService:All() do
+			self:Check(colony)
+		end
+	end
+end
+
+return RankService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="21">
+          <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
 	ResourceNodeService
@@ -5075,7 +5201,7 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">SaveService</string>
             <string name="Source"><![CDATA[--[[
@@ -5188,6 +5314,7 @@ function SaveService:Snapshot(colony)
 		happiness = colony.happiness,
 		day = colony.day,
 		quest = colony.quest,
+		rank = colony.rank,
 		stats = colony.stats,
 	}
 end
@@ -5207,6 +5334,7 @@ function SaveService:Restore(colony, data)
 	colony.happiness = tonumber(data.happiness) or colony.happiness
 	colony.day = tonumber(data.day) or colony.day
 	colony.quest = tonumber(data.quest) or 1
+	colony.rank = tonumber(data.rank) or 1
 	if type(data.stats) == "table" then
 		for k, n in data.stats do
 			if type(k) == "string" and type(n) == "number" then
@@ -5312,7 +5440,7 @@ return SaveService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
@@ -5503,7 +5631,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">TechService</string>
             <string name="Source"><![CDATA[--[[
@@ -5590,7 +5718,7 @@ return TechService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -5873,7 +6001,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">TownRaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -6305,7 +6433,7 @@ return TownRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">TradeService</string>
             <string name="Source"><![CDATA[--[[
@@ -6445,7 +6573,7 @@ return TradeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">VillageDefenseService</string>
             <string name="Source"><![CDATA[--[[
@@ -6879,7 +7007,7 @@ return VillageDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -7266,7 +7394,8 @@ local function newDay(self, colony)
 	end
 
 	local adults, children = counts(colony)
-	local free = ColonyService:Housing(colony) - adults - children
+	-- free beds, but never past the population cap of your rank
+	local free = math.min(ColonyService:Housing(colony), services.RankService:PopCap(colony)) - adults - children
 	local h = colony.happiness
 
 	-- Unhappy people leave first.
@@ -7387,7 +7516,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -7553,7 +7682,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -8261,15 +8390,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="31">
+  <Item class="StarterPlayer" referent="32">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="32">
+    <Item class="StarterPlayerScripts" referent="33">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="33">
+      <Item class="LocalScript" referent="34">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -8302,11 +8431,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="34">
+        <Item class="Folder" referent="35">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -8416,7 +8545,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -8478,7 +8607,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -8549,7 +8678,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="38">
+          <Item class="ModuleScript" referent="39">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -8827,7 +8956,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="39">
+          <Item class="ModuleScript" referent="40">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -8917,7 +9046,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="40">
+          <Item class="ModuleScript" referent="41">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -9113,7 +9242,7 @@ function HudController:Start()
 	local popLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 3, Parent = panel })
 	local jobLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 4, TextColor3 = THEME.Muted, TextSize = 14, Parent = panel })
 	local moodLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 5, Parent = panel })
-	local warnLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 6, TextColor3 = THEME.Bad, TextSize = 14, Parent = panel })
+	local warnLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 6, TextColor3 = THEME.Bad, TextSize = 14, TextScaled = true, Parent = panel })
 
 	---------------------------------------------------------------- build menu
 	--[[
@@ -9241,7 +9370,11 @@ function HudController:Start()
 		tipTitle.Text = (Config.BuildingIcons[buildingType] or "") .. "  " .. def.Display
 		tipBody.Text = def.Description
 		tipStats.Text = statsText(def)
-		if def.Requires and not known[def.Requires] then
+		local rank = lastState and lastState.rank and lastState.rank.index or 1
+		if def.Rank and rank < def.Rank then
+			tipCost.Text = "🔒 Become a " .. Config.Ranks[def.Rank].Name .. " first"
+			tipCost.TextColor3 = THEME.Bad
+		elseif def.Requires and not known[def.Requires] then
 			tipCost.Text = "🔒 Research " .. Config.Tech[def.Requires].Name .. " first (T)"
 			tipCost.TextColor3 = THEME.Bad
 		else
@@ -9521,9 +9654,10 @@ function HudController:Start()
 			end
 			lastValues[name] = value
 		end
-		dayLabel.Text = "Day " .. state.day .. "  ·  " .. (state.season or "")
+		local rank = state.rank
+		dayLabel.Text = (rank and (rank.name .. "  ·  ") or "") .. "Day " .. state.day .. "  ·  " .. (state.season or "")
 		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
-		popLabel.Text = string.format("Population %d / %d homes", state.population, state.housing)
+		popLabel.Text = string.format("Population %d / %d homes", state.population, math.min(state.housing, rank and rank.cap or state.housing))
 		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)
 		moodLabel.Text = string.format("Happiness %d (%s)", state.happiness, moodWord(state.happiness))
 		moodLabel.TextColor3 = state.happiness >= 55 and THEME.Good or (state.happiness >= 35 and THEME.Text or THEME.Bad)
@@ -9533,6 +9667,9 @@ function HudController:Start()
 			warnLabel.Text = "Not enough housing!"
 		elseif state.idle > 0 then
 			warnLabel.Text = "Idle villagers: build workplaces."
+			warnLabel.TextColor3 = THEME.Muted
+		elseif rank and rank.nextName then
+			warnLabel.Text = "Next: " .. rank.nextName .. " (" .. rank.nextText .. ")"
 			warnLabel.TextColor3 = THEME.Muted
 		else
 			warnLabel.Text = ""
@@ -9565,7 +9702,12 @@ function HudController:Start()
 		for _, buildingType in Config.BuildOrder do
 			local def = Config.Buildings[buildingType]
 			local entry = buttons[buildingType]
-			if def.Requires and not known[def.Requires] then
+			local rankIndex = state.rank and state.rank.index or 1
+			if def.Rank and rankIndex < def.Rank then
+				entry.cost.Text = "🔒 " .. Config.Ranks[def.Rank].Name
+				entry.cost.TextColor3 = THEME.Muted
+				entry.button.BackgroundTransparency = 0.55
+			elseif def.Requires and not known[def.Requires] then
 				entry.cost.Text = "🔒 " .. Config.Tech[def.Requires].Name
 				entry.cost.TextColor3 = THEME.Muted
 				entry.button.BackgroundTransparency = 0.55
@@ -9583,7 +9725,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="41">
+          <Item class="ModuleScript" referent="42">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -9664,7 +9806,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="42">
+          <Item class="ModuleScript" referent="43">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -9875,7 +10017,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="43">
+          <Item class="ModuleScript" referent="44">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -9966,7 +10108,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="44">
+          <Item class="ModuleScript" referent="45">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -10018,7 +10160,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="45">
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -10340,7 +10482,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="46">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -10428,7 +10570,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="47">
+          <Item class="ModuleScript" referent="48">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -10626,7 +10768,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -10679,7 +10821,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -10774,12 +10916,12 @@ return VillagerAnimController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="50">
+  <Item class="Workspace" referent="51">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="51">
+    <Item class="Part" referent="52">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -10800,13 +10942,13 @@ return VillagerAnimController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="52">
+    <Item class="BoolValue" referent="53">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="53">
+    <Item class="SpawnLocation" referent="54">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -10826,7 +10968,7 @@ return VillagerAnimController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="54">
+    <Item class="Part" referent="55">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -10843,13 +10985,13 @@ return VillagerAnimController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="55">
+      <Item class="SurfaceGui" referent="56">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="56">
+        <Item class="TextLabel" referent="57">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -10881,13 +11023,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="57">
+      <Item class="SurfaceGui" referent="58">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="58">
+        <Item class="TextLabel" referent="59">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

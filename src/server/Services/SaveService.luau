@@ -108,6 +108,7 @@ function SaveService:Snapshot(colony)
 		happiness = colony.happiness,
 		day = colony.day,
 		quest = colony.quest,
+		rank = colony.rank,
 		stats = colony.stats,
 	}
 end
@@ -127,6 +128,7 @@ function SaveService:Restore(colony, data)
 	colony.happiness = tonumber(data.happiness) or colony.happiness
 	colony.day = tonumber(data.day) or colony.day
 	colony.quest = tonumber(data.quest) or 1
+	colony.rank = tonumber(data.rank) or 1
 	if type(data.stats) == "table" then
 		for k, n in data.stats do
 			if type(k) == "string" and type(n) == "number" then

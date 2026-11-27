@@ -382,7 +382,8 @@ local function newDay(self, colony)
 	end
 
 	local adults, children = counts(colony)
-	local free = ColonyService:Housing(colony) - adults - children
+	-- free beds, but never past the population cap of your rank
+	local free = math.min(ColonyService:Housing(colony), services.RankService:PopCap(colony)) - adults - children
 	local h = colony.happiness
 
 	-- Unhappy people leave first.

@@ -148,6 +148,7 @@ Config.Buildings = {
 		Description = "Builds ships. Needed to research boats; launch them from your dock.",
 		Size = { 3, 4 },
 		Cost = { Wood = 90, Stone = 20 },
+		Rank = 2, -- Chieftain
 	},
 	HuntingLodge = {
 		Display = "Hunting Lodge",
@@ -166,6 +167,7 @@ Config.Buildings = {
 		Housing = 10,
 		Happiness = 5,
 		Requires = "Chieftainship",
+		Rank = 3, -- Hersir
 	},
 	Palisade = {
 		Display = "Palisade",
@@ -314,6 +316,17 @@ Config.Quests = {
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
 	{ Title = "Hold the line", Text = "Build a Watchtower, then beat off a raid on your village.", Kind = "stat", Stat = "defend", Goal = 1, Reward = { Silver = 15, Wood = 40 } },
 	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+}
+
+-- Ranks: your title grows with your village. Each rank raises how many
+-- people can live in your settlement and unlocks bigger buildings
+-- (a building's Rank field). You rise as soon as you meet the needs.
+Config.Ranks = {
+	{ Name = "Settler", PopCap = 10 },
+	{ Name = "Chieftain", PopCap = 16, Needs = { Population = 6, Buildings = 5 }, Reward = { Silver = 10 } },
+	{ Name = "Hersir", PopCap = 26, Needs = { Population = 12, Buildings = 10, Tech = 3 }, Reward = { Silver = 25, Lore = 15 } },
+	{ Name = "Jarl", PopCap = 40, Needs = { Population = 20, Buildings = 16, Tech = 7 }, Reward = { Silver = 50, Lore = 30 } },
+	{ Name = "King", PopCap = 70, Needs = { Population = 32, Buildings = 24, Tech = 12 }, Reward = { Silver = 100, Lore = 60 } },
 }
 
 -- Rival warbands raid YOUR village every few days. Fight them off, build

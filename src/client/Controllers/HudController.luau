@@ -191,7 +191,7 @@ function HudController:Start()
 	local popLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 3, Parent = panel })
 	local jobLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 4, TextColor3 = THEME.Muted, TextSize = 14, Parent = panel })
 	local moodLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 5, Parent = panel })
-	local warnLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 6, TextColor3 = THEME.Bad, TextSize = 14, Parent = panel })
+	local warnLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 6, TextColor3 = THEME.Bad, TextSize = 14, TextScaled = true, Parent = panel })
 
 	---------------------------------------------------------------- build menu
 	--[[
@@ -319,7 +319,11 @@ function HudController:Start()
 		tipTitle.Text = (Config.BuildingIcons[buildingType] or "") .. "  " .. def.Display
 		tipBody.Text = def.Description
 		tipStats.Text = statsText(def)
-		if def.Requires and not known[def.Requires] then
+		local rank = lastState and lastState.rank and lastState.rank.index or 1
+		if def.Rank and rank < def.Rank then
+			tipCost.Text = "🔒 Become a " .. Config.Ranks[def.Rank].Name .. " first"
+			tipCost.TextColor3 = THEME.Bad
+		elseif def.Requires and not known[def.Requires] then
 			tipCost.Text = "🔒 Research " .. Config.Tech[def.Requires].Name .. " first (T)"
 			tipCost.TextColor3 = THEME.Bad
 		else
@@ -599,9 +603,10 @@ function HudController:Start()
 			end
 			lastValues[name] = value
 		end
-		dayLabel.Text = "Day " .. state.day .. "  ·  " .. (state.season or "")
+		local rank = state.rank
+		dayLabel.Text = (rank and (rank.name .. "  ·  ") or "") .. "Day " .. state.day .. "  ·  " .. (state.season or "")
 		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
-		popLabel.Text = string.format("Population %d / %d homes", state.population, state.housing)
+		popLabel.Text = string.format("Population %d / %d homes", state.population, math.min(state.housing, rank and rank.cap or state.housing))
 		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)
 		moodLabel.Text = string.format("Happiness %d (%s)", state.happiness, moodWord(state.happiness))
 		moodLabel.TextColor3 = state.happiness >= 55 and THEME.Good or (state.happiness >= 35 and THEME.Text or THEME.Bad)
@@ -611,6 +616,9 @@ function HudController:Start()
 			warnLabel.Text = "Not enough housing!"
 		elseif state.idle > 0 then
 			warnLabel.Text = "Idle villagers: build workplaces."
+			warnLabel.TextColor3 = THEME.Muted
+		elseif rank and rank.nextName then
+			warnLabel.Text = "Next: " .. rank.nextName .. " (" .. rank.nextText .. ")"
 			warnLabel.TextColor3 = THEME.Muted
 		else
 			warnLabel.Text = ""
@@ -643,7 +651,12 @@ function HudController:Start()
 		for _, buildingType in Config.BuildOrder do
 			local def = Config.Buildings[buildingType]
 			local entry = buttons[buildingType]
-			if def.Requires and not known[def.Requires] then
+			local rankIndex = state.rank and state.rank.index or 1
+			if def.Rank and rankIndex < def.Rank then
+				entry.cost.Text = "🔒 " .. Config.Ranks[def.Rank].Name
+				entry.cost.TextColor3 = THEME.Muted
+				entry.button.BackgroundTransparency = 0.55
+			elseif def.Requires and not known[def.Requires] then
 				entry.cost.Text = "🔒 " .. Config.Tech[def.Requires].Name
 				entry.cost.TextColor3 = THEME.Muted
 				entry.button.BackgroundTransparency = 0.55

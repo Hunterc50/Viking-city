@@ -80,6 +80,8 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 
 The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
 
+**Ranks:** you start as a **Settler**. Grow your village (people, buildings, research) to become **Chieftain**, **Hersir**, **Jarl** and finally **King**. Each rank lets more people live in your village and unlocks bigger buildings (Shipyard at Chieftain, Great Hall at Hersir). The colony panel (top right) shows your rank and what you need for the next one.
+
 The **Saga** panel (top left) always shows your next goal and its reward, from felling your first tree to building a Great Hall. It's the easiest way to learn the game.
 
 Research shows on your Viking: **Chain Mail** gives you a mail shirt and helmet, and **Iron Axes** / **Steel Edges** change your axe head.
@@ -243,6 +245,7 @@ src/
       VillagerService.luau      jobs, food, happiness, births, immigrants, walking
       SaveService.luau          saves and loads each village with a DataStore
       QuestService.luau         the Saga: a chain of goals with rewards
+      RankService.luau          Settler to King ranks, population caps
       TradeService.luau         Ottar's trading stalls on the beach
       VillageDefenseService.luau  rival warbands raiding your village, watchtowers
       BoatService.luau          sailing, ship health, volleys, ramming, the raider ship

@@ -163,6 +163,7 @@ function ColonyService:Sync(colony)
 		end)(),
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 		quest = services.QuestService:State(colony),
+		rank = services.RankService:State(colony),
 	}
 
 	if colony.gridDirty then

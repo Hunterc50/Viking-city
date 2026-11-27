@@ -120,6 +120,9 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 	end
 
 	local def = Config.Buildings[buildingType]
+	if def.Rank and services.RankService:Rank(colony) < def.Rank then
+		return false, "Become a " .. Config.Ranks[def.Rank].Name .. " first (grow your village)"
+	end
 	if def.Requires and not ColonyService:Has(colony, def.Requires) then
 		return false, "Research " .. Config.Tech[def.Requires].Name .. " first (press T)"
 	end
