@@ -93,9 +93,10 @@ local function target(from: Vector3): (Vector3?, string?)
 			return m:GetAttribute("NodeKind") == kind
 		end)
 		return p, quest.Stat == "chop" and "Press 1, then click the tree" or "Press 2, then click the rock"
-	elseif quest.Stat == "deer" then
-		return nearestIn(workspace:FindFirstChild("Wildlife"), from, function()
-			return true
+	elseif quest.Stat == "deer" or quest.Stat == "wolf" then
+		local wolf = quest.Stat == "wolf"
+		return nearestIn(workspace:FindFirstChild("Wildlife"), from, function(m)
+			return (m:GetAttribute("Wolf") == true) == wolf
 		end), "Press 3, aim and click to shoot"
 	elseif quest.Stat == "trade" then
 		return nearestIn(workspace, from, function(m)

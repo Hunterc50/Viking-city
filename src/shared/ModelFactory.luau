@@ -1551,6 +1551,57 @@ function ModelFactory.deer(rng: Random): Model
 	return model
 end
 
+-- A grey wolf, built like the deer: an anchored Body with welded parts.
+function ModelFactory.wolf(rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "Wolf"
+	local g = 104 + rng:NextInteger(-14, 14)
+	local coat = Color3.fromRGB(g, g - 4, g - 10)
+	local pale = Color3.fromRGB(196, 192, 184)
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Anchored = true
+	body.CanCollide = false
+	body.Size = V3(1.2, 1.2, 3)
+	body.Color = coat
+	body.Material = Enum.Material.Fabric
+	body.CFrame = CFrame.new(0, 2, 0)
+	body.Parent = model
+	local function attach(name, size, offset: CFrame, color)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color or coat
+		p.Material = Enum.Material.Fabric
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = body.CFrame * offset
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	for _, x in { -0.4, 0.4 } do
+		for _, z in { -1.05, 1.05 } do
+			attach("Leg", V3(0.3, 1.6, 0.3), CFrame.new(x, -1.2, z), coat:Lerp(Color3.new(0, 0, 0), 0.25))
+		end
+	end
+	attach("Ruff", V3(1.4, 1.4, 1), CFrame.new(0, 0.15, -1.2), coat:Lerp(pale, 0.2))
+	attach("Head", V3(0.9, 0.85, 1), CFrame.new(0, 0.55, -1.9))
+	attach("Snout", V3(0.5, 0.45, 0.7), CFrame.new(0, 0.38, -2.6), pale)
+	for _, x in { -0.28, 0.28 } do
+		attach("Ear", V3(0.22, 0.45, 0.15), CFrame.new(x, 1.15, -1.75))
+		attach("Eye", V3(0.12, 0.12, 0.05), CFrame.new(x * 0.8, 0.72, -2.41), Color3.fromRGB(230, 190, 70))
+	end
+	attach("Tail", V3(0.35, 0.35, 1.6), CFrame.new(0, 0.1, 2) * CFrame.Angles(math.rad(30), 0, 0), coat:Lerp(Color3.new(0, 0, 0), 0.15))
+	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", 2)
+	return model
+end
+
 -- A flying arrow (visual only).
 function ModelFactory.arrow(): BasePart
 	local shaft = Instance.new("Part")

@@ -3,6 +3,9 @@
 	Deer graze in the meadow behind each plot. They wander slowly and bolt
 	when a player comes close, so you hunt them with the Bow from a distance.
 	A deer gives meat (Food) and Hides, then a new one wanders in later.
+	In winter a wolf pack prowls the meadow behind each settled plot. Wolves
+	slink closer when you are near and circle you at a distance; shoot one
+	for its pelt (Hides). They leave when winter ends.
 ]]
 
 local Players = game:GetService("Players")
@@ -111,6 +114,15 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 
 	local ColonyService = services.ColonyService
 	local colony = ColonyService:Get(hunter)
+	if deer.wolf then
+		if colony then
+			ColonyService:Add(colony, "Hides", W.WolfHides)
+			services.QuestService:Count(colony, "wolf")
+			ColonyService:Notify(colony, "A wolf brought down! +" .. W.WolfHides .. " Hides", "gain")
+			ColonyService:Sync(colony)
+		end
+		return
+	end
 	if colony then
 		local mult = ColonyService:Has(colony, "PathWoods") and 2 or 1
 		ColonyService:Add(colony, "Food", W.Meat * mult)
@@ -123,6 +135,59 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 	task.delay(W.RespawnSeconds, function()
 		self:Spawn(deer.area)
 	end)
+end
+
+local function spawnWolf(area)
+	nextId += 1
+	local model = ModelFactory.wolf(rng)
+	model:SetAttribute("DeerId", nextId) -- so arrows find it like a deer
+	model:SetAttribute("Wolf", true)
+	local x = rng:NextNumber(area.minX, area.maxX)
+	local z = area.maxZ - rng:NextNumber(0, 20) -- they come down from the woods
+	local offset = model:GetAttribute("GroundOffset")
+	model:PivotTo(CFrame.new(x, services.WorldService:GroundHeight(x, z) + offset, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+	model.Parent = folder
+	herd[model] = { model = model, body = model.PrimaryPart, offset = offset, area = area, busyUntil = 0, wolf = true }
+end
+
+local lastPack = {} -- [plot index] = os.clock() of the last wolf that came in
+
+-- Keeps a pack behind every settled plot in winter, and sends them off after.
+local function tendPacks()
+	local winter = workspace:GetAttribute("Season") == "Winter"
+	local counts = {}
+	for model, rec in herd do
+		if rec.wolf then
+			if not winter then
+				herd[model] = nil
+				rec.walk = (rec.walk or 0) + 1
+				model:Destroy()
+			else
+				counts[rec.area.plot] = (counts[rec.area.plot] or 0) + 1
+			end
+		end
+	end
+	if not winter then
+		return
+	end
+	local settled = {}
+	for _, player in Players:GetPlayers() do
+		local index = player:GetAttribute("PlotIndex")
+		if typeof(index) == "number" then
+			settled[index] = true
+		end
+	end
+	local now = os.clock()
+	for index in settled do
+		local have = counts[index] or 0
+		if have < W.WolvesPerPack and (have == 0 or now - (lastPack[index] or 0) > W.WolfRespawnSeconds) then
+			lastPack[index] = now
+			local area = areaFor(index)
+			for _ = have + 1, (have == 0 and W.WolvesPerPack or have + 1) do
+				spawnWolf(area)
+			end
+		end
+	end
 end
 
 local function nearestPlayer(pos: Vector3): (Vector3?, number)
@@ -151,12 +216,34 @@ function WildlifeService:Start()
 		end
 	end
 
+	local packTimer = 0
 	while true do
 		task.wait(0.4)
 		local now = os.clock()
+		packTimer += 0.4
+		if packTimer >= 5 then
+			packTimer = 0
+			tendPacks()
+		end
 		for _, deer in herd do
 			local pos = deer.body.Position
 			local threat, dist = nearestPlayer(pos)
+			if deer.wolf then
+				if threat and dist < W.WolfStalk and now >= deer.busyUntil then
+					-- slink to a spot on a ring around you, a little further round each time
+					local from = Vector3.new(pos.X - threat.X, 0, pos.Z - threat.Z)
+					local angle = math.atan2(from.Z, from.X) + rng:NextNumber(0.3, 0.9) * (deer.side or 1)
+					local x, z = clampToArea(deer.area, threat.X + math.cos(angle) * W.WolfKeepAway, threat.Z + math.sin(angle) * W.WolfKeepAway)
+					local t = moveTo(deer, x, z, W.WolfSpeed * rng:NextNumber(0.6, 1))
+					deer.busyUntil = now + t + rng:NextNumber(0.5, 2)
+				elseif now >= deer.busyUntil then
+					deer.side = rng:NextNumber() < 0.5 and -1 or 1
+					local x, z = clampToArea(deer.area, pos.X + rng:NextNumber(-30, 30), pos.Z + rng:NextNumber(-30, 30))
+					local t = moveTo(deer, x, z, W.WolfSpeed * rng:NextNumber(0.3, 0.6))
+					deer.busyUntil = now + t + rng:NextNumber(2, 6)
+				end
+				continue
+			end
 			if threat and dist < W.FleeDistance and not deer.fleeing then
 				-- bolt directly away
 				local away = Vector3.new(pos.X - threat.X, 0, pos.Z - threat.Z)

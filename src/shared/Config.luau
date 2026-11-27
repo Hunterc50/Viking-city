@@ -237,6 +237,13 @@ Config.Wildlife = {
 	FleeDistance = 22, -- deer bolt when a player gets this close
 	Meat = 25, -- Food from one deer
 	Hides = 2,
+	-- in winter a wolf pack prowls the meadow behind each settled plot
+	WolvesPerPack = 3,
+	WolfSpeed = 13,
+	WolfStalk = 50, -- wolves come closer when you are this near
+	WolfKeepAway = 14, -- ...but keep this far off, circling you
+	WolfHides = 4,
+	WolfRespawnSeconds = 90,
 }
 
 -- The rival village you can raid ---------------------------------------------
@@ -406,6 +413,7 @@ Config.Quests = {
 	{ Title = "Shield wall!", Text = "Hire warriors (J), have them follow you, then press G to form a shield wall.", Kind = "stat", Stat = "formation", Goal = 1, Reward = { Silver = 15 } },
 	{ Title = "Storm the gate", Text = "Lead your war band in a wedge (G) and break down a rival hold's gate.", Kind = "stat", Stat = "gate", Goal = 1, Reward = { Silver = 40, Lore = 20 } },
 	{ Title = "Mead for the hall", Text = "Build a Brewhouse (Lore & Craft tab). Mead keeps your people happy.", Kind = "building", Building = "Brewhouse", Goal = 1, Reward = { Food = 40, Silver = 10 } },
+	{ Title = "The wolf winter", Text = "In winter, wolves prowl the meadow behind your village. Shoot one with the Bow.", Kind = "stat", Stat = "wolf", Goal = 1, Reward = { Hides = 6, Lore = 10 } },
 }
 
 -- Ranks: your title grows with your village. Each rank raises how many
