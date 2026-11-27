@@ -14,12 +14,13 @@ all original. Without them the game still works and uses its block-built models.
 2. **Open VikingCity in Roblox Studio.**
 3. **Import it.** Click **File**, then **Import 3D**, and pick `VikingAssets.glb`.
    Leave the settings as they are and click **Import**.
-4. **Press Play.** The game finds the meshes by itself.
-5. **Save** the place (File > Save) so the meshes stay.
+4. **Tidy it away.** A model called **VikingAssets** appears in the Explorer
+   (all the models stacked on one spot). Drag it onto **ReplicatedStorage > Assets**.
+   If you forget, the game does it for you when you press Play.
+5. **Press Play.** The game finds the meshes by itself.
+6. **Save** the place (File > Save) so the meshes stay.
 
-A model called **VikingAssets** will appear in the Explorer. When the game
-starts, it moves itself into ReplicatedStorage > Assets. Don't rename it or
-the models inside it.
+Don't rename VikingAssets or the models inside it.
 
 ## Only want some of them?
 
