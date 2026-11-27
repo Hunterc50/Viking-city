@@ -1938,9 +1938,13 @@ function ModelFactory.bakeTemplates(): number
 	for _, slot in ModelFactory.Slots do
 		local make = makers[slot]
 		if make and not workshop:FindFirstChild(slot) then
-			local item = make()
+			-- Start from your own model if one is already in Assets.
+			local own = customAsset(slot)
+			local item = own or make()
 			item.Name = slot
-			item:SetAttribute("Template", true)
+			if not own then
+				item:SetAttribute("Template", true)
+			end
 			local width = 8
 			if item:IsA("Model") then
 				local _, size = item:GetBoundingBox()
@@ -1979,6 +1983,10 @@ function ModelFactory.collectWorkshop()
 		assets.Parent = ReplicatedStorage
 	end
 	for _, item in workshop:GetChildren() do
+		local handle = item:IsA("Tool") and item:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.CanTouch = true
+		end
 		local old = assets:FindFirstChild(item.Name)
 		if old then
 			old:Destroy()
@@ -2070,7 +2078,8 @@ return Remotes
 local servicesFolder = script:WaitForChild("Services")
 
 -- Models you edited in Workspace > ModelWorkshop become the game's models.
-require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ModelFactory")).collectWorkshop()
+local ModelFactory = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ModelFactory"))
+ModelFactory.collectWorkshop()
 
 local services = {}
 for _, module in servicesFolder:GetChildren() do
@@ -2083,6 +2092,21 @@ for _, service in services do
 	if service.Init then
 		service:Init(services)
 	end
+end
+
+-- Workspace > ShowModelWorkshop ticked: lay out every model in the meadow
+-- while playing, so it can be copied (Ctrl+C), then pasted back in after
+-- pressing Stop, where it can be edited and saved.
+local show = workspace:FindFirstChild("ShowModelWorkshop")
+if show and show:IsA("BoolValue") and show.Value then
+	ModelFactory.bakeTemplates()
+	for _, item in workspace.ModelWorkshop:GetChildren() do
+		local handle = item:IsA("Tool") and item:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.CanTouch = false -- so walking past doesn't pick the tool up
+		end
+	end
+	print("[VikingCity] ModelWorkshop is in Workspace: copy it, press Stop, paste it into Workspace")
 end
 
 for name, service in services do
@@ -7130,7 +7154,13 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="41">
+    <Item class="BoolValue" referent="41">
+      <Properties>
+        <string name="Name">ShowModelWorkshop</string>
+        <bool name="Value">false</bool>
+      </Properties>
+    </Item>
+    <Item class="SpawnLocation" referent="42">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -7150,7 +7180,7 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="42">
+    <Item class="Part" referent="43">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -7167,13 +7197,13 @@ return ToolController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="43">
+      <Item class="SurfaceGui" referent="44">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="44">
+        <Item class="TextLabel" referent="45">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -7205,13 +7235,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="45">
+      <Item class="SurfaceGui" referent="46">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="46">
+        <Item class="TextLabel" referent="47">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

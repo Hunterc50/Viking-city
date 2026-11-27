@@ -82,17 +82,24 @@ Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Ea
 
 Normally the valley and every building are made by code when you press Play, so in edit mode you only see a flat grey plate. One command turns them into real models you can click on, move, recolour and save.
 
-### Step 1: get everything into the editor (once)
+### Step 1: get the models into the editor (once)
 
-1. Open `VikingCity.rbxl` in Roblox Studio. **Don't** press Play.
-2. Click **View** (top menu), then **Command Bar**. A long text box appears at the bottom.
-3. Paste this into it and press **Enter**:
-   ```
-   require(game.ServerScriptService.Server.EditTools).Setup()
-   ```
-4. Wait. Studio may freeze for up to a minute. When the Output window says `done`, the whole valley, forests, docks and torches are now in the place.
-5. Fly behind your plot (the grassy meadow). There is a row of every building, tree, rock, bush, a deer and the tools. They live in **Explorer > Workspace > ModelWorkshop**. These are the models the game uses.
-6. Save straight away: **File > Save to File As**, give it a new name like `MyVikingCity.rbxl`.
+1. Open `VikingCity.rbxl` in Roblox Studio. Don't press Play yet.
+2. In the **Explorer** (the list of everything in the game, usually on the right), click **Workspace** to open it, then click **ShowModelWorkshop**.
+3. In the **Properties** window, tick the **Value** box.
+4. Press **Play**. Behind your plot, in the grassy meadow, is a row of one of every building, tree, rock, bush, a deer and the tools.
+5. In the Explorer, under **Workspace**, right-click **ModelWorkshop** and choose **Copy** (or click it and press Ctrl+C).
+6. Press **Stop**.
+7. In the Explorer, right-click **Workspace** and choose **Paste Into**. The row of models is now in your place for real.
+8. Click **ShowModelWorkshop** again and untick **Value**.
+9. Save: **File > Save to File As**, with a new name like `MyVikingCity.rbxl`.
+
+Can't find the Explorer or Properties? Open them from the **View** tab (or the **Window** menu in newer Studio).
+
+**Optional, for the whole valley as well:** if your Studio has a **Command Bar** (old Studio: View > Command Bar; newer Studio: search "Command Bar" in the menus), paste this in it and press Enter instead of the steps above. It brings in both the models and the whole valley (terrain, forests, docks), and Studio may freeze for up to a minute:
+```
+require(game.ServerScriptService.Server.EditTools).Setup()
+```
 
 ### Step 2: moving around and picking things
 
@@ -121,7 +128,7 @@ Tips:
 - Keep each building **inside its model** (in the Explorer, every piece should sit under `Longhouse`, `Cottage`, ...). Don't rename the models: the name tells the game what it is.
 - Keep a building about the same size it already is, so it still fits its spot on the build grid. Its bottom becomes ground level.
 - Edits to a model in **ModelWorkshop** change **every** copy in the game (every Longhouse you build, every pine tree). Don't worry about where the workshop row sits: it disappears when you press Play.
-- Edits to the valley (moving a tree, painting the ground, deleting a rock in **Workspace > Scenery**) change just that spot.
+- Edits to the valley (moving a tree, painting the ground, deleting a rock in **Workspace > Scenery**) need the Command Bar way, and change just that spot.
 - Don't want one of your edited models any more? Delete it from ModelWorkshop and the game goes back to its built-in one. (The built-in trees vary randomly, a workshop tree is the same shape every time, just resized and turned.)
 
 ### Step 4: test and save
@@ -133,11 +140,11 @@ Tips:
 
 When a new `VikingCity.rbxl` comes out:
 1. Open your saved place, click **ModelWorkshop** in the Explorer, press **Ctrl+C**.
-2. Open the new `VikingCity.rbxl`, run the Step 1 command, then delete its fresh **ModelWorkshop**, click **Workspace** and press **Ctrl+V** to paste yours in. Save.
+2. Open the new `VikingCity.rbxl`, right-click **Workspace** and choose **Paste Into**. Save.
 
-Hand edits to the valley itself don't carry over, so put your favourite changes into the models where you can.
+Hand edits to the valley itself (Command Bar way only) don't carry over, so put your favourite changes into the models where you can.
 
-Other commands for the Command Bar:
+Other commands, if you have the Command Bar:
 - `require(game.ServerScriptService.Server.EditTools).Models()` only adds the ModelWorkshop row (for example, after you deleted one model and want it back).
 - `require(game.ServerScriptService.Server.EditTools).Reset()` removes the saved valley so the game makes a fresh one every Play again.
 

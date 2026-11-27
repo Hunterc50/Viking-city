@@ -29,6 +29,12 @@
       }
     },
     "Workspace": {
+      "ShowModelWorkshop": {
+        "$className": "BoolValue",
+        "$properties": {
+          "Value": false
+        }
+      },
       "Baseplate": {
         "$className": "Part",
         "$properties": {

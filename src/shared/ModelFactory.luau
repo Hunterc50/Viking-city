@@ -1527,9 +1527,13 @@ function ModelFactory.bakeTemplates(): number
 	for _, slot in ModelFactory.Slots do
 		local make = makers[slot]
 		if make and not workshop:FindFirstChild(slot) then
-			local item = make()
+			-- Start from your own model if one is already in Assets.
+			local own = customAsset(slot)
+			local item = own or make()
 			item.Name = slot
-			item:SetAttribute("Template", true)
+			if not own then
+				item:SetAttribute("Template", true)
+			end
 			local width = 8
 			if item:IsA("Model") then
 				local _, size = item:GetBoundingBox()
@@ -1568,6 +1572,10 @@ function ModelFactory.collectWorkshop()
 		assets.Parent = ReplicatedStorage
 	end
 	for _, item in workshop:GetChildren() do
+		local handle = item:IsA("Tool") and item:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.CanTouch = true
+		end
 		local old = assets:FindFirstChild(item.Name)
 		if old then
 			old:Destroy()
