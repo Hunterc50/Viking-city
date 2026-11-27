@@ -113,6 +113,12 @@ local function newShip(kindName: string, start: CFrame, owner: Player?, title: s
 		-- raiders crew their own ship, in war gear
 		ModelFactory.addCrew(model, 8, rng, 4)
 	end
+	if owner then
+		local colony = services.ColonyService:Get(owner)
+		if colony then
+			services.ClanService:Apply(colony, model) -- the sail in the clan's colours
+		end
+	end
 	model:PivotTo(start)
 	model.Parent = workspace
 	local ship = {

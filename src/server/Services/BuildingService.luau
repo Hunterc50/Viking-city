@@ -70,6 +70,7 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
 	model:PivotTo(finalCFrame)
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
+	services.ClanService:Apply(colony, model) -- banners in the clan's colours
 	model.Parent = colony.plot.Buildings
 	if animate then
 		raiseUp(model, finalCFrame)

@@ -324,6 +324,15 @@ Config.Weather = {
 	FogRaiderSight = 0.4, -- the raider ship only spots you at 40% of its usual range
 }
 
+-- Clan colours (Jarl's Table > Land): banners, standards and your sail.
+Config.ClanColours = {
+	{ Name = "Blood", Label = "Blood and Gold", Main = Color3.fromRGB(138, 32, 30), Trim = Color3.fromRGB(200, 164, 84) },
+	{ Name = "Raven", Label = "Raven Black", Main = Color3.fromRGB(32, 32, 36), Trim = Color3.fromRGB(196, 198, 204) },
+	{ Name = "Fjord", Label = "Fjord Blue", Main = Color3.fromRGB(36, 70, 120), Trim = Color3.fromRGB(232, 228, 214) },
+	{ Name = "Pine", Label = "Pine Green", Main = Color3.fromRGB(40, 84, 52), Trim = Color3.fromRGB(222, 206, 160) },
+	{ Name = "Ember", Label = "Ember", Main = Color3.fromRGB(190, 92, 34), Trim = Color3.fromRGB(30, 26, 24) },
+}
+
 -- Sieges: every rival hold has a gate in its palisade. Break it (axe blows,
 -- or your war band in a wedge) before you can plunder or burn inside.
 Config.Siege = {

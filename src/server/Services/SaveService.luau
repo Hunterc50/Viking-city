@@ -113,6 +113,7 @@ function SaveService:Snapshot(colony)
 		land = colony.land,
 		relations = colony.relations,
 		rites = colony.rites,
+		clan = colony.clan,
 		warbandMode = colony.warband and colony.warband.mode == "follow" and "follow" or nil,
 	}
 end
@@ -191,6 +192,10 @@ function SaveService:Restore(colony, data)
 			made[i].warrior = true
 			services.VillagerService:Rebuild(colony, made[i])
 		end
+	end
+	if type(data.clan) == "string" then
+		colony.clan = data.clan
+		services.ClanService:ApplyAll(colony)
 	end
 	if data.warbandMode == "follow" then
 		colony.warband = { mode = "follow" }

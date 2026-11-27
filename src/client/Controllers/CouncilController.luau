@@ -154,6 +154,25 @@ local function buildLand(body, state)
 		text(n, "Your land is as big as it can grow. A true Great Steading!", { TextColor3 = THEME.Good, LayoutOrder = 1 })
 	end
 	text(body, "Bigger land grows toward the meadow and into the gaps beside your plot. It never touches a neighbour.", { TextColor3 = THEME.Muted, TextSize = 13, LayoutOrder = 3 })
+
+	-- clan colours for your banners and sail
+	local cc = card(body, 4)
+	text(cc, "Clan colours", { Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = THEME.Accent, LayoutOrder = 1 })
+	text(cc, "They fly on your banners, your Great Hall's standards and your longship's sail.", { TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 2 })
+	local cr = row(cc, 3)
+	local current = state.council.clan or "Blood"
+	for _, c in Config.ClanColours do
+		local on = c.Name == current
+		local b = button(cr, (on and "» " or "") .. c.Label, not on, function()
+			act("Colours", c.Name)
+		end, 128)
+		local swatch = Instance.new("Frame")
+		swatch.Size = UDim2.new(0, 6, 1, -8)
+		swatch.Position = UDim2.fromOffset(4, 4)
+		swatch.BackgroundColor3 = c.Main
+		swatch.BorderSizePixel = 0
+		swatch.Parent = b
+	end
 end
 
 local function buildWarband(body, state)
