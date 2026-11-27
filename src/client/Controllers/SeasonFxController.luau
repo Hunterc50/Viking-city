@@ -77,10 +77,49 @@ function SeasonFxController:Start()
 	workspace:GetAttributeChangedSignal("StormLevel"):Connect(update)
 	update()
 
-	RunService.RenderStepped:Connect(function()
+	-- low morning mist that hangs over the water and the valley floor
+	local mistBox = Instance.new("Part")
+	mistBox.Name = "MistBox"
+	mistBox.Anchored = true
+	mistBox.CanCollide = false
+	mistBox.CanQuery = false
+	mistBox.CanTouch = false
+	mistBox.Transparency = 1
+	mistBox.Size = Vector3.new(220, 1, 220)
+	mistBox.Parent = workspace
+	local mist = emitter(mistBox)
+	mist.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	mist.Color = ColorSequence.new(Color3.fromRGB(214, 222, 232))
+	mist.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 14), NumberSequenceKeypoint.new(1, 30) })
+	mist.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, 0.86), NumberSequenceKeypoint.new(0.7, 0.88), NumberSequenceKeypoint.new(1, 1) })
+	mist.Lifetime = NumberRange.new(14, 20)
+	mist.Speed = NumberRange.new(0.6, 1.6)
+	mist.SpreadAngle = Vector2.new(180, 10)
+	mist.Rotation = NumberRange.new(0, 360)
+	mist.RotSpeed = NumberRange.new(-4, 4)
+	mist.Acceleration = Vector3.new(0.4, 0, 0.2)
+	mist.LightInfluence = 0.8
+
+	local Lighting = game:GetService("Lighting")
+	local mistTimer = 0
+	RunService.RenderStepped:Connect(function(dt)
 		local cam = workspace.CurrentCamera.CFrame.Position
 		-- hover above the camera's focus area so the weather surrounds you
 		box.CFrame = CFrame.new(cam.X, cam.Y + 35, cam.Z)
+		-- the mist stays low, at the water and on the valley floor
+		mistBox.CFrame = CFrame.new(cam.X, 2.5, cam.Z)
+		mistTimer += dt
+		if mistTimer > 1 then
+			mistTimer = 0
+			local clock = Lighting.ClockTime
+			-- strongest at dawn, a little in the evening, more in fog and autumn
+			local dawn = math.clamp(1 - math.abs(clock - 6.5) / 2.5, 0, 1)
+			local dusk = math.clamp(1 - math.abs(clock - 20.5) / 2, 0, 1) * 0.5
+			local fog = workspace:GetAttribute("FogLevel") or 0
+			local autumn = workspace:GetAttribute("Season") == "Autumn" and 0.3 or 0
+			local high = math.clamp((cam.Y - 60) / 120, 0, 1) -- from high up it would only blur the view
+			mist.Rate = math.max(dawn, dusk, fog, autumn) * 10 * (1 - high)
+		end
 	end)
 end
 
