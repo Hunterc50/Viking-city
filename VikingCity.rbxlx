@@ -14459,6 +14459,112 @@ return GuideController
           </Item>
           <Item class="ModuleScript" referent="55">
             <Properties>
+              <string name="Name">HearthGlowController</string>
+              <string name="Source"><![CDATA[--[[
+	HearthGlowController
+	At dusk the homes light up: a soft, flickering firelight shines from every
+	house in every village (Longhouse, Cottage, Great Hall), and goes out at
+	dawn. Done on the client, so it costs the server nothing.
+]]
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local HearthGlowController = {}
+
+local function isNight(): boolean
+	local t = Lighting.ClockTime
+	return t >= 18.2 or t <= 6.2
+end
+
+local function isHome(model: Instance): boolean
+	local kind = model:GetAttribute("BuildingType")
+	local def = kind and Config.Buildings[kind]
+	return def ~= nil and (def.Housing or 0) > 0
+end
+
+function HearthGlowController:Start()
+	local lights = {} -- [model] = PointLight
+	local phase = {} -- [PointLight] = flicker offset
+	local timer = 0
+	local flicker = 0
+
+	local function refresh()
+		local night = isNight()
+		local plots = workspace:FindFirstChild("Plots")
+		local seen = {}
+		if plots then
+			for _, plot in plots:GetChildren() do
+				local buildings = plot:FindFirstChild("Buildings")
+				if buildings then
+					for _, model in buildings:GetChildren() do
+						if model:IsA("Model") and isHome(model) then
+							seen[model] = true
+							local light = lights[model]
+							if not light or not light.Parent then
+								local anchor = Instance.new("Attachment")
+								anchor.Name = "HearthGlow"
+								local root = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+								if root then
+									anchor.Parent = root
+									anchor.WorldPosition = model:GetPivot().Position + Vector3.new(0, 3.5, 0)
+									light = Instance.new("PointLight")
+									light.Color = Color3.fromRGB(255, 164, 86)
+									light.Range = 20
+									light.Shadows = false
+									light.Parent = anchor
+									lights[model] = light
+									phase[light] = math.random() * 10
+								end
+							end
+							if light then
+								light.Enabled = night
+							end
+						end
+					end
+				end
+			end
+		end
+		for model, light in lights do
+			if not seen[model] then
+				lights[model] = nil
+				phase[light] = nil
+				if light.Parent then
+					light.Parent:Destroy()
+				end
+			end
+		end
+	end
+
+	RunService.Heartbeat:Connect(function(dt)
+		timer += dt
+		if timer >= 2 then
+			timer = 0
+			refresh()
+		end
+		-- a gentle flicker, as from a fire inside
+		flicker += dt
+		if flicker >= 0.12 then
+			flicker = 0
+			local t = os.clock()
+			for _, light in lights do
+				if light.Enabled then
+					light.Brightness = 1.1 + math.sin(t * 7 + (phase[light] or 0)) * 0.12 + math.random() * 0.15
+				end
+			end
+		end
+	end)
+end
+
+return HearthGlowController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="56">
+            <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
 	HudController
@@ -15166,7 +15272,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="56">
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">IntroController</string>
               <string name="Source"><![CDATA[--[[
@@ -15503,7 +15609,7 @@ return IntroController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="57">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -15584,7 +15690,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="58">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -15877,7 +15983,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">ScreenToggleController</string>
               <string name="Source"><![CDATA[--[[
@@ -15934,7 +16040,7 @@ return ScreenToggleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -16066,7 +16172,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="61">
+          <Item class="ModuleScript" referent="62">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -16118,7 +16224,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="62">
+          <Item class="ModuleScript" referent="63">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -16441,7 +16547,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="63">
+          <Item class="ModuleScript" referent="64">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -16529,7 +16635,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="64">
+          <Item class="ModuleScript" referent="65">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -16714,7 +16820,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="65">
+          <Item class="ModuleScript" referent="66">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -16912,7 +17018,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="66">
+          <Item class="ModuleScript" referent="67">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -16965,7 +17071,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="67">
+          <Item class="ModuleScript" referent="68">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -17191,7 +17297,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="68">
+          <Item class="ModuleScript" referent="69">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -17337,12 +17443,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="69">
+  <Item class="Workspace" referent="70">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="70">
+    <Item class="Part" referent="71">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -17363,13 +17469,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="71">
+    <Item class="BoolValue" referent="72">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="72">
+    <Item class="SpawnLocation" referent="73">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -17389,7 +17495,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="73">
+    <Item class="Part" referent="74">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -17406,13 +17512,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="74">
+      <Item class="SurfaceGui" referent="75">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="75">
+        <Item class="TextLabel" referent="76">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -17444,13 +17550,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="76">
+      <Item class="SurfaceGui" referent="77">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="77">
+        <Item class="TextLabel" referent="78">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
