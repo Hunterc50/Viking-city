@@ -894,6 +894,26 @@ function Builders.Fishery(model, w, d)
 	end
 end
 
+function Builders.Brewhouse(model, _w, _d)
+	-- a small smoky hall with a copper vat out front and barrels of mead
+	hall(model, CFrame.new(-1.5, 0, 2), { w = 9, d = 7, wallH = 4.6, roof = "thatch", smoke = true })
+	addPart(model, { Name = "Vat", Shape = Enum.PartType.Cylinder, Size = V3(2.4, 3, 3), CFrame = CFrame.new(4.6, 1.2, -4.6) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(176, 110, 64), Material = Enum.Material.Metal })
+	for _, x in { 3.2, 6 } do
+		post(model, V3(x, 0, -4.6), 1, 0.3, Colors.DarkWood)
+	end
+	brazier(model, V3(4.6, 0, -2), 1.2)
+	for i, p in { V3(-6, 0, -4.4), V3(-4.2, 0, -4.8), V3(-5.1, 1.6, -4.6) } do
+		addPart(model, { Name = "Barrel", Shape = Enum.PartType.Cylinder, Size = V3(1.6, 1.4, 1.4), CFrame = CFrame.new(p + V3(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = vary(Color3.fromRGB(116, 78, 48), 0.08), Material = Enum.Material.WoodPlanks })
+		if i == 1 then
+			addPart(model, { Name = "Hoop", Shape = Enum.PartType.Cylinder, Size = V3(0.12, 1.5, 1.5), CFrame = CFrame.new(p + V3(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 58, 56), Material = Enum.Material.Metal })
+		end
+	end
+	-- beehive skeps by the wall
+	for _, x in { -6.5, -5 } do
+		addPart(model, { Name = "Skep", Shape = Enum.PartType.Ball, Size = V3(1.3, 1.3, 1.3), Position = V3(x, 0.9, 6.6), Color = Color3.fromRGB(196, 160, 88), Material = Enum.Material.Fabric })
+	end
+end
+
 function Builders.GreatHall(model, w, d)
 	hall(model, CFrame.new(), { w = w - 4, d = d - 6, wallH = 9, roof = "shingle", pitch = 42, smoke = true })
 	-- tall carved pillars at the entrance and a pair of braziers

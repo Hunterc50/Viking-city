@@ -485,6 +485,7 @@ local WORK = {
 	Shipyard = { task = "Hammer", carry = "Log" },
 	HuntingLodge = { task = "Hammer", carry = "Hide" },
 	Fishery = { task = "Farm", carry = "Sack" },
+	Brewhouse = { task = "Hammer", carry = "Sack" },
 }
 
 -- Where goods are taken: the storehouse, or else the biggest hall.

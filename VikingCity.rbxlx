@@ -187,6 +187,15 @@ Config.Buildings = {
 		Workers = 2,
 		Produces = { Food = 0.22 },
 	},
+	Brewhouse = {
+		Display = "Brewhouse",
+		Description = "A brewer turns honey and grain into mead. +6 happiness, and the mead you sell brings in a little silver.",
+		Size = { 2, 2 },
+		Cost = { Wood = 40, Stone = 10, Food = 20 },
+		Workers = 1,
+		Happiness = 6,
+		Produces = { Silver = 0.03 },
+	},
 	HuntingLodge = {
 		Display = "Hunting Lodge",
 		Description = "2 hunters bring back meat and hides.",
@@ -226,7 +235,7 @@ Config.Buildings = {
 Config.BuildCategories = {
 	{ Name = "Housing", Icon = "🏠", Buildings = { "Longhouse", "Cottage", "GreatHall" } },
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
-	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy" } },
+	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
 	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
 }
@@ -234,7 +243,7 @@ Config.BuildCategories = {
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
 }
 
 -- Every building in menu order (built from the tabs above).
@@ -425,6 +434,7 @@ Config.Quests = {
 	{ Title = "Fishers of the fjord", Text = "Build a Fishery (Production tab). It feeds your people even in winter.", Kind = "building", Building = "Fishery", Goal = 1, Reward = { Wood = 30 } },
 	{ Title = "Shield wall!", Text = "Hire warriors (J), have them follow you, then press G to form a shield wall.", Kind = "stat", Stat = "formation", Goal = 1, Reward = { Silver = 15 } },
 	{ Title = "Storm the gate", Text = "Lead your war band in a wedge (G) and break down a rival hold's gate.", Kind = "stat", Stat = "gate", Goal = 1, Reward = { Silver = 40, Lore = 20 } },
+	{ Title = "Mead for the hall", Text = "Build a Brewhouse (Lore & Craft tab). Mead keeps your people happy.", Kind = "building", Building = "Brewhouse", Goal = 1, Reward = { Food = 40, Silver = 10 } },
 }
 
 -- Ranks: your title grows with your village. Each rank raises how many
@@ -1657,6 +1667,26 @@ function Builders.Fishery(model, w, d)
 	-- barrels of salted fish
 	for _, p in { V3(-6, 0, -1), V3(-5, 0, -2.2) } do
 		addPart(model, { Name = "Barrel", Shape = Enum.PartType.Cylinder, Size = V3(1.6, 1.2, 1.2), CFrame = CFrame.new(p + V3(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 76, 48), Material = Enum.Material.WoodPlanks })
+	end
+end
+
+function Builders.Brewhouse(model, _w, _d)
+	-- a small smoky hall with a copper vat out front and barrels of mead
+	hall(model, CFrame.new(-1.5, 0, 2), { w = 9, d = 7, wallH = 4.6, roof = "thatch", smoke = true })
+	addPart(model, { Name = "Vat", Shape = Enum.PartType.Cylinder, Size = V3(2.4, 3, 3), CFrame = CFrame.new(4.6, 1.2, -4.6) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(176, 110, 64), Material = Enum.Material.Metal })
+	for _, x in { 3.2, 6 } do
+		post(model, V3(x, 0, -4.6), 1, 0.3, Colors.DarkWood)
+	end
+	brazier(model, V3(4.6, 0, -2), 1.2)
+	for i, p in { V3(-6, 0, -4.4), V3(-4.2, 0, -4.8), V3(-5.1, 1.6, -4.6) } do
+		addPart(model, { Name = "Barrel", Shape = Enum.PartType.Cylinder, Size = V3(1.6, 1.4, 1.4), CFrame = CFrame.new(p + V3(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = vary(Color3.fromRGB(116, 78, 48), 0.08), Material = Enum.Material.WoodPlanks })
+		if i == 1 then
+			addPart(model, { Name = "Hoop", Shape = Enum.PartType.Cylinder, Size = V3(0.12, 1.5, 1.5), CFrame = CFrame.new(p + V3(0, 0.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(60, 58, 56), Material = Enum.Material.Metal })
+		end
+	end
+	-- beehive skeps by the wall
+	for _, x in { -6.5, -5 } do
+		addPart(model, { Name = "Skep", Shape = Enum.PartType.Ball, Size = V3(1.3, 1.3, 1.3), Position = V3(x, 0.9, 6.6), Color = Color3.fromRGB(196, 160, 88), Material = Enum.Material.Fabric })
 	end
 end
 
@@ -10506,6 +10536,7 @@ local WORK = {
 	Shipyard = { task = "Hammer", carry = "Log" },
 	HuntingLodge = { task = "Hammer", carry = "Hide" },
 	Fishery = { task = "Farm", carry = "Sack" },
+	Brewhouse = { task = "Hammer", carry = "Sack" },
 }
 
 -- Where goods are taken: the storehouse, or else the biggest hall.

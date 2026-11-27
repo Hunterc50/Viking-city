@@ -158,6 +158,15 @@ Config.Buildings = {
 		Workers = 2,
 		Produces = { Food = 0.22 },
 	},
+	Brewhouse = {
+		Display = "Brewhouse",
+		Description = "A brewer turns honey and grain into mead. +6 happiness, and the mead you sell brings in a little silver.",
+		Size = { 2, 2 },
+		Cost = { Wood = 40, Stone = 10, Food = 20 },
+		Workers = 1,
+		Happiness = 6,
+		Produces = { Silver = 0.03 },
+	},
 	HuntingLodge = {
 		Display = "Hunting Lodge",
 		Description = "2 hunters bring back meat and hides.",
@@ -197,7 +206,7 @@ Config.Buildings = {
 Config.BuildCategories = {
 	{ Name = "Housing", Icon = "🏠", Buildings = { "Longhouse", "Cottage", "GreatHall" } },
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
-	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy" } },
+	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
 	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
 }
@@ -205,7 +214,7 @@ Config.BuildCategories = {
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
 }
 
 -- Every building in menu order (built from the tabs above).
@@ -396,6 +405,7 @@ Config.Quests = {
 	{ Title = "Fishers of the fjord", Text = "Build a Fishery (Production tab). It feeds your people even in winter.", Kind = "building", Building = "Fishery", Goal = 1, Reward = { Wood = 30 } },
 	{ Title = "Shield wall!", Text = "Hire warriors (J), have them follow you, then press G to form a shield wall.", Kind = "stat", Stat = "formation", Goal = 1, Reward = { Silver = 15 } },
 	{ Title = "Storm the gate", Text = "Lead your war band in a wedge (G) and break down a rival hold's gate.", Kind = "stat", Stat = "gate", Goal = 1, Reward = { Silver = 40, Lore = 20 } },
+	{ Title = "Mead for the hall", Text = "Build a Brewhouse (Lore & Craft tab). Mead keeps your people happy.", Kind = "building", Building = "Brewhouse", Goal = 1, Reward = { Food = 40, Silver = 10 } },
 }
 
 -- Ranks: your title grows with your village. Each rank raises how many
