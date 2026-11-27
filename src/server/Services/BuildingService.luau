@@ -68,6 +68,7 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	model:SetAttribute("OwnerUserId", colony.player.UserId)
 	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
 	model:PivotTo(finalCFrame)
+	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
 	model.Parent = colony.plot.Buildings
 	if animate then
 		raiseUp(model, finalCFrame)

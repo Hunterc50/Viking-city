@@ -309,7 +309,7 @@ function HudController:Start()
 		for _, name in Config.ResourceOrder do
 			resLabels[name].Text = string.format("%s %d/%d", name, state.resources[name] or 0, state.storage)
 		end
-		dayLabel.Text = "Day " .. state.day
+		dayLabel.Text = "Day " .. state.day .. "  ·  " .. (state.season or "")
 		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
 		popLabel.Text = string.format("Population %d / %d homes", state.population, state.housing)
 		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)

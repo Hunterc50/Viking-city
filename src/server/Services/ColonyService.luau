@@ -132,6 +132,7 @@ function ColonyService:Sync(colony)
 		happiness = math.floor(colony.happiness + 0.5),
 		starving = colony.starving,
 		day = colony.day,
+		season = workspace:GetAttribute("Season") or "Summer",
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 	}
 

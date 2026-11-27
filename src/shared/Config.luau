@@ -147,4 +147,14 @@ Config.Bow = {
 
 Config.DemolishRefund = 0.5 -- fraction of the cost returned
 
+-- Seasons -------------------------------------------------------------------
+-- The year turns for everyone on the server. Each season lasts SeasonSeconds.
+Config.SeasonSeconds = 180
+Config.Seasons = {
+	{ Name = "Summer", FarmRate = 1.25, FoodUse = 1.0 },
+	{ Name = "Autumn", FarmRate = 0.8, FoodUse = 1.0 },
+	{ Name = "Winter", FarmRate = 0, FoodUse = 1.5 }, -- frozen fields, cold bellies
+	{ Name = "Spring", FarmRate = 0.9, FoodUse = 1.0 },
+}
+
 return Config

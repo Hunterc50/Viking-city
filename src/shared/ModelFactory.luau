@@ -590,6 +590,81 @@ function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
 	return model, trunk
 end
 
+-- A tall, narrow spruce with drooping tiers. Returns model, trunk.
+function ModelFactory.spruce(rng: Random, scale: number?): (Model, BasePart)
+	local s = scale or rng:NextNumber(1, 1.6)
+	local model = Instance.new("Model")
+	model.Name = "Spruce"
+	local trunk = post(model, Vector3.zero, 6 * s, 1 * s)
+	trunk.Name = "Trunk"
+	local tiers = 8
+	local twist = rng:NextNumber(0, math.pi)
+	for i = 1, tiers do
+		local t = (i - 1) / (tiers - 1)
+		local width = (5.4 - 4.4 * t) * s
+		addPart(model, {
+			Name = "Needles",
+			Size = V3(width, 1.9 * s, width),
+			CFrame = CFrame.new(0, (2.6 + i * 1.75) * s, 0) * CFrame.Angles(0, twist + i * 0.7, 0) * CFrame.Angles(0.12, 0, 0.12),
+			Color = i % 2 == 0 and Color3.fromRGB(34, 60, 42) or Color3.fromRGB(28, 52, 38),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+		})
+	end
+	addPart(model, {
+		Name = "Tip",
+		Size = V3(0.8 * s, 2.6 * s, 0.8 * s),
+		Position = V3(0, (2.6 + tiers * 1.75 + 1.8) * s, 0),
+		Color = Color3.fromRGB(30, 56, 40),
+		Material = Enum.Material.Grass,
+		CanCollide = false,
+	})
+	model.WorldPivot = CFrame.new()
+	return model, trunk
+end
+
+-- A low, dense juniper shrub.
+function ModelFactory.juniper(rng: Random, scale: number?): Model
+	local s = scale or rng:NextNumber(0.7, 1.3)
+	local model = Instance.new("Model")
+	model.Name = "Juniper"
+	for i = 1, 4 do
+		local h = rng:NextNumber(1.6, 3.2) * s
+		addPart(model, {
+			Name = "Juniper",
+			Size = V3(rng:NextNumber(1.4, 2.2) * s, h, rng:NextNumber(1.4, 2.2) * s),
+			CFrame = CFrame.new(rng:NextNumber(-1, 1) * s, h / 2, rng:NextNumber(-1, 1) * s) * CFrame.Angles(0, rng:NextNumber(0, 3), rng:NextNumber(-0.2, 0.2)),
+			Color = Color3.fromRGB(48, 76, 56),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+		})
+	end
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
+-- A fern: a fan of fronds close to the ground.
+function ModelFactory.fern(rng: Random, scale: number?): Model
+	local s = scale or rng:NextNumber(0.8, 1.4)
+	local model = Instance.new("Model")
+	model.Name = "Fern"
+	local n = 6
+	local turn = rng:NextNumber(0, math.pi)
+	for i = 1, n do
+		local a = turn + i / n * math.pi * 2
+		addPart(model, {
+			Name = "Fern",
+			Size = V3(0.7 * s, 0.08, 2.6 * s),
+			CFrame = CFrame.Angles(0, a, 0) * CFrame.new(0, 0.7 * s, -1.1 * s) * CFrame.Angles(math.rad(28), 0, 0),
+			Color = Color3.fromRGB(70, 112, 48),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+		})
+	end
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
 -- A boulder cluster. Returns model, main part.
 function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
 	local s = scale or 1
@@ -608,6 +683,18 @@ function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
 		})
 		main = main or p
 	end
+	if rng:NextNumber() < 0.6 then
+		-- a cap of moss on top of the biggest stone
+		local top = main.CFrame * CFrame.new(0, main.Size.Y / 2 - 0.15, 0)
+		addPart(model, {
+			Name = "Moss",
+			Size = V3(main.Size.X * 0.85, 0.45, main.Size.Z * 0.85),
+			CFrame = top,
+			Color = Color3.fromRGB(84, 110, 56),
+			Material = Enum.Material.LeafyGrass,
+			CanCollide = false,
+		})
+	end
 	model.WorldPivot = CFrame.new()
 	return model, main
 end
@@ -615,8 +702,11 @@ end
 -- Wild resource nodes. Returns the model and the part the prompt goes on.
 function ModelFactory.node(kind: string, rng: Random): (Model, BasePart)
 	if kind == "Tree" then
-		if rng:NextNumber() < 0.75 then
+		local r = rng:NextNumber()
+		if r < 0.45 then
 			return ModelFactory.pine(rng)
+		elseif r < 0.75 then
+			return ModelFactory.spruce(rng)
 		end
 		return ModelFactory.birch(rng)
 	elseif kind == "Rock" then

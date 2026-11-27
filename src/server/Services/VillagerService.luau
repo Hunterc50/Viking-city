@@ -196,12 +196,15 @@ local function produce(colony, dt: number)
 			workers[v.job] = (workers[v.job] or 0) + 1
 		end
 	end
+	local season = services.SeasonService:Current()
 	for id, b in colony.buildings do
 		local produces = Config.Buildings[b.type].Produces
 		local n = workers[id]
 		if produces and n then
 			for resource, rate in produces do
-				ColonyService:Add(colony, resource, rate * n * dt * efficiency)
+				-- crops only grow outside winter
+				local seasonal = b.type == "Farm" and season.FarmRate or 1
+				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal)
 			end
 		end
 	end
@@ -209,7 +212,7 @@ end
 
 local function eat(colony, dt: number)
 	local adults, children = counts(colony)
-	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt
+	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * services.SeasonService:Current().FoodUse
 	local food = colony.resources.Food or 0
 	local wasStarving = colony.starving
 	if food >= need then

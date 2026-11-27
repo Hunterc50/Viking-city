@@ -328,8 +328,11 @@ local function scatterScenery()
 		end
 		local model
 		local s = rng:NextNumber(1, 2.1) * (1 - hit.Position.Y / 400) -- smaller trees higher up
-		if rng:NextNumber() < 0.82 then
+		local r = rng:NextNumber()
+		if r < 0.38 then
 			model = ModelFactory.pine(rng, s)
+		elseif r < 0.8 then
+			model = ModelFactory.spruce(rng, s * 1.1)
 		else
 			model = ModelFactory.birch(rng, s * 0.8)
 		end
@@ -350,6 +353,27 @@ local function scatterScenery()
 		end
 		if rng:NextNumber() < density * 2 and plant(x, z) then
 			planted += 1
+		end
+		if os.clock() - budget > 0.05 then
+			task.wait()
+			budget = os.clock()
+		end
+	end
+
+	-- understory: ferns and junipers where the woods are
+	local under = 0
+	tries = 0
+	while under < 450 and tries < 4000 do
+		tries += 1
+		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(-30, 560)
+		if fbm(x, z, 1 / 220, 3, 29) + 0.15 > 0.05 and not inPlotArea(x, z) then
+			local hit = groundAt(x, z)
+			if hit and treeMaterials[hit.Material] and hit.Normal.Y > 0.8 and hit.Position.Y < 110 and hit.Position.Y > 1.5 then
+				local model = rng:NextNumber() < 0.6 and ModelFactory.fern(rng) or ModelFactory.juniper(rng)
+				model:PivotTo(CFrame.new(hit.Position - Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, rng:NextNumber(0, 6), 0))
+				model.Parent = folder
+				under += 1
+			end
 		end
 		if os.clock() - budget > 0.05 then
 			task.wait()
@@ -507,8 +531,17 @@ local function dayNightCycle()
 			night = math.clamp(math.min(h, 12 - h) / 1.5, 0, 1)
 		end
 		local golden = math.clamp(1 - math.abs(clock - 18) / 2, 0, 1) + math.clamp(1 - math.abs(clock - 7) / 1.5, 0, 1)
+		local season = workspace:GetAttribute("Season")
+		local seasonTint = Color3.fromRGB(255, 244, 228)
+		if season == "Winter" then
+			seasonTint = Color3.fromRGB(222, 234, 255)
+		elseif season == "Autumn" then
+			seasonTint = Color3.fromRGB(255, 230, 196)
+		elseif season == "Spring" then
+			seasonTint = Color3.fromRGB(246, 255, 236)
+		end
 		if grade then
-			grade.TintColor = Color3.fromRGB(255, 244, 228):Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night)
+			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night)
 			grade.Brightness = 0.02 + night * 0.05
 		end
 		if atmosphere then
