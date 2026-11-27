@@ -18,6 +18,10 @@ local AudioController = {}
 -- Once it's imported into Studio it shows up as a Sound named VikingTheme;
 -- otherwise the Music slot in Sounds is used, if it has an ID.
 local function themeId(): string?
+	local uploaded = require(game:GetService("ReplicatedStorage").Shared.AssetIds).sound("VikingTheme")
+	if uploaded then
+		return uploaded
+	end
 	for _, root in { workspace, game:GetService("ReplicatedStorage"), SoundService } do
 		for _, d in root:GetDescendants() do
 			if d:IsA("Sound") and string.find(d.Name, "VikingTheme") and d.SoundId ~= "" then

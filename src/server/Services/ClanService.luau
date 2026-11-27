@@ -6,6 +6,7 @@
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local ModelFactory = require(Shared.ModelFactory)
 
 local ClanService = {}
 
@@ -55,6 +56,9 @@ function ClanService:Apply(colony, root: Instance)
 				d.Color = c.Main
 			elseif r == "trim" then
 				d.Color = c.Trim
+			end
+			if r then
+				ModelFactory.retintTexture(d)
 			end
 		end
 	end

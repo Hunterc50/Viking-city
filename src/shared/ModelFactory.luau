@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(script.Parent.Config)
 local SettlerRig = require(script.Parent.SettlerRig)
+local AssetIds = require(script.Parent.AssetIds)
 
 local ModelFactory = {}
 
@@ -2286,6 +2287,77 @@ local MESH_MATERIALS = {
 	Cloth = Enum.Material.Fabric,
 	Metal = Enum.Material.Metal,
 }
+-- Our own textures (textures/*.png, uploaded; see AssetIds) for each piece kind,
+-- and how many studs one copy of the texture covers.
+local MESH_TEXTURES = {
+	Wood = { "Planks", 6 },
+	Stone = { "Stone", 8 },
+	Thatch = { "Thatch", 5 },
+	Cloth = { "Cloth", 6 },
+	Metal = { "Iron", 4 },
+}
+local FACES = { Enum.NormalId.Top, Enum.NormalId.Bottom, Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right }
+
+-- Puts texture `name` on a piece: a SurfaceAppearance named after it in
+-- ReplicatedStorage.Textures if you made one, else the uploaded image on
+-- every face, tinted with the piece's colour.
+local function applyTexture(part: MeshPart, name: string, studs: number)
+	if part:FindFirstChild("OwnTexture") then
+		return
+	end
+	local templates = ReplicatedStorage:FindFirstChild("Textures")
+	local template = templates and templates:FindFirstChild(name)
+	if template and template:IsA("SurfaceAppearance") then
+		local sa = template:Clone()
+		sa.Name = "OwnTexture"
+		local ok = pcall(function()
+			sa.Parent = part
+		end)
+		if ok then
+			return
+		end
+		sa:Destroy()
+	end
+	local url = AssetIds.texture(name)
+	if not url then
+		return
+	end
+	-- the images are pale (about 75% bright), so lift the tint to match
+	local c = part.Color
+	local tintColor = Color3.new(math.min(c.R / 0.75, 1), math.min(c.G / 0.75, 1), math.min(c.B / 0.75, 1))
+	local marker = Instance.new("Folder")
+	marker.Name = "OwnTexture"
+	marker.Parent = part
+	for _, face in FACES do
+		local t = Instance.new("Texture")
+		t.Name = "OwnTexture_" .. face.Name
+		t.Texture = url
+		t.Face = face
+		t.StudsPerTileU = studs
+		t.StudsPerTileV = studs
+		t.Color3 = tintColor
+		t.Parent = part
+	end
+end
+ModelFactory.applyTexture = applyTexture
+
+-- After a piece changes colour (seasons, clan colours), match its texture;
+-- under snow the texture steps aside so the white shows.
+function ModelFactory.retintTexture(part: BasePart)
+	if not part:FindFirstChild("OwnTexture") then
+		return
+	end
+	local c = part.Color
+	local tintColor = Color3.new(math.min(c.R / 0.75, 1), math.min(c.G / 0.75, 1), math.min(c.B / 0.75, 1))
+	local hidden = part.Material == Enum.Material.Snow or part.Transparency >= 1
+	for _, t in part:GetChildren() do
+		if t:IsA("Texture") and string.sub(t.Name, 1, 11) == "OwnTexture_" then
+			t.Color3 = tintColor
+			t.Transparency = hidden and 1 or 0
+		end
+	end
+end
+
 dressMaterials = function(root: Instance)
 	for _, d in root:GetDescendants() do
 		if d:IsA("MeshPart") then
@@ -2299,6 +2371,10 @@ dressMaterials = function(root: Instance)
 				end)
 				if kind == "Metal" then
 					d.Reflectance = 0.05
+				end
+				local tex = MESH_TEXTURES[kind]
+				if tex then
+					applyTexture(d, tex[1], tex[2])
 				end
 			end
 		end

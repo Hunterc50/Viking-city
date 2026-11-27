@@ -16,6 +16,8 @@
 	built-in sounds that come with every Roblox install.
 ]]
 
+local AssetIds = require(script.Parent.AssetIds)
+
 local Sounds = {}
 
 Sounds.Slots = {
@@ -51,6 +53,10 @@ local function idFor(name: string): string?
 	end
 	if slot.Id ~= "" then
 		return slot.Id
+	end
+	local uploaded = AssetIds.sound(name)
+	if uploaded then
+		return uploaded
 	end
 	if found[name] then
 		return found[name]

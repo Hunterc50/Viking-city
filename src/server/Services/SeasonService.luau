@@ -18,6 +18,7 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local ModelFactory = require(Shared.ModelFactory)
 
 local SeasonService = {}
 
@@ -83,7 +84,7 @@ local function meshRole(part: BasePart): string?
 	return nil
 end
 
-local function paint(part: BasePart, season: string)
+local function paintBase(part: BasePart, season: string)
 	local name = meshRole(part) or part.Name
 	if name == "Needles" or name == "Tip" then
 		local c = base(part)
@@ -140,6 +141,13 @@ local function paint(part: BasePart, season: string)
 			part.Color = c
 		end
 	end
+end
+
+-- Our own textures on mesh pieces (ModelFactory.applyTexture) follow the
+-- piece's colour, and step aside when a roof is under snow.
+local function paint(part: BasePart, season: string)
+	paintBase(part, season)
+	ModelFactory.retintTexture(part)
 end
 
 -- Paints every part inside `root` for the current season. Called for the
