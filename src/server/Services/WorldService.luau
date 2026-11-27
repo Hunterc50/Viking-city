@@ -104,13 +104,77 @@ local function mountainMask(x: number, z: number): (number, number)
 	return math.max(back, far, side), far
 end
 
+-- Two rivers run down from the mountains into the fjord, one past each end
+-- of the valley (beyond the rival holds), through a terraced, cliffy upland.
+local RIVERS = { FLAT_MIN_X - 80, FLAT_MAX_X + 80 }
+local RIVER_HALF = 7 -- half the water's width
+local RIVER_TOP_Z = 760
+
+local function riverCentre(base: number, z: number): number
+	return base + math.sin(z / 110 + base) * 30 + math.sin(z / 47) * 12
+end
+
+-- distance to the nearest river's centre line, and that line's x
+local function nearestRiver(x: number, z: number): (number, number)
+	local best, bx = math.huge, 0
+	if z < SHORE_Z - 30 or z > RIVER_TOP_Z then
+		return best, bx
+	end
+	for _, base in RIVERS do
+		local cx = riverCentre(base, z)
+		local d = math.abs(x - cx)
+		if d < best then
+			best, bx = d, cx
+		end
+	end
+	return best, bx
+end
+
+-- rock steps on the uplands: soft slopes broken by short cliffs
+local function terrace(v: number, step: number): number
+	local s = math.floor(v / step)
+	local f = v / step - s
+	return (s + smooth(0.62, 1, f)) * step
+end
+
 -- The height of the land at x, z
+local landHeight
 local function heightAt(x: number, z: number): number
+	local h = landHeight(x, z)
+	local d, cx = nearestRiver(x, z)
+	if d < 18 then
+		-- carve the river bed below the bank on its centre line
+		local bank = landHeight(cx, z)
+		local bed = math.min(bank, TOP) - 9
+		if bank > TOP + 1 then
+			bed = bank - 9
+		end
+		h = lerp(h, math.min(h, bed), smooth(18, RIVER_HALF, d))
+	end
+	return h
+end
+
+-- Where water stands in a column: the river surface near a river, else sea level.
+local function waterLevelAt(x: number, z: number): number
+	local d, cx = nearestRiver(x, z)
+	if d < RIVER_HALF + 3 then
+		local bank = landHeight(cx, z)
+		return math.max(0, bank > TOP + 1 and bank - 2 or 0)
+	end
+	return 0
+end
+
+function landHeight(x: number, z: number): number
 	local m, far = mountainMask(x, z)
 	local mountains = m * (40 + 210 * ridged(x, z, 1 / 380, 5))
 	local hills = 26 * (fbm(x, z, 1 / 170, 4, 1) + 0.5) * smooth(200, 340, z)
 	local detail = fbm(x, z, 1 / 36, 2, 3) * 2.5
 	local h = TOP + hills + mountains + detail
+	-- terraces and cliffs on the uplands behind the valley
+	local cliffy = smooth(170, 300, z) * (1 - flatMask(x, z)) * smooth(-0.2, 0.15, fbm(x, z, 1 / 260, 2, 71))
+	if cliffy > 0 then
+		h = lerp(h, TOP + terrace(h - TOP, 11), cliffy * 0.9)
+	end
 
 	-- the fjord: slope down from the beach, rise again at the far shore
 	if z < SHORE_Z then
@@ -218,6 +282,12 @@ local function surfaceMaterial(x: number, z: number, h: number, slope: number)
 		local dx, dz = x - rival.Center.X, z - rival.Center.Z
 		return (dx * dx + dz * dz < 36 * 36 or fbm(x, z, 1 / 25, 2, 41) > 0.2) and M.Ground or M.Grass
 	end
+	local rd = nearestRiver(x, z)
+	if rd < RIVER_HALF + 2 then
+		return M.Mud
+	elseif rd < 14 then
+		return fbm(x, z, 1 / 12, 2, 77) > 0 and M.Pebble or M.Ground
+	end
 	if h < -6 then
 		return M.Mud
 	end
@@ -266,6 +336,7 @@ local function buildTerrain()
 	Terrain:SetMaterialColor(M.Sand, Color3.fromRGB(176, 164, 134))
 	Terrain:SetMaterialColor(M.Ground, Color3.fromRGB(104, 88, 64))
 	Terrain:SetMaterialColor(M.Mud, Color3.fromRGB(62, 56, 46))
+	Terrain:SetMaterialColor(M.Pebble, Color3.fromRGB(128, 122, 112))
 	-- deep fjord teal: low transparency so depth reads as colour, full
 	-- reflectance so the sky and mountains mirror in it
 	Terrain.WaterColor = Color3.fromRGB(22, 50, 60)
@@ -281,14 +352,19 @@ local function buildTerrain()
 	local nx = (MAX_X - MIN_X) // VOXEL
 	local nz = (MAX_Z - MIN_Z) // VOXEL
 	local heights = table.create(nx + 2)
+	local waters = table.create(nx + 2)
 	local budget = os.clock()
 	for i = 0, nx + 1 do
 		local row = table.create(nz + 2)
+		local wrow = table.create(nz + 2)
 		local x = MIN_X + (i - 0.5) * VOXEL
 		for k = 0, nz + 1 do
-			row[k] = heightAt(x, MIN_Z + (k - 0.5) * VOXEL)
+			local z = MIN_Z + (k - 0.5) * VOXEL
+			row[k] = heightAt(x, z)
+			wrow[k] = waterLevelAt(x, z)
 		end
 		heights[i] = row
+		waters[i] = wrow
 		if os.clock() - budget > 0.05 then
 			if RunService:IsRunning() then
 				task.wait()
@@ -312,6 +388,11 @@ local function buildTerrain()
 					hi = math.max(hi, h)
 				end
 			end
+			for i = ci, ci2 do
+				for k = ck, ck2 do
+					hi = math.max(hi, waters[i][k])
+				end
+			end
 			hi = math.max(hi, 0) -- room for water
 			local yMin = math.floor((lo - 14) / VOXEL) * VOXEL
 			local yMax = math.ceil((hi + 1) / VOXEL) * VOXEL
@@ -323,6 +404,7 @@ local function buildTerrain()
 				local mx, ox = table.create(ny), table.create(ny)
 				local x = MIN_X + (i - 0.5) * VOXEL
 				local row, rowL, rowR = heights[i], heights[i - 1], heights[i + 1]
+				local wrow = waters[i]
 				for j = 1, ny do
 					mx[j] = table.create(ck2 - ck + 1)
 					ox[j] = table.create(ck2 - ck + 1)
@@ -350,7 +432,7 @@ local function buildTerrain()
 						elseif h > y0 then
 							occ = (h - y0) / VOXEL
 							mat = surface
-						elseif y0 + VOXEL <= 0 then
+						elseif y0 + VOXEL <= wrow[k] + 0.01 then
 							occ = 1
 							mat = M.Water
 						else
