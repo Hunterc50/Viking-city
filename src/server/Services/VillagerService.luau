@@ -347,6 +347,9 @@ local function burnFirewood(colony, dt: number)
 		return
 	end
 	local need = homes * V.FirewoodPerHomePerSecond * dt
+	if services.ColonyService:Has(colony, "TurfWalls") then
+		need *= 0.5
+	end
 	local wood = colony.resources.Wood or 0
 	if wood >= need then
 		colony.resources.Wood = wood - need

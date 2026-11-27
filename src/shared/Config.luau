@@ -586,6 +586,7 @@ Config.Tech = {
 	CropRotation = { Branch = "Buildings", Name = "Crop Rotation", Description = "Farms grow 25% more.", Cost = { Lore = 15 } },
 	Masonry = { Branch = "Buildings", Name = "Masonry", Description = "Quarries cut 30% more stone, and you break rocks faster.", Cost = { Lore = 20 } },
 	Trapping = { Branch = "Buildings", Name = "Trapping", Description = "Unlocks the Hunting Lodge.", Cost = { Lore = 20 } },
+	TurfWalls = { Branch = "Buildings", Name = "Turf Walls", Description = "Homes packed with turf keep the heat in: they burn half the firewood in winter.", Cost = { Lore = 25, Wood = 30 } },
 	Chieftainship = { Branch = "Buildings", Name = "Chieftainship", Description = "Unlocks the Great Hall.", Cost = { Lore = 60, Silver = 20 }, Requires = { "Masonry" } },
 	-- Gear (needs a Smithy)
 	IronAxes = { Branch = "Gear", Name = "Iron Blades", Description = "Chop 50% more wood with fewer swings, and your Sword hits 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
