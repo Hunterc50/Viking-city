@@ -199,9 +199,14 @@ function VillagerAnimController:Start()
 			if working then
 				f.work += dt
 			end
+			local guard = f.model:GetAttribute("Guard")
 			for _, limb in f.limbs do
 				local angle = swing * limb.side * (limb.isArm and 0.8 or 1)
-				if limb.isArm and carry then
+				if limb.isArm and guard and limb.side ~= 1 then
+					-- in the wall: the arm comes up and turns so the shield faces front
+					limb.weld.C0 = limb.hip * CFrame.Angles(0.7, 0, 0) * CFrame.Angles(0, -math.pi / 2, 0) * CFrame.new(0, -limb.half, 0)
+					continue
+				elseif limb.isArm and carry then
 					angle = 0.95 -- both arms hold the load
 				elseif limb.isArm and working then
 					angle = workAngle(work, f.work, limb.side == 1)

@@ -37,6 +37,8 @@ local function handle(colony, action: string, arg)
 		return services.WarbandService:SetMode(colony, "follow")
 	elseif action == "StayHome" then
 		return services.WarbandService:SetMode(colony, "home")
+	elseif action == "Formation" then
+		return services.WarbandService:SetFormation(colony, arg)
 	elseif action == "Expedition" then
 		return services.WarbandService:Expedition(colony, arg)
 	elseif action == "Gift" then

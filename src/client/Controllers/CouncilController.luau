@@ -15,6 +15,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
 local Grid = require(Shared.Grid)
 local Remotes = require(Shared.Remotes)
 
@@ -182,7 +183,17 @@ local function buildWarband(body, state)
 	button(r2, "Guard the village", w.mode == "follow", function()
 		act("StayHome")
 	end, 180)
-	text(c, "Following warriors fight beside you and row your longship: faster ship, one more arrow each per volley.", { TextSize = 12, TextColor3 = THEME.Muted, LayoutOrder = 6 })
+	local r4 = row(c, 6)
+	for _, key in { "loose", "wall", "wedge" } do
+		local f = Config.Formations[key]
+		local on = w.formation == key and w.mode == "follow"
+		button(r4, (on and "» " or "") .. f.Label, w.mode ~= "away" and w.count > 0 and not on, function()
+			act("Formation", key)
+		end, 140)
+	end
+	local f = Config.Formations[w.formation or "loose"]
+	text(c, "Formation: " .. f.Label .. ", " .. f.Text .. ". Press G in the field to switch.", { TextSize = 12, TextColor3 = THEME.Muted, LayoutOrder = 7 })
+	text(c, "Following warriors fight beside you and row your longship: faster ship, one more arrow each per volley. At a rival hold they hack at the gate with you; a wedge rams it twice as hard.", { TextSize = 12, TextColor3 = THEME.Muted, LayoutOrder = 8 })
 
 	local e = card(body, 2)
 	text(e, "Send them raiding on their own (strength " .. w.power .. ")", { Font = Enum.Font.GothamBold, TextSize = 16, LayoutOrder = 1 })
@@ -396,6 +407,8 @@ function CouncilController:Start()
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.J then
 			toggle()
+		elseif not processed and input.KeyCode == Enum.KeyCode.G then
+			act("Formation", "next")
 		end
 	end)
 	controllers.StateController.Changed:Connect(function()

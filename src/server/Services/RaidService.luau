@@ -73,6 +73,21 @@ local function newHold(R)
 		end
 	end
 
+	local function gateBroken(): boolean
+		return state.gate == nil or state.gate.broken
+	end
+
+	local function lockedOut(player: Player): boolean
+		if gateBroken() then
+			return false
+		end
+		local colony = services.ColonyService:Get(player)
+		if colony then
+			services.ColonyService:Notify(colony, "Break the gate of " .. R.Name .. " first!", "bad")
+		end
+		return true
+	end
+
 	local function makePrompt(parent: Instance, action: string, objectText: string, key: Enum.KeyCode, holdTime: number)
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = action
@@ -214,7 +229,7 @@ local function newHold(R)
 		local chest = { model = model, lid = lid, lidClosed = lid.CFrame, hinge = cf * CFrame.new(0, 2.5, 1.3), looted = false }
 		chest.prompt = makePrompt(lid, "Plunder", "Chest", Enum.KeyCode.E, 1.5)
 		chest.prompt.Triggered:Connect(function(player)
-			if chest.looted then
+			if chest.looted or lockedOut(player) then
 				return
 			end
 			local ColonyService = services.ColonyService
@@ -250,14 +265,214 @@ local function newHold(R)
 		table.insert(state.chests, chest)
 	end
 
-	-- Guards ----------------------------------------------------------------------
-
 	local function weld(part: BasePart, to: BasePart)
 		local w = Instance.new("WeldConstraint")
 		w.Part0 = to
 		w.Part1 = part
 		w.Parent = part
 	end
+
+	local buildGate
+	-- Gate ------------------------------------------------------------------------
+	-- A pair of heavy doors between two towers in the palisade gap. Raiders must
+	-- break it before they can plunder or burn anything inside.
+
+	local function updateGateLabel()
+		local g = state.gate
+		if not g then
+			return
+		end
+		if g.broken then
+			g.label.Text = "The gate is broken!"
+			g.label.TextColor3 = Color3.fromRGB(255, 150, 120)
+		else
+			g.label.Text = string.format("Gate %d / %d", math.ceil(g.hp), g.max)
+			g.label.TextColor3 = g.hp < g.max and Color3.fromRGB(255, 205, 140) or Color3.fromRGB(240, 235, 225)
+		end
+		g.bar.Size = UDim2.fromScale(math.clamp(g.hp / g.max, 0, 1), 1)
+	end
+
+	local function setGateOpen(open: boolean)
+		local g = state.gate
+		for _, leaf in g.leaves do
+			leaf.part.CanCollide = not open
+			if open then
+				TweenService:Create(leaf.part, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { CFrame = leaf.fallen }):Play()
+			else
+				leaf.part.CFrame = leaf.closed
+			end
+		end
+		g.bar.Parent.Visible = not open
+	end
+
+	buildGate = function(segments: number)
+		-- the gap's half-width, from the nearest wall segment on either side
+		local step = math.pi * 2 / segments
+		local aMin = math.huge
+		for i = 0, segments - 1 do
+			local a = i * step - GATE
+			a = math.abs(math.atan2(math.sin(a), math.cos(a)))
+			if a > 0.2 then
+				aMin = math.min(aMin, a)
+			end
+		end
+		local half = math.max(8, R.Radius * math.sin(aMin) - Config.CELL / 2 + 1)
+		local centre = CENTER + gateDir * (R.Radius * math.cos(aMin * 0.5))
+		local frame = CFrame.lookAt(centre, centre + gateDir) -- X along the wall, -Z outward
+		local model = Instance.new("Model")
+		model.Name = "Gate"
+		local add = ModelFactory.addPart
+		local WOOD = Color3.fromRGB(96, 66, 42)
+		local DARK = Color3.fromRGB(70, 48, 32)
+		local IRON = Color3.fromRGB(58, 58, 62)
+		local H = 13
+		-- the two gate towers, with a fighting platform across the top
+		for _, side in { -1, 1 } do
+			local x = side * (half + 2)
+			add(model, { Name = "GateTower", Size = Vector3.new(5, 19, 5), CFrame = frame * CFrame.new(x, 9.5, 0), Color = DARK, Material = Enum.Material.WoodPlanks })
+			add(model, { Name = "GateTowerTop", Size = Vector3.new(6.4, 1, 6.4), CFrame = frame * CFrame.new(x, 19.5, 0), Color = WOOD, Material = Enum.Material.WoodPlanks })
+			add(model, { Name = "Roof", Size = Vector3.new(4.6, 4.6, 4.6), CFrame = frame * CFrame.new(x, 21.6, 0) * CFrame.Angles(0, math.rad(45), 0) * CFrame.Angles(math.rad(45), 0, 0), Color = Color3.fromRGB(58, 44, 34), Material = Enum.Material.Wood })
+			for _, y in { 4, 11 } do
+				add(model, { Name = "Band", Size = Vector3.new(5.2, 0.5, 5.2), CFrame = frame * CFrame.new(x, y, 0), Color = IRON, Material = Enum.Material.Metal })
+			end
+		end
+		add(model, { Name = "GateWalk", Size = Vector3.new(half * 2 + 4, 1.4, 4.6), CFrame = frame * CFrame.new(0, H + 2.6, 0), Color = WOOD, Material = Enum.Material.WoodPlanks })
+		for k = -3, 3 do
+			add(model, { Name = "Stake", Size = Vector3.new(0.9, 2.6, 0.9), CFrame = frame * CFrame.new(k * half / 3.2, H + 4.4, -2), Color = DARK, Material = Enum.Material.Wood })
+		end
+		-- the doors: two heavy leaves that fall outward when the gate breaks
+		local leaves = {}
+		for _, side in { -1, 1 } do
+			local x = side * half / 2
+			local closed = frame * CFrame.new(x, H / 2, 0)
+			local leaf = add(model, { Name = "GateDoor", Size = Vector3.new(half - 0.1, H, 1.6), CFrame = closed, Color = WOOD, Material = Enum.Material.WoodPlanks })
+			leaf.CanCollide = true
+			for _, y in { -H * 0.3, H * 0.3 } do
+				local band = add(model, { Name = "Band", Size = Vector3.new(half - 0.4, 0.6, 1.9), CFrame = closed * CFrame.new(0, y, 0), Color = IRON, Material = Enum.Material.Metal })
+				band.Anchored = false
+				band.CanCollide = false
+				weld(band, leaf)
+			end
+			local boss = add(model, { Name = "Band", Size = Vector3.new(1.2, 1.2, 2), CFrame = closed * CFrame.new(-side * (half / 2 - 1.2), 0, 0), Color = IRON, Material = Enum.Material.Metal })
+			boss.Anchored = false
+			boss.CanCollide = false
+			weld(boss, leaf)
+			-- fallen flat on the ground outside, a little askew
+			local fallen = frame * CFrame.new(x, 0.9, -H / 2 - 0.5) * CFrame.Angles(math.rad(-88), math.rad(side * 6), 0)
+			table.insert(leaves, { part = leaf, closed = closed, fallen = fallen })
+		end
+		model.Parent = folder
+
+		-- health over the gate
+		local anchor = anchorPart(frame * CFrame.new(0, H + 7, 0), model)
+		local gui = Instance.new("BillboardGui")
+		gui.Size = UDim2.fromOffset(220, 46)
+		gui.MaxDistance = 160
+		gui.Parent = anchor
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, 0, 0.55, 0)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBold
+		label.TextScaled = true
+		label.TextStrokeTransparency = 0.4
+		label.Parent = gui
+		local back = Instance.new("Frame")
+		back.Position = UDim2.fromScale(0.1, 0.66)
+		back.Size = UDim2.fromScale(0.8, 0.22)
+		back.BackgroundColor3 = Color3.fromRGB(30, 24, 20)
+		back.BorderSizePixel = 0
+		back.Parent = gui
+		local bar = Instance.new("Frame")
+		bar.Size = UDim2.fromScale(1, 1)
+		bar.BackgroundColor3 = Color3.fromRGB(200, 120, 60)
+		bar.BorderSizePixel = 0
+		bar.Parent = back
+
+		state.gate = {
+			hold = hold,
+			model = model,
+			leaves = leaves,
+			position = centre,
+			out = gateDir,
+			side = gateSide,
+			half = half,
+			hp = Config.Siege.GateHealth,
+			max = Config.Siege.GateHealth,
+			broken = false,
+			label = label,
+			bar = bar,
+		}
+		updateGateLabel()
+	end
+
+	-- A blow on the gate. Returns true when it landed.
+	function hold:DamageGate(amount: number, attacker: Player?): boolean
+		local g = state.gate
+		if not g or g.broken then
+			return false
+		end
+		markRaid()
+		local colony = attacker and services.ColonyService:Get(attacker)
+		if colony and services.DiplomacyService then
+			services.DiplomacyService:OnHostile(colony, R.Name)
+		end
+		if not state.alarm then
+			state.alarm = true
+			notifyAll((attacker and attacker.DisplayName or "Raiders") .. " is storming the gate of " .. R.Name .. "!", "raid")
+		end
+		g.hp -= amount
+		Sounds.play("Chop", g.position + Vector3.new(0, 4, 0))
+		-- the doors shudder
+		for _, leaf in g.leaves do
+			leaf.part.CFrame = leaf.closed * CFrame.new(0, 0, -0.25)
+			task.delay(0.08, function()
+				if not g.broken then
+					leaf.part.CFrame = leaf.closed
+				end
+			end)
+		end
+		if g.hp <= 0 then
+			g.hp = 0
+			g.broken = true
+			setGateOpen(true)
+			Sounds.play("Build", g.position)
+			Sounds.play("WarHorn", g.position)
+			notifyAll("The gate of " .. R.Name .. " is broken! Storm the hold!", "raid")
+			if colony then
+				services.QuestService:Count(colony, "gate")
+			end
+		end
+		updateGateLabel()
+		return true
+	end
+
+	-- The standing gate if `position` is within `range` of it.
+	function hold:GateNear(position: Vector3, range: number)
+		local g = state.gate
+		if not g or g.broken then
+			return nil
+		end
+		local rel = position - g.position
+		local along = math.abs(rel:Dot(g.side))
+		local depth = math.abs(rel:Dot(g.out))
+		if along <= g.half + range * 0.5 and depth <= range then
+			return g
+		end
+		return nil
+	end
+
+	local function restoreGate()
+		local g = state.gate
+		if g then
+			g.hp = g.max
+			g.broken = false
+			setGateOpen(false)
+			updateGateLabel()
+		end
+	end
+
+	-- Guards ----------------------------------------------------------------------
+
 
 	local function gear(parent: Model, attachTo: BasePart, name: string, size: Vector3, offset: CFrame, color: Color3, material, shape)
 		local p = Instance.new("Part")
@@ -639,6 +854,9 @@ local function newHold(R)
 			building.firePrompt = makePrompt(anchor, "Set alight", kind, Enum.KeyCode.F, 1)
 			building.firePrompt.MaxActivationDistance = 18
 			building.firePrompt.Triggered:Connect(function(player)
+				if lockedOut(player) then
+					return
+				end
 				if not services.ToolService:IsHolding(player, "Torch") then
 					local colony = services.ColonyService:Get(player)
 					if colony then
@@ -676,6 +894,7 @@ local function newHold(R)
 				wall.Parent = folder
 			end
 		end
+		buildGate(segments)
 
 		-- the war horn on a post just outside the gate
 		local gate = CENTER + gateDir * (R.Radius + 10) + gateSide * 14
@@ -784,6 +1003,7 @@ local function newHold(R)
 		state.alarm = false
 		state.raidedAt = nil
 		state.hornPrompt.Enabled = true
+		restoreGate()
 		notifyAll(R.Name .. " has rebuilt its walls and restocked its stores.", "info")
 	end
 
@@ -870,6 +1090,36 @@ function RaidService:NearestDefender(position: Vector3, range: number): (Model?,
 		end
 	end
 	return best, bestRoot, bestDmg
+end
+
+-- The standing gate of any hold near `position` (for the war band), or nil.
+function RaidService:GateNear(position: Vector3, range: number)
+	for _, h in holds do
+		local g = h:GateNear(position, range)
+		if g then
+			return g
+		end
+	end
+	return nil
+end
+
+function RaidService:DamageGate(gate, amount: number, attacker: Player?): boolean
+	return gate and gate.hold and gate.hold:DamageGate(amount, attacker) or false
+end
+
+-- A player's melee blow: lands on a gate in front of them within `range`.
+function RaidService:StrikeGate(position: Vector3, look: Vector3, range: number, amount: number, attacker: Player): boolean
+	local g = self:GateNear(position, range)
+	if not g then
+		return false
+	end
+	-- facing the doors (from either side)
+	local toward = (g.position - position) * Vector3.new(1, 0, 1)
+	local facing = toward:Dot(g.out) * look:Dot(g.out) > 0 or math.abs((position - g.position):Dot(g.out)) < 2
+	if not facing then
+		return false
+	end
+	return g.hold:DamageGate(amount, attacker)
 end
 
 function RaidService:Start()

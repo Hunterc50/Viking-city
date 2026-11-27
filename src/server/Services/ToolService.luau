@@ -247,6 +247,11 @@ local function strike(player: Player)
 	for _, militia in services.TownRaidService:MilitiaNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.TownRaidService:DamageMilitia(militia, damage, player)
 	end
+	-- a hold's gate: axes bite into the doors best
+	local gateDamage = Config.Siege.ToolDamage[held.Name]
+	if gateDamage then
+		services.RaidService:StrikeGate(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange, gateDamage * (damage / base), player)
+	end
 end
 
 function ToolService:Start()

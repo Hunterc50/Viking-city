@@ -177,9 +177,50 @@ function WarbandService:SetMode(colony, mode: string): (boolean, string)
 		return false, "Hire some warriors first."
 	end
 	b.mode = mode
+	for _, v in warriors(colony) do
+		if v.model then
+			v.model:SetAttribute("Guard", (mode == "follow" and b.formation == "wall") or nil)
+		end
+	end
 	services.ColonyService:Notify(colony, mode == "follow" and "Your war band falls in behind you." or "Your war band stays to guard the village.", "info")
 	services.ColonyService:Sync(colony)
 	return true, mode
+end
+
+local FORMATIONS = { "loose", "wall", "wedge" }
+local formationSpot, assaultGate
+local F = Config.Formations
+
+function WarbandService:SetFormation(colony, formation: string?): (boolean, string)
+	local b = band(colony)
+	if b.mode == "away" then
+		return false, "The war band is away on an expedition."
+	end
+	if #warriors(colony) == 0 then
+		return false, "Hire some warriors first."
+	end
+	if formation == nil or formation == "next" then
+		-- cycle to the next one (the G key)
+		local i = table.find(FORMATIONS, b.formation or "loose") or 1
+		formation = FORMATIONS[i % #FORMATIONS + 1]
+	end
+	if not F[formation] then
+		return false, "Unknown formation."
+	end
+	b.formation = formation
+	if b.mode ~= "follow" then
+		b.mode = "follow"
+	end
+	for _, v in warriors(colony) do
+		if v.model then
+			v.model:SetAttribute("Guard", formation == "wall" or nil)
+		end
+	end
+	Sounds.play("WarHorn", colony.player.Character and colony.player.Character:FindFirstChild("HumanoidRootPart") and colony.player.Character.HumanoidRootPart.Position or nil)
+	local text = F[formation].Label .. "! Your war band forms " .. F[formation].Text .. "."
+	services.ColonyService:Notify(colony, text, "info")
+	services.ColonyService:Sync(colony)
+	return true, F[formation].Label
 end
 
 -- Following and fighting ---------------------------------------------------------
@@ -257,27 +298,32 @@ local function fall(colony, v)
 end
 
 -- One fighting step for a warrior near an enemy. Returns true if it fought.
-local function fight(colony, v, now: number, dt: number, anchor: Vector3): boolean
-	local enemy, root, dmg, kind = nearestEnemy(colony, v.body.Position, W.Sight)
-	if not enemy or not root or (root.Position - anchor).Magnitude > W.Sight * 1.5 then
+-- `f` is the formation's settings: Sight, Speed, Damage, DamageTaken, and
+-- Leash (how far from `anchor` they may chase; a shield wall holds its line).
+local function fight(colony, v, now: number, dt: number, anchor: Vector3, f): boolean
+	f = f or {}
+	local sight = W.Sight * (f.Sight or 1)
+	local leash = f.Leash or sight * 1.5
+	local enemy, root, dmg, kind = nearestEnemy(colony, v.body.Position, sight)
+	if not enemy or not root or (root.Position - anchor).Magnitude > leash then
 		return false
 	end
 	local d = (root.Position - v.body.Position) * Vector3.new(1, 0, 1)
 	if d.Magnitude > W.Reach then
-		moveTo(v, root.Position - d.Unit * (W.Reach - 1.5), Config.Villagers.WalkSpeed * 2.4, dt)
+		moveTo(v, root.Position - d.Unit * (W.Reach - 1.5), Config.Villagers.WalkSpeed * 2.4 * (f.Speed or 1), dt)
 	else
 		v.body.CFrame = CFrame.lookAt(v.body.Position, v.body.Position + d)
 		if now - (v.lastBlow or 0) >= W.HitCooldown then
 			v.lastBlow = now
 			swing(v)
 			Sounds.play("Swing", v.body.Position)
-			hit(colony, kind, enemy, blowDamage(colony))
+			hit(colony, kind, enemy, blowDamage(colony) * (f.Damage or 1))
 		end
 		-- the enemy hits back now and then
 		if now - (v.lastHurt or 0) >= W.HitCooldown * 1.3 then
 			v.lastHurt = now
 			if rng:NextNumber() < 0.5 then
-				v.hp = (v.hp or maxHealth(colony)) - (dmg or 10) * 0.6
+				v.hp = (v.hp or maxHealth(colony)) - (dmg or 10) * 0.6 * (f.DamageTaken or 1)
 				if v.hp <= 0 then
 					fall(colony, v)
 				end
@@ -317,6 +363,56 @@ function WarbandService:CrewBonus(player: Player): number
 	return math.min(self:CrewCount(player) * W.CrewSpeed, W.CrewSpeedMax)
 end
 
+-- Where warrior i of n stands, around the player at `anchor` facing `look`.
+formationSpot = function(formation: string, i: number, n: number, anchor: Vector3, look: Vector3, right: Vector3): Vector3
+	if formation == "wall" then
+		-- two ranks of shields in front of you, the second rank staggered
+		local perRank = math.max(2, math.ceil(n / 2))
+		local rank = (i - 1) // perRank
+		local inRank = math.min(perRank, n - rank * perRank)
+		local k = (i - 1) % perRank
+		local offset = (k - (inRank - 1) / 2) * 3 + rank * 1.5
+		return anchor + look * (5 - rank * 2.8) + right * offset
+	elseif formation == "wedge" then
+		-- the boar's snout: a point ahead of you, widening back
+		local row = math.ceil(i / 2)
+		local side = (i % 2 == 0) and 1 or -1
+		return anchor + look * (5.5 - row * 2.6) + right * side * (1.2 + row * 2.2)
+	end
+	-- loose: a crowd at your back
+	local row = math.ceil(i / 2)
+	return anchor - look * (3 + row * 3) + right * ((i % 2 == 0) and 2.5 or -2.5) * row * 0.8
+end
+
+-- Near a rival gate with no one to fight: hack at the doors beside you.
+assaultGate = function(colony, v, i: number, now: number, dt: number, root: BasePart, formation: string): boolean
+	if formation == "wall" then
+		return false
+	end
+	local gate = services.RaidService:GateNear(root.Position, 30)
+	if not gate then
+		return false
+	end
+	-- spread along the outside of the doors
+	local sideOf = (root.Position - gate.position):Dot(gate.out) >= 0 and 1 or -1
+	local slot = ((i - 1) % 6 - 2.5) / 2.5 * (gate.half - 1.5)
+	local spot = gate.position + gate.out * (3 * sideOf) + gate.side * slot
+	local d = (spot - v.body.Position) * Vector3.new(1, 0, 1)
+	if d.Magnitude > 1.5 then
+		moveTo(v, spot, Config.Villagers.WalkSpeed * 2.4 * (formation == "wedge" and Config.Formations.wedge.Speed or 1), dt)
+	else
+		v.body.CFrame = CFrame.lookAt(v.body.Position, v.body.Position - gate.out * sideOf)
+		if now - (v.lastBlow or 0) >= W.HitCooldown then
+			v.lastBlow = now
+			swing(v)
+			local ram = formation == "wedge" and Config.Siege.WedgeRam or 1
+			services.RaidService:DamageGate(gate, blowDamage(colony) * ram, colony.player)
+		end
+	end
+	v.fighting = now
+	return true
+end
+
 local function stepColony(colony, now: number, dt: number)
 	local b = band(colony)
 	if b.mode == "away" then
@@ -336,6 +432,10 @@ local function stepColony(colony, now: number, dt: number)
 		if not v.body or not v.model or not v.model.Parent then
 			continue
 		end
+		local guard = (b.mode == "follow" and b.formation == "wall" and not ship) or nil
+		if v.model:GetAttribute("Guard") ~= guard then
+			v.model:SetAttribute("Guard", guard)
+		end
 		if now - (v.fighting or 0) > 4 and (v.hp or heal) < heal then
 			v.hp = math.min(heal, (v.hp or heal) + W.HealPerSecond * dt)
 		end
@@ -346,20 +446,29 @@ local function stepColony(colony, now: number, dt: number)
 				continue
 			end
 			local anchor = root.Position
-			if not fight(colony, v, now, dt, anchor) then
-				-- a loose wedge behind you
-				local look = root.CFrame.LookVector * Vector3.new(1, 0, 1)
-				look = look.Magnitude > 0.1 and look.Unit or Vector3.new(0, 0, 1)
-				local right = Vector3.new(-look.Z, 0, look.X)
-				local row = math.ceil(i / 2)
-				local spot = anchor - look * (3 + row * 3) + right * ((i % 2 == 0) and 2.5 or -2.5) * row * 0.8
+			local look = root.CFrame.LookVector * Vector3.new(1, 0, 1)
+			look = look.Magnitude > 0.1 and look.Unit or Vector3.new(0, 0, 1)
+			local right = Vector3.new(-look.Z, 0, look.X)
+			local formation = b.formation or "loose"
+			local spot = formationSpot(formation, i, #list, anchor, look, right)
+			local f = F[formation]
+			local opts = { Sight = f.Sight, Speed = f.Speed, Damage = f.Damage, DamageTaken = f.DamageTaken }
+			if formation == "wall" then
+				-- hold the line: only strike what comes close to their place in it
+				opts.Sight = (W.Reach + 6) / W.Sight
+				opts.Leash = W.Reach + 8
+			end
+			if not fight(colony, v, now, dt, formation == "wall" and spot or anchor, opts) and not assaultGate(colony, v, i, now, dt, root, formation) then
 				local far = (spot - v.body.Position).Magnitude
 				if far > 120 then
 					-- left far behind (you sailed off or respawned): catch up at once
 					local y = math.max(groundY(spot.X, spot.Z), 0.5)
 					v.body.CFrame = CFrame.new(spot.X, y + v.height, spot.Z)
-				elseif far > 2 then
-					moveTo(v, spot, root.AssemblyLinearVelocity.Magnitude > 10 and 20 or Config.Villagers.WalkSpeed * 2, dt)
+				elseif far > 1.2 then
+					moveTo(v, spot, (root.AssemblyLinearVelocity.Magnitude > 10 and 20 or Config.Villagers.WalkSpeed * 2) * (f.Speed or 1), dt)
+				elseif formation == "wall" then
+					-- shields to the front
+					v.body.CFrame = CFrame.lookAt(v.body.Position, v.body.Position + look)
 				end
 			end
 		else
@@ -519,6 +628,7 @@ function WarbandService:State(colony)
 	end
 	return {
 		mode = b.mode,
+		formation = b.formation or "loose",
 		target = b.target,
 		secondsLeft = b.returnAt and math.max(0, math.floor(b.returnAt - os.clock())) or nil,
 		count = #list,

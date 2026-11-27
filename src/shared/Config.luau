@@ -316,6 +316,21 @@ Config.Weather = {
 	FogRaiderSight = 0.4, -- the raider ship only spots you at 40% of its usual range
 }
 
+-- Sieges: every rival hold has a gate in its palisade. Break it (axe blows,
+-- or your war band in a wedge) before you can plunder or burn inside.
+Config.Siege = {
+	GateHealth = 600,
+	ToolDamage = { Axe = 30, Pickaxe = 20, Sword = 18 }, -- per blow on the gate
+	WedgeRam = 2, -- warriors in a wedge hit gates this much harder
+}
+
+-- War band formations (Jarl's Table > War band, or press G while they follow)
+Config.Formations = {
+	loose = { Label = "Loose", Text = "a loose crowd behind you" },
+	wall = { Label = "Shield wall", Text = "two ranks of shields in front of you. They hold the line and take half damage", DamageTaken = 0.5 },
+	wedge = { Label = "Wedge", Text = "a boar's-snout wedge. They charge harder, hit 40% harder and ram gates", Damage = 1.4, Speed = 1.25, Sight = 1.3 },
+}
+
 Config.Combat = {
 	-- melee damage per blow by what you're holding: tools barely scratch,
 	-- the Sword is the real weapon
@@ -354,7 +369,7 @@ Config.Quests = {
 	{ Title = "Keepers of lore", Text = "Build a Lore Hall. Its skalds earn Lore for research.", Kind = "building", Building = "LoreHall", Goal = 1, Reward = { Lore = 10 } },
 	{ Title = "New knowledge", Text = "Press T and research anything.", Kind = "tech", Goal = 1, Reward = { Wood = 30 } },
 	{ Title = "A growing village", Text = "Reach 8 people. Keep everyone fed, housed and happy.", Kind = "population", Goal = 8, Reward = { Silver = 10 } },
-	{ Title = "Plunder Greywater", Text = "Walk west to Greywater Hold, beat its guards and plunder a chest (E).", Kind = "stat", Stat = "plunder", Goal = 1, Reward = { Silver = 10 } },
+	{ Title = "Plunder Greywater", Text = "Walk west to Greywater Hold, chop through its gate with your axe, beat the guards and plunder a chest (E).", Kind = "stat", Stat = "plunder", Goal = 1, Reward = { Silver = 10 } },
 	{ Title = "Shipwrights", Text = "Build a Shipyard (War & Sea tab).", Kind = "building", Building = "Shipyard", Goal = 1, Reward = { Wood = 40 } },
 	{ Title = "Take to the sea", Text = "Research Karve (T), then hold E at the end of your jetty to launch.", Kind = "stat", Stat = "launch", Goal = 1, Reward = { Food = 30 } },
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
