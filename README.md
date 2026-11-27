@@ -78,21 +78,78 @@ Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Ea
 
 ---
 
-## Using your own 3D models (meshes) for extra realism
+## Editing the world and models yourself (no coding)
 
-The game is built from simple blocks so it works out of the box, but you can swap any of them for a realistic model, and the game will use yours automatically.
+Normally the valley and every building are made by code when you press Play, so in edit mode you only see a flat grey plate. One command turns them into real models you can click on, move, recolour and save.
 
-1. In Studio, open **Window > 3D Importer** (or the Toolbox, **Creator Store** tab, to find free models) and import your model (`.fbx`, `.obj` or `.gltf`).
-2. In the Explorer, open **ReplicatedStorage > Assets**.
-3. Drag your model into the **Assets** folder.
-4. Rename it to exactly one of these slot names:
-   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `LoreHall`, `Smithy`, `Shrine`, `Shipyard`, `HuntingLodge`, `GreatHall`, `Tree_Pine`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Axe`, `Pickaxe`, `Bow`
-5. Press Play. Buildings are resized to fit their spot on the grid automatically.
+### Step 1: get everything into the editor (once)
 
-Notes:
-- `Axe`, `Pickaxe` and `Bow` must be **Tools** (with a part named `Handle`). Everything else is a **Model**.
-- Only use models you made or that are free to use, and avoid ones with scripts inside.
-- Save your place with your models in it (File > Save to File As). When a new `VikingCity.rbxl` comes out, open it, then copy your **Assets** folder across from your saved place.
+1. Open `VikingCity.rbxl` in Roblox Studio. **Don't** press Play.
+2. Click **View** (top menu), then **Command Bar**. A long text box appears at the bottom.
+3. Paste this into it and press **Enter**:
+   ```
+   require(game.ServerScriptService.Server.EditTools).Setup()
+   ```
+4. Wait. Studio may freeze for up to a minute. When the Output window says `done`, the whole valley, forests, docks and torches are now in the place.
+5. Fly behind your plot (the grassy meadow). There is a row of every building, tree, rock, bush, a deer and the tools. They live in **Explorer > Workspace > ModelWorkshop**. These are the models the game uses.
+6. Save straight away: **File > Save to File As**, give it a new name like `MyVikingCity.rbxl`.
+
+### Step 2: moving around and picking things
+
+- **Fly the camera:** hold the **right mouse button** and use **W A S D** (Q / E go down and up). Mouse wheel zooms.
+- **Find something:** open **View > Explorer**. Click the arrow next to `Workspace`, then `ModelWorkshop`. Click a name (say `Longhouse`), then press **F** to fly the camera to it.
+- **Select it:** click it in the 3D view or in the Explorer. A blue box shows the whole model is selected.
+- **Select one piece inside a model** (a roof, a wall): hold **Alt** and click it, or open the model's arrow in the Explorer and click the part.
+- **Properties:** **View > Properties** shows everything about what you selected (colour, material, size).
+
+### Step 3: changing things
+
+| I want to... | Do this |
+| --- | --- |
+| Move it | **Home** tab > **Move** (or Ctrl+2), drag the coloured arrows |
+| Turn it | **Rotate** (Ctrl+4), drag the coloured rings |
+| Make a part bigger or smaller | **Scale** (Ctrl+3), drag the dots. Whole model: in Properties change **Scale** |
+| Change colour | Select a part, in Properties click the **Color** box and pick one. Or **Home > Color** |
+| Change material (wood, stone, grass) | Properties > **Material**, or **Home > Material** |
+| Copy something | **Ctrl+D** (duplicates it in place, then move it) |
+| Delete something | Select it, press **Delete** |
+| Undo | **Ctrl+Z** |
+| Add a new block | **Home > Part**, then move, scale and colour it. Drag it in the Explorer onto a model to make it part of that model |
+| Paint or sculpt the ground | **Home > Editor** (Terrain Editor): Paint, Grow, Erode, Smooth, Flatten |
+
+Tips:
+- Keep each building **inside its model** (in the Explorer, every piece should sit under `Longhouse`, `Cottage`, ...). Don't rename the models: the name tells the game what it is.
+- Keep a building about the same size it already is, so it still fits its spot on the build grid. Its bottom becomes ground level.
+- Edits to a model in **ModelWorkshop** change **every** copy in the game (every Longhouse you build, every pine tree). Don't worry about where the workshop row sits: it disappears when you press Play.
+- Edits to the valley (moving a tree, painting the ground, deleting a rock in **Workspace > Scenery**) change just that spot.
+- Don't want one of your edited models any more? Delete it from ModelWorkshop and the game goes back to its built-in one. (The built-in trees vary randomly, a workshop tree is the same shape every time, just resized and turned.)
+
+### Step 4: test and save
+
+1. Press **Play** (F5) to try it. Press **Stop** to go back. **Changes you make while playing are thrown away**, so always edit after pressing Stop.
+2. **File > Save to File As** (or Ctrl+S after the first save) to keep your work.
+
+### Getting a new version without losing your edits
+
+When a new `VikingCity.rbxl` comes out:
+1. Open your saved place, click **ModelWorkshop** in the Explorer, press **Ctrl+C**.
+2. Open the new `VikingCity.rbxl`, run the Step 1 command, then delete its fresh **ModelWorkshop**, click **Workspace** and press **Ctrl+V** to paste yours in. Save.
+
+Hand edits to the valley itself don't carry over, so put your favourite changes into the models where you can.
+
+Other commands for the Command Bar:
+- `require(game.ServerScriptService.Server.EditTools).Models()` only adds the ModelWorkshop row (for example, after you deleted one model and want it back).
+- `require(game.ServerScriptService.Server.EditTools).Reset()` removes the saved valley so the game makes a fresh one every Play again.
+
+### Using real 3D models (meshes)
+
+You can also replace any model with an imported one:
+1. **Window > 3D Importer** (or the Toolbox, **Creator Store** tab, for free models) and import your `.fbx`, `.obj` or `.gltf`.
+2. Drag it into **ReplicatedStorage > Assets**, and rename it to one of these slot names:
+   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `LoreHall`, `Smithy`, `Shrine`, `Shipyard`, `HuntingLodge`, `GreatHall`, `Tree_Pine`, `Tree_Spruce`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Longship`, `Axe`, `Pickaxe`, `Bow`, `Torch`
+3. Press Play. Imported buildings are resized to fit their spot on the grid automatically. If a model with the same name is in ModelWorkshop, the workshop one wins, so delete that one.
+
+Notes: `Axe`, `Pickaxe`, `Bow` and `Torch` must be **Tools** with a part named `Handle`. Only use models you made or that are free to use, and avoid ones with scripts inside.
 
 ---
 
@@ -105,9 +162,10 @@ src/
     Config.luau         every balance number: costs, rates, timings
     Grid.luau           grid maths: cells, footprints, rotation
     Remotes.luau        RemoteEvents/RemoteFunctions between client and server
-    ModelFactory.luau   builds every model from parts, or uses your own from Assets
+    ModelFactory.luau   builds every model from parts, or uses your own from Assets / ModelWorkshop
   server/   -> ServerScriptService.Server
     init.server.luau    loads every service in Services/
+    EditTools.luau      Command Bar helpers that put the world and models into edit mode
     Services/
       WorldService.luau         generates the valley terrain, forests, docks and lighting
       PlotService.luau          gives each player land, spawns them there
@@ -136,4 +194,5 @@ docs/DESIGN.md          the full game design and roadmap
 
 - Progress isn't saved yet (coming with DataStores in Phase 1).
 - Buildings appear instantly; construction time comes later.
-- Models are made from parts in code; swap in real meshes with the Assets folder (above).
+- Models are made from parts in code; edit them or swap in real meshes (see "Editing the world and models yourself").
+- The rival village layout, villagers and guards are still made by code each time (its buildings do use your edited models).

@@ -16,7 +16,7 @@
       <Item class="StringValue" referent="3">
         <Properties>
           <string name="Name">_HowToUse</string>
-          <string name="Value">Drop your own models (meshes) in this folder to replace the built-in ones. Name each one exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, Tree_Pine, Tree_Birch, Rock, Bush, Dock, Deer, Axe, Pickaxe, Bow (Axe/Pickaxe/Bow must be Tools with a Handle). Anything missing uses the built-in version.</string>
+          <string name="Value">Drop your own models (meshes) in this folder to replace the built-in ones, named exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, LoreHall, Smithy, Shrine, Shipyard, HuntingLodge, GreatHall, Tree_Pine, Tree_Spruce, Tree_Birch, Rock, Bush, Dock, Deer, Longship, Axe, Pickaxe, Bow, Torch (tools must be Tools with a Handle). Easier: run require(game.ServerScriptService.Server.EditTools).Setup() in View > Command Bar to get every built-in model in Workspace > ModelWorkshop to edit. See README.</string>
         </Properties>
       </Item>
     </Item>
@@ -1681,13 +1681,19 @@ end
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
 	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
-	"Tree_Pine", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
-	"Axe", "Pickaxe", "Bow", "Longship",
+	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
+	"Axe", "Pickaxe", "Bow", "Torch", "Longship",
 }
 
+-- Models laid out in Workspace > ModelWorkshop (see bakeTemplates) are
+-- looked at first, so edits made there in Studio are used straight away.
 local function customAsset(name: string): Instance?
-	local folder = ReplicatedStorage:FindFirstChild("Assets")
-	local item = folder and folder:FindFirstChild(name)
+	local workshop = workspace:FindFirstChild("ModelWorkshop")
+	local item = workshop and workshop:FindFirstChild(name)
+	if not item then
+		local folder = ReplicatedStorage:FindFirstChild("Assets")
+		item = folder and folder:FindFirstChild(name)
+	end
 	return item and item:Clone() or nil
 end
 ModelFactory.customAsset = customAsset
@@ -1723,7 +1729,9 @@ local function prepare(item: Instance, anchored: boolean, fit: Vector3?, scale: 
 	end
 	local _, size = model:GetBoundingBox()
 	local factor = scale or 1
-	if fit and size.X > 0 and size.Z > 0 then
+	-- Templates (baked from the built-in models) already have the right size,
+	-- so they are kept exactly as you shaped them.
+	if fit and not model:GetAttribute("Template") and size.X > 0 and size.Z > 0 then
 		factor *= math.min(fit.X / size.X, fit.Z / size.Z)
 	end
 	if math.abs(factor - 1) > 0.01 then
@@ -1738,6 +1746,7 @@ end
 local partBuilt = {
 	building = ModelFactory.building,
 	pine = ModelFactory.pine,
+	spruce = ModelFactory.spruce,
 	birch = ModelFactory.birch,
 	boulder = ModelFactory.boulder,
 	node = ModelFactory.node,
@@ -1780,6 +1789,14 @@ function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
 		return model, main
 	end
 	return partBuilt.birch(rng, scale)
+end
+
+function ModelFactory.spruce(rng: Random, scale: number?): (Model, BasePart)
+	local model, main = customTree("Tree_Spruce", rng, scale)
+	if model then
+		return model, main
+	end
+	return partBuilt.spruce(rng, scale)
 end
 
 function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
@@ -1850,6 +1867,125 @@ function ModelFactory.tool(kind: string): Tool
 		return custom
 	end
 	return partBuilt.tool(kind)
+end
+
+-- Editing models in Studio ------------------------------------------------------
+--[[
+	bakeTemplates() is run once from Studio's Command Bar (in edit mode, not
+	while playing):
+	    require(game.ServerScriptService.Server.EditTools).Setup()
+	It puts a copy of every built-in model into Workspace > ModelWorkshop, in
+	a row you can see and edit. When the game starts, the server moves them
+	into ReplicatedStorage > Assets and uses them everywhere. Delete one to go
+	back to the built-in version (which has more random variety for trees).
+]]
+local function moveBy(item: Instance, offset: CFrame)
+	if item:IsA("PVInstance") then
+		item:PivotTo(offset * item:GetPivot())
+		return
+	end
+	for _, d in item:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CFrame = offset * d.CFrame
+		end
+	end
+end
+
+function ModelFactory.bakeTemplates(): number
+	local workshop = workspace:FindFirstChild("ModelWorkshop")
+	if not workshop then
+		workshop = Instance.new("Folder")
+		workshop.Name = "ModelWorkshop"
+		workshop.Parent = workspace
+	end
+	local rng = Random.new(7)
+	local makers = {
+		Tree_Pine = function()
+			return partBuilt.pine(rng, 1)
+		end,
+		Tree_Spruce = function()
+			return partBuilt.spruce(rng, 1)
+		end,
+		Tree_Birch = function()
+			return partBuilt.birch(rng, 1)
+		end,
+		Rock = function()
+			return partBuilt.boulder(rng, 1)
+		end,
+		Bush = function()
+			return partBuilt.node("Bush", rng)
+		end,
+		Dock = function()
+			return partBuilt.dock(48)
+		end,
+		Deer = function()
+			return partBuilt.deer(rng)
+		end,
+	}
+	for _, kind in Config.Tools do
+		makers[kind] = function()
+			return partBuilt.tool(kind)
+		end
+	end
+	for b in Config.Buildings do
+		makers[b] = function()
+			return partBuilt.building(b)
+		end
+	end
+
+	-- Lay them out in a row in the meadow behind the first plot.
+	local x, z, made = -20, 200, 0
+	for _, slot in ModelFactory.Slots do
+		local make = makers[slot]
+		if make and not workshop:FindFirstChild(slot) then
+			local item = make()
+			item.Name = slot
+			item:SetAttribute("Template", true)
+			local width = 8
+			if item:IsA("Model") then
+				local _, size = item:GetBoundingBox()
+				width = math.max(size.X, size.Z, 6)
+			end
+			x += width / 2 + 6
+			local hit = workspace:Raycast(V3(x, 400, z), V3(0, -800, 0))
+			local y = hit and hit.Position.Y or 1
+			if item:IsA("Tool") then
+				local handle = item:FindFirstChild("Handle")
+				if handle then
+					moveBy(item, CFrame.new(V3(x, y + 2.5, z) - handle.Position))
+				end
+			else
+				item:PivotTo(CFrame.new(x, y, z))
+			end
+			item.Parent = workshop
+			x += width / 2
+			made += 1
+		end
+	end
+	return made
+end
+
+-- Called by the server as the game starts: hands the workshop models to the
+-- game (ReplicatedStorage > Assets) and clears them out of the world.
+function ModelFactory.collectWorkshop()
+	local workshop = workspace:FindFirstChild("ModelWorkshop")
+	if not workshop then
+		return
+	end
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	if not assets then
+		assets = Instance.new("Folder")
+		assets.Name = "Assets"
+		assets.Parent = ReplicatedStorage
+	end
+	for _, item in workshop:GetChildren() do
+		local old = assets:FindFirstChild(item.Name)
+		if old then
+			old:Destroy()
+		end
+		item.Parent = assets
+	end
+	workshop:Destroy()
 end
 
 return ModelFactory
@@ -1933,6 +2069,9 @@ return Remotes
 
 local servicesFolder = script:WaitForChild("Services")
 
+-- Models you edited in Workspace > ModelWorkshop become the game's models.
+require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ModelFactory")).collectWorkshop()
+
 local services = {}
 for _, module in servicesFolder:GetChildren() do
 	if module:IsA("ModuleScript") then
@@ -1956,11 +2095,74 @@ for name, service in services do
 end
 ]]></string>
       </Properties>
-      <Item class="Folder" referent="11">
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">EditTools</string>
+          <string name="Source"><![CDATA[--[[
+	EditTools
+	Run from Studio's Command Bar (View > Command Bar) while NOT playing:
+
+	    require(game.ServerScriptService.Server.EditTools).Setup()
+
+	It does two things, so you can see and change the game's world and
+	models in edit mode, then save them in your place:
+	  1. builds the whole valley (terrain, forests, rocks, docks, lighting)
+	     into Workspace, and marks it as saved so the game doesn't rebuild it
+	  2. puts a copy of every building, tree, rock, bush, deer and tool in
+	     Workspace > ModelWorkshop, in a row in the meadow behind your plot
+
+	Studio may freeze for up to a minute while it builds. Run it once; run
+	it again later only if you want to start the valley from scratch (your
+	ModelWorkshop edits are kept).
+
+	Other commands:
+	    require(game.ServerScriptService.Server.EditTools).Models()  -- only step 2
+	    require(game.ServerScriptService.Server.EditTools).Reset()   -- undo step 1
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local EditTools = {}
+
+local function factory()
+	return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ModelFactory"))
+end
+
+function EditTools.Models()
+	local made = factory().bakeTemplates()
+	print("[EditTools] added " .. made .. " models to Workspace > ModelWorkshop")
+end
+
+function EditTools.Setup()
+	local start = os.clock()
+	local WorldService = require(script.Parent:WaitForChild("Services"):WaitForChild("WorldService"))
+	WorldService:Bake()
+	EditTools.Models()
+	print(string.format("[EditTools] done in %.0f seconds. Now File > Save to File As to keep it.", os.clock() - start))
+end
+
+-- Throws the saved valley away, so the game builds a fresh one each time again.
+function EditTools.Reset()
+	for _, name in { "Scenery", "ShoreFoam" } do
+		local old = workspace:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+	workspace.Terrain:Clear()
+	workspace:SetAttribute("WorldBaked", nil)
+	print("[EditTools] saved valley removed; the game will build a new one when you press Play")
+end
+
+return EditTools
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="12">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="12">
+        <Item class="ModuleScript" referent="13">
           <Properties>
             <string name="Name">BoatService</string>
             <string name="Source"><![CDATA[--[[
@@ -2140,7 +2342,7 @@ return BoatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="13">
+        <Item class="ModuleScript" referent="14">
           <Properties>
             <string name="Name">BuildingService</string>
             <string name="Source"><![CDATA[--[[
@@ -2330,7 +2532,7 @@ return BuildingService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="14">
+        <Item class="ModuleScript" referent="15">
           <Properties>
             <string name="Name">ColonyService</string>
             <string name="Source"><![CDATA[--[[
@@ -2584,7 +2786,7 @@ return ColonyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="15">
+        <Item class="ModuleScript" referent="16">
           <Properties>
             <string name="Name">PlotService</string>
             <string name="Source"><![CDATA[--[[
@@ -2729,7 +2931,7 @@ return PlotService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="16">
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">RaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -3455,7 +3657,7 @@ return RaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="17">
+        <Item class="ModuleScript" referent="18">
           <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
@@ -3580,7 +3782,7 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="18">
+        <Item class="ModuleScript" referent="19">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
@@ -3771,7 +3973,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="19">
+        <Item class="ModuleScript" referent="20">
           <Properties>
             <string name="Name">TechService</string>
             <string name="Source"><![CDATA[--[[
@@ -3858,7 +4060,7 @@ return TechService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -4030,7 +4232,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -4419,7 +4621,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -4584,7 +4786,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -4608,6 +4810,7 @@ return WildlifeService
 ]]
 
 local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -4822,7 +5025,9 @@ local function buildTerrain()
 		end
 		heights[i] = row
 		if os.clock() - budget > 0.05 then
-			task.wait()
+			if RunService:IsRunning() then
+				task.wait()
+			end
 			budget = os.clock()
 		end
 	end
@@ -4900,7 +5105,9 @@ local function buildTerrain()
 			Terrain:WriteVoxels(Region3.new(regionMin, regionMax), VOXEL, materials, occupancy)
 
 			if os.clock() - budget > 0.05 then
-				task.wait()
+				if RunService:IsRunning() then
+					task.wait()
+				end
 				budget = os.clock()
 			end
 		end
@@ -4955,7 +5162,9 @@ local function scatterScenery()
 			planted += 1
 		end
 		if os.clock() - budget > 0.05 then
-			task.wait()
+			if RunService:IsRunning() then
+				task.wait()
+			end
 			budget = os.clock()
 		end
 	end
@@ -4976,7 +5185,9 @@ local function scatterScenery()
 			end
 		end
 		if os.clock() - budget > 0.05 then
-			task.wait()
+			if RunService:IsRunning() then
+				task.wait()
+			end
 			budget = os.clock()
 		end
 	end
@@ -5215,20 +5426,46 @@ local function setupLighting()
 	rays.Parent = Lighting
 end
 
-function WorldService:Init()
+local function clearPlaceholders()
 	-- The flat Baseplate and welcome sign are only there so the place isn't
-	-- empty in edit mode; the real world replaces them when the game runs.
+	-- empty in edit mode; the real world replaces them.
 	for _, name in { "Baseplate", "WelcomeSign" } do
 		local old = workspace:FindFirstChild(name)
 		if old then
 			old:Destroy()
 		end
 	end
+end
 
+function WorldService:Init()
+	clearPlaceholders()
+	if workspace:GetAttribute("WorldBaked") then
+		-- The valley was saved into the place (see Bake), so whatever you
+		-- changed in Studio is kept: nothing is regenerated.
+		print("[WorldService] using the saved valley")
+		return
+	end
 	setupLighting()
 	buildTerrain()
 	scatterScenery()
 	print("[WorldService] valley built")
+end
+
+-- Builds the valley in Studio edit mode, so it is saved in the place file
+-- and can be edited by hand. Run through EditTools.Setup().
+function WorldService:Bake()
+	clearPlaceholders()
+	for _, name in { "Scenery", "ShoreFoam" } do
+		local old = workspace:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+	Terrain:Clear()
+	setupLighting()
+	buildTerrain()
+	scatterScenery()
+	workspace:SetAttribute("WorldBaked", true)
 end
 
 function WorldService:Start()
@@ -5249,15 +5486,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="24">
+  <Item class="StarterPlayer" referent="25">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="25">
+    <Item class="StarterPlayerScripts" referent="26">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="26">
+      <Item class="LocalScript" referent="27">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -5290,11 +5527,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="27">
+        <Item class="Folder" referent="28">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="28">
+          <Item class="ModuleScript" referent="29">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -5404,7 +5641,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="29">
+          <Item class="ModuleScript" referent="30">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -5462,7 +5699,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="30">
+          <Item class="ModuleScript" referent="31">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -5740,7 +5977,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="31">
+          <Item class="ModuleScript" referent="32">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -5830,7 +6067,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="32">
+          <Item class="ModuleScript" referent="33">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -6230,7 +6467,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="33">
+          <Item class="ModuleScript" referent="34">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -6311,7 +6548,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="34">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -6402,7 +6639,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -6454,7 +6691,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -6776,7 +7013,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -6867,12 +7104,12 @@ return ToolController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="38">
+  <Item class="Workspace" referent="39">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="39">
+    <Item class="Part" referent="40">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -6893,7 +7130,7 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="40">
+    <Item class="SpawnLocation" referent="41">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -6913,7 +7150,7 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="41">
+    <Item class="Part" referent="42">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -6930,13 +7167,13 @@ return ToolController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="42">
+      <Item class="SurfaceGui" referent="43">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="43">
+        <Item class="TextLabel" referent="44">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -6968,13 +7205,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="44">
+      <Item class="SurfaceGui" referent="45">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="45">
+        <Item class="TextLabel" referent="46">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

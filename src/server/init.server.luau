@@ -7,6 +7,9 @@
 
 local servicesFolder = script:WaitForChild("Services")
 
+-- Models you edited in Workspace > ModelWorkshop become the game's models.
+require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("ModelFactory")).collectWorkshop()
+
 local services = {}
 for _, module in servicesFolder:GetChildren() do
 	if module:IsA("ModuleScript") then

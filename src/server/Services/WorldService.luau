@@ -19,6 +19,7 @@
 ]]
 
 local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -233,7 +234,9 @@ local function buildTerrain()
 		end
 		heights[i] = row
 		if os.clock() - budget > 0.05 then
-			task.wait()
+			if RunService:IsRunning() then
+				task.wait()
+			end
 			budget = os.clock()
 		end
 	end
@@ -311,7 +314,9 @@ local function buildTerrain()
 			Terrain:WriteVoxels(Region3.new(regionMin, regionMax), VOXEL, materials, occupancy)
 
 			if os.clock() - budget > 0.05 then
-				task.wait()
+				if RunService:IsRunning() then
+					task.wait()
+				end
 				budget = os.clock()
 			end
 		end
@@ -366,7 +371,9 @@ local function scatterScenery()
 			planted += 1
 		end
 		if os.clock() - budget > 0.05 then
-			task.wait()
+			if RunService:IsRunning() then
+				task.wait()
+			end
 			budget = os.clock()
 		end
 	end
@@ -387,7 +394,9 @@ local function scatterScenery()
 			end
 		end
 		if os.clock() - budget > 0.05 then
-			task.wait()
+			if RunService:IsRunning() then
+				task.wait()
+			end
 			budget = os.clock()
 		end
 	end
@@ -626,20 +635,46 @@ local function setupLighting()
 	rays.Parent = Lighting
 end
 
-function WorldService:Init()
+local function clearPlaceholders()
 	-- The flat Baseplate and welcome sign are only there so the place isn't
-	-- empty in edit mode; the real world replaces them when the game runs.
+	-- empty in edit mode; the real world replaces them.
 	for _, name in { "Baseplate", "WelcomeSign" } do
 		local old = workspace:FindFirstChild(name)
 		if old then
 			old:Destroy()
 		end
 	end
+end
 
+function WorldService:Init()
+	clearPlaceholders()
+	if workspace:GetAttribute("WorldBaked") then
+		-- The valley was saved into the place (see Bake), so whatever you
+		-- changed in Studio is kept: nothing is regenerated.
+		print("[WorldService] using the saved valley")
+		return
+	end
 	setupLighting()
 	buildTerrain()
 	scatterScenery()
 	print("[WorldService] valley built")
+end
+
+-- Builds the valley in Studio edit mode, so it is saved in the place file
+-- and can be edited by hand. Run through EditTools.Setup().
+function WorldService:Bake()
+	clearPlaceholders()
+	for _, name in { "Scenery", "ShoreFoam" } do
+		local old = workspace:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+	Terrain:Clear()
+	setupLighting()
+	buildTerrain()
+	scatterScenery()
+	workspace:SetAttribute("WorldBaked", true)
 end
 
 function WorldService:Start()

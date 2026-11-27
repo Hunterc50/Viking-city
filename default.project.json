@@ -11,7 +11,7 @@
         "_HowToUse": {
           "$className": "StringValue",
           "$properties": {
-            "Value": "Drop your own models (meshes) in this folder to replace the built-in ones. Name each one exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, Tree_Pine, Tree_Birch, Rock, Bush, Dock, Deer, Axe, Pickaxe, Bow (Axe/Pickaxe/Bow must be Tools with a Handle). Anything missing uses the built-in version."
+            "Value": "Drop your own models (meshes) in this folder to replace the built-in ones, named exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, LoreHall, Smithy, Shrine, Shipyard, HuntingLodge, GreatHall, Tree_Pine, Tree_Spruce, Tree_Birch, Rock, Bush, Dock, Deer, Longship, Axe, Pickaxe, Bow, Torch (tools must be Tools with a Handle). Easier: run require(game.ServerScriptService.Server.EditTools).Setup() in View > Command Bar to get every built-in model in Workspace > ModelWorkshop to edit. See README."
           }
         }
       }

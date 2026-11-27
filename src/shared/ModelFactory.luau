@@ -1270,13 +1270,19 @@ end
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
 	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
-	"Tree_Pine", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
-	"Axe", "Pickaxe", "Bow", "Longship",
+	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
+	"Axe", "Pickaxe", "Bow", "Torch", "Longship",
 }
 
+-- Models laid out in Workspace > ModelWorkshop (see bakeTemplates) are
+-- looked at first, so edits made there in Studio are used straight away.
 local function customAsset(name: string): Instance?
-	local folder = ReplicatedStorage:FindFirstChild("Assets")
-	local item = folder and folder:FindFirstChild(name)
+	local workshop = workspace:FindFirstChild("ModelWorkshop")
+	local item = workshop and workshop:FindFirstChild(name)
+	if not item then
+		local folder = ReplicatedStorage:FindFirstChild("Assets")
+		item = folder and folder:FindFirstChild(name)
+	end
 	return item and item:Clone() or nil
 end
 ModelFactory.customAsset = customAsset
@@ -1312,7 +1318,9 @@ local function prepare(item: Instance, anchored: boolean, fit: Vector3?, scale: 
 	end
 	local _, size = model:GetBoundingBox()
 	local factor = scale or 1
-	if fit and size.X > 0 and size.Z > 0 then
+	-- Templates (baked from the built-in models) already have the right size,
+	-- so they are kept exactly as you shaped them.
+	if fit and not model:GetAttribute("Template") and size.X > 0 and size.Z > 0 then
 		factor *= math.min(fit.X / size.X, fit.Z / size.Z)
 	end
 	if math.abs(factor - 1) > 0.01 then
@@ -1327,6 +1335,7 @@ end
 local partBuilt = {
 	building = ModelFactory.building,
 	pine = ModelFactory.pine,
+	spruce = ModelFactory.spruce,
 	birch = ModelFactory.birch,
 	boulder = ModelFactory.boulder,
 	node = ModelFactory.node,
@@ -1369,6 +1378,14 @@ function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
 		return model, main
 	end
 	return partBuilt.birch(rng, scale)
+end
+
+function ModelFactory.spruce(rng: Random, scale: number?): (Model, BasePart)
+	local model, main = customTree("Tree_Spruce", rng, scale)
+	if model then
+		return model, main
+	end
+	return partBuilt.spruce(rng, scale)
 end
 
 function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
@@ -1439,6 +1456,125 @@ function ModelFactory.tool(kind: string): Tool
 		return custom
 	end
 	return partBuilt.tool(kind)
+end
+
+-- Editing models in Studio ------------------------------------------------------
+--[[
+	bakeTemplates() is run once from Studio's Command Bar (in edit mode, not
+	while playing):
+	    require(game.ServerScriptService.Server.EditTools).Setup()
+	It puts a copy of every built-in model into Workspace > ModelWorkshop, in
+	a row you can see and edit. When the game starts, the server moves them
+	into ReplicatedStorage > Assets and uses them everywhere. Delete one to go
+	back to the built-in version (which has more random variety for trees).
+]]
+local function moveBy(item: Instance, offset: CFrame)
+	if item:IsA("PVInstance") then
+		item:PivotTo(offset * item:GetPivot())
+		return
+	end
+	for _, d in item:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CFrame = offset * d.CFrame
+		end
+	end
+end
+
+function ModelFactory.bakeTemplates(): number
+	local workshop = workspace:FindFirstChild("ModelWorkshop")
+	if not workshop then
+		workshop = Instance.new("Folder")
+		workshop.Name = "ModelWorkshop"
+		workshop.Parent = workspace
+	end
+	local rng = Random.new(7)
+	local makers = {
+		Tree_Pine = function()
+			return partBuilt.pine(rng, 1)
+		end,
+		Tree_Spruce = function()
+			return partBuilt.spruce(rng, 1)
+		end,
+		Tree_Birch = function()
+			return partBuilt.birch(rng, 1)
+		end,
+		Rock = function()
+			return partBuilt.boulder(rng, 1)
+		end,
+		Bush = function()
+			return partBuilt.node("Bush", rng)
+		end,
+		Dock = function()
+			return partBuilt.dock(48)
+		end,
+		Deer = function()
+			return partBuilt.deer(rng)
+		end,
+	}
+	for _, kind in Config.Tools do
+		makers[kind] = function()
+			return partBuilt.tool(kind)
+		end
+	end
+	for b in Config.Buildings do
+		makers[b] = function()
+			return partBuilt.building(b)
+		end
+	end
+
+	-- Lay them out in a row in the meadow behind the first plot.
+	local x, z, made = -20, 200, 0
+	for _, slot in ModelFactory.Slots do
+		local make = makers[slot]
+		if make and not workshop:FindFirstChild(slot) then
+			local item = make()
+			item.Name = slot
+			item:SetAttribute("Template", true)
+			local width = 8
+			if item:IsA("Model") then
+				local _, size = item:GetBoundingBox()
+				width = math.max(size.X, size.Z, 6)
+			end
+			x += width / 2 + 6
+			local hit = workspace:Raycast(V3(x, 400, z), V3(0, -800, 0))
+			local y = hit and hit.Position.Y or 1
+			if item:IsA("Tool") then
+				local handle = item:FindFirstChild("Handle")
+				if handle then
+					moveBy(item, CFrame.new(V3(x, y + 2.5, z) - handle.Position))
+				end
+			else
+				item:PivotTo(CFrame.new(x, y, z))
+			end
+			item.Parent = workshop
+			x += width / 2
+			made += 1
+		end
+	end
+	return made
+end
+
+-- Called by the server as the game starts: hands the workshop models to the
+-- game (ReplicatedStorage > Assets) and clears them out of the world.
+function ModelFactory.collectWorkshop()
+	local workshop = workspace:FindFirstChild("ModelWorkshop")
+	if not workshop then
+		return
+	end
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	if not assets then
+		assets = Instance.new("Folder")
+		assets.Name = "Assets"
+		assets.Parent = ReplicatedStorage
+	end
+	for _, item in workshop:GetChildren() do
+		local old = assets:FindFirstChild(item.Name)
+		if old then
+			old:Destroy()
+		end
+		item.Parent = assets
+	end
+	workshop:Destroy()
 end
 
 return ModelFactory
