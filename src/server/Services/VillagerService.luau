@@ -449,7 +449,9 @@ local function newDay(self, colony)
 		local couple = couples[rng:NextInteger(1, #couples)]
 		local namesake = couple[rng:NextInteger(1, 2)]
 		local daughter = rng:NextNumber() < 0.5
-		local name = Config.Names[rng:NextInteger(1, #Config.Names)] .. " " .. firstName(namesake) .. (daughter and "sdottir" or "sson")
+		-- names alternate: odd ones are girls' names, even ones boys'
+		local pick = rng:NextInteger(0, #Config.Names // 2 - 1) * 2 + (daughter and 1 or 2)
+		local name = Config.Names[pick] .. " " .. firstName(namesake) .. (daughter and "sdottir" or "sson")
 		local home = homeOf(colony, couple[1])
 		local spawnAt = couple[1].body and (couple[1].body.Position - Vector3.new(0, couple[1].height, 0)) or nil
 		local v = self:Add(colony, true, spawnAt, name)

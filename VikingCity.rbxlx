@@ -743,6 +743,7 @@ return Grid
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(script.Parent.Config)
+local SettlerRig = require(script.Parent.SettlerRig)
 
 local ModelFactory = {}
 
@@ -2231,6 +2232,76 @@ local MAIL = Color3.fromRGB(128, 132, 138)
 local STEEL = Color3.fromRGB(162, 166, 172)
 local GOLD = Color3.fromRGB(214, 172, 84)
 
+-- Women's names are every other one in Config.Names (Astrid, Sigrid, ...).
+local womenNames = {}
+for i, n in Config.Names do
+	if i % 2 == 1 then
+		womenNames[n] = true
+	end
+end
+function ModelFactory.isWoman(name: string): boolean
+	return womenNames[string.match(name, "^(%S+)") or name] == true
+end
+
+local RIG_PARTS = { Body = true, Head = true, Arm = true, Leg = true }
+
+-- Swaps a villager's blocks for the settler mesh pieces (Settler_<Man|Woman>_<gear>
+-- in the imported pack). The blocky rig stays, invisible, so walking and
+-- working animations still move the arms and legs.
+local function dressWithMesh(model: Model, pack: Instance, rig, s: number): boolean
+	local function pieceOf(piece: string): BasePart?
+		for _, d in pack:GetDescendants() do
+			if d:IsA("BasePart") and (d.Name == piece or d.Name == piece .. "_Node") then
+				return d
+			end
+		end
+		return nil
+	end
+	local sources = {}
+	for piece in RIG_PARTS do
+		sources[piece] = pieceOf(piece)
+		if not sources[piece] or not rig[piece] then
+			return false
+		end
+	end
+	for _, d in model:GetChildren() do
+		if d:IsA("BasePart") and not RIG_PARTS[d.Name] then
+			d:Destroy()
+		end
+	end
+	for _, part in model:GetChildren() do
+		if part:IsA("BasePart") and RIG_PARTS[part.Name] then
+			local info = rig[part.Name]
+			local mesh = sources[part.Name]:Clone()
+			mesh.Name = "Mesh" .. part.Name
+			mesh.Anchored = false
+			mesh.CanCollide = false
+			mesh.CanQuery = false
+			mesh.CanTouch = false
+			mesh.Massless = true
+			mesh.Size = info.size * s
+			mesh.CFrame = part.CFrame * CFrame.new(info.centre * s)
+			for _, c in mesh:GetChildren() do
+				if c:IsA("JointInstance") or c:IsA("WeldConstraint") then
+					c:Destroy()
+				end
+			end
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = part
+			weld.Part1 = mesh
+			weld.Parent = mesh
+			mesh.Parent = model
+			part.Transparency = 1
+			for _, c in part:GetChildren() do
+				if c:IsA("Decal") then
+					c:Destroy()
+				end
+			end
+		end
+	end
+	return true
+end
+
 function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stage: string?, gear: number?): Model
 	stage = stage or (isChild and "child" or "adult")
 	gear = (stage == "adult" or stage == "elder") and math.clamp(gear or 1, 1, 5) or 0
@@ -2429,6 +2500,21 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 		piece("CapFur", V3(hs * 1.12, hs * 0.16, hs * 1.12), head.CFrame * CFrame.new(0, hs * 0.24, 0), FUR, Enum.Material.Fabric, nil, head)
 	end
 
+	-- the settler meshes, when the pack is imported (grown-ups only)
+	if (stage == "adult" or stage == "elder") and ModelFactory.customAsset then
+		local woman = ModelFactory.isWoman(name)
+		local slot = "Settler_" .. (woman and "Woman" or "Man") .. "_" .. math.max(gear, 1)
+		local rig = SettlerRig[slot]
+		local pack = rig and ModelFactory.customAsset(slot)
+		if pack then
+			if dressWithMesh(model, pack, rig, s) then
+				model:SetAttribute("Helmeted", not woman and gear >= 3)
+				model:SetAttribute("Meshed", true)
+			end
+			pack:Destroy()
+		end
+	end
+
 	local tag = Instance.new("BillboardGui")
 	tag.Name = "NameTag"
 	tag.Size = UDim2.fromOffset(140, 22)
@@ -2547,7 +2633,7 @@ function ModelFactory.armWarrior(model: Model)
 		return p
 	end
 	local head = model:FindFirstChild("Head")
-	if head and head:IsA("BasePart") and not model:FindFirstChild("Helmet") then
+	if head and head:IsA("BasePart") and not model:FindFirstChild("Helmet") and not model:GetAttribute("Helmeted") then
 		local r = model:GetAttribute("HeadSize") or head.Size.X
 		piece("Helmet", Vector3.new(r * 1.08, r * 0.6, r * 1.08), head.CFrame * CFrame.new(0, r * 0.22, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, Enum.PartType.Ball, head)
 		piece("Nasal", Vector3.new(r * 0.12, r * 0.45, r * 0.12), head.CFrame * CFrame.new(0, 0, -r * 0.5), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, nil, head)
@@ -2702,6 +2788,9 @@ ModelFactory.Slots = {
 -- tucks it away into Assets when the game starts.
 local slotSet = {}
 for _, slot in ModelFactory.Slots do
+	slotSet[slot] = true
+end
+for slot in SettlerRig do
 	slotSet[slot] = true
 end
 
@@ -2917,7 +3006,8 @@ end
 -- one (a mesh can't carry them), as do attributes like a tower's ArcherPost.
 local function keepGlow(custom: Model, reference: Model)
 	for _, d in reference:GetDescendants() do
-		if d:IsA("BasePart") and (d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
+		-- crop rows stay the game's own too, so fields still change with the seasons
+		if d:IsA("BasePart") and (d.Name == "Barley" or d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
 			d.Parent = custom
 		end
 	end
@@ -3408,6 +3498,77 @@ return Remotes
       </Item>
       <Item class="ModuleScript" referent="10">
         <Properties>
+          <string name="Name">SettlerRig</string>
+          <string name="Source"><![CDATA[-- Generated by tools/meshgen/build.py. Do not edit by hand.
+-- For each settler mesh piece: its size and its centre, in the space of
+-- the villager rig part it rides on (studs, full adult size).
+return {
+	Settler_Man_1 = {
+		Head = { size = Vector3.new(1.260, 1.699, 1.406), centre = Vector3.new(0.000, -0.121, 0.003) },
+		Body = { size = Vector3.new(2.100, 2.650, 1.230), centre = Vector3.new(0.000, -0.375, -0.015) },
+		Arm = { size = Vector3.new(0.974, 2.287, 0.941), centre = Vector3.new(-0.005, -0.071, 0.000) },
+		Leg = { size = Vector3.new(0.924, 2.000, 1.012), centre = Vector3.new(0.000, 0.000, -0.044) },
+	},
+	Settler_Man_2 = {
+		Head = { size = Vector3.new(1.436, 1.820, 1.454), centre = Vector3.new(-0.001, -0.140, 0.027) },
+		Body = { size = Vector3.new(2.494, 2.932, 1.397), centre = Vector3.new(-0.010, -0.234, -0.000) },
+		Arm = { size = Vector3.new(0.963, 2.309, 0.934), centre = Vector3.new(0.001, -0.076, 0.001) },
+		Leg = { size = Vector3.new(0.950, 2.000, 1.025), centre = Vector3.new(0.000, 0.000, -0.037) },
+	},
+	Settler_Man_3 = {
+		Head = { size = Vector3.new(1.380, 2.020, 1.440), centre = Vector3.new(0.000, -0.120, 0.020) },
+		Body = { size = Vector3.new(2.482, 2.914, 1.458), centre = Vector3.new(0.023, -0.243, 0.037) },
+		Arm = { size = Vector3.new(0.965, 2.290, 0.928), centre = Vector3.new(0.004, -0.077, -0.002) },
+		Leg = { size = Vector3.new(0.950, 2.000, 1.025), centre = Vector3.new(0.000, 0.000, -0.037) },
+	},
+	Settler_Man_4 = {
+		Head = { size = Vector3.new(1.380, 2.100, 1.520), centre = Vector3.new(0.000, -0.160, 0.040) },
+		Body = { size = Vector3.new(2.900, 3.144, 1.870), centre = Vector3.new(0.000, -0.378, 0.215) },
+		Arm = { size = Vector3.new(0.968, 2.280, 0.958), centre = Vector3.new(-0.004, -0.072, 0.000) },
+		Leg = { size = Vector3.new(0.950, 2.000, 1.025), centre = Vector3.new(0.000, 0.000, -0.037) },
+	},
+	Settler_Man_5 = {
+		Head = { size = Vector3.new(1.380, 2.490, 1.520), centre = Vector3.new(0.000, -0.045, 0.040) },
+		Body = { size = Vector3.new(2.900, 3.163, 1.870), centre = Vector3.new(0.000, -0.369, 0.215) },
+		Arm = { size = Vector3.new(0.963, 2.283, 0.958), centre = Vector3.new(-0.002, -0.075, 0.000) },
+		Leg = { size = Vector3.new(0.950, 2.000, 1.025), centre = Vector3.new(0.000, 0.000, -0.037) },
+	},
+	Settler_Woman_1 = {
+		Head = { size = Vector3.new(1.260, 2.329, 1.427), centre = Vector3.new(0.000, -0.386, 0.014) },
+		Body = { size = Vector3.new(2.240, 3.700, 1.171), centre = Vector3.new(0.000, -0.900, -0.045) },
+		Arm = { size = Vector3.new(0.821, 2.287, 0.792), centre = Vector3.new(-0.002, -0.076, 0.000) },
+		Leg = { size = Vector3.new(0.798, 2.000, 0.950), centre = Vector3.new(0.000, 0.000, -0.075) },
+	},
+	Settler_Woman_2 = {
+		Head = { size = Vector3.new(1.441, 2.320, 1.466), centre = Vector3.new(-0.007, -0.390, 0.033) },
+		Body = { size = Vector3.new(2.452, 3.959, 1.458), centre = Vector3.new(0.041, -0.771, 0.022) },
+		Arm = { size = Vector3.new(0.832, 2.279, 0.796), centre = Vector3.new(0.003, -0.076, -0.000) },
+		Leg = { size = Vector3.new(0.821, 2.000, 0.960), centre = Vector3.new(0.000, 0.000, -0.070) },
+	},
+	Settler_Woman_3 = {
+		Head = { size = Vector3.new(1.284, 2.325, 1.422), centre = Vector3.new(0.012, -0.387, 0.011) },
+		Body = { size = Vector3.new(2.474, 3.965, 1.334), centre = Vector3.new(-0.021, -0.768, 0.008) },
+		Arm = { size = Vector3.new(0.817, 2.282, 0.793), centre = Vector3.new(-0.002, -0.073, -0.000) },
+		Leg = { size = Vector3.new(0.821, 2.000, 0.960), centre = Vector3.new(0.000, 0.000, -0.070) },
+	},
+	Settler_Woman_4 = {
+		Head = { size = Vector3.new(1.260, 2.326, 1.424), centre = Vector3.new(0.000, -0.387, 0.012) },
+		Body = { size = Vector3.new(2.900, 3.795, 1.434), centre = Vector3.new(0.000, -0.703, -0.003) },
+		Arm = { size = Vector3.new(0.822, 2.303, 0.821), centre = Vector3.new(0.001, -0.080, 0.000) },
+		Leg = { size = Vector3.new(0.821, 2.000, 0.960), centre = Vector3.new(0.000, 0.000, -0.070) },
+	},
+	Settler_Woman_5 = {
+		Head = { size = Vector3.new(1.260, 2.309, 1.424), centre = Vector3.new(0.000, -0.396, 0.012) },
+		Body = { size = Vector3.new(2.900, 3.830, 1.492), centre = Vector3.new(0.000, -0.685, 0.026) },
+		Arm = { size = Vector3.new(0.833, 2.306, 0.821), centre = Vector3.new(0.002, -0.075, 0.000) },
+		Leg = { size = Vector3.new(0.821, 2.000, 0.960), centre = Vector3.new(0.000, 0.000, -0.070) },
+	},
+}
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
           <string name="Name">Sounds</string>
           <string name="Source"><![CDATA[--[[
 	Sounds
@@ -3504,11 +3665,11 @@ return Sounds
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="11">
+  <Item class="ServerScriptService" referent="12">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="12">
+    <Item class="Script" referent="13">
       <Properties>
         <string name="Name">Server</string>
         <token name="RunContext">0</token>
@@ -3575,7 +3736,7 @@ for name, service in services do
 end
 ]]></string>
       </Properties>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">EditTools</string>
           <string name="Source"><![CDATA[--[[
@@ -3638,11 +3799,11 @@ return EditTools
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="14">
+      <Item class="Folder" referent="15">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="15">
+        <Item class="ModuleScript" referent="16">
           <Properties>
             <string name="Name">BoatService</string>
             <string name="Source"><![CDATA[--[[
@@ -4235,7 +4396,7 @@ return BoatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="16">
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">BuildingService</string>
             <string name="Source"><![CDATA[--[[
@@ -4430,7 +4591,7 @@ return BuildingService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="17">
+        <Item class="ModuleScript" referent="18">
           <Properties>
             <string name="Name">ColonyService</string>
             <string name="Source"><![CDATA[--[[
@@ -4714,7 +4875,7 @@ return ColonyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="18">
+        <Item class="ModuleScript" referent="19">
           <Properties>
             <string name="Name">CouncilService</string>
             <string name="Source"><![CDATA[--[[
@@ -4805,7 +4966,7 @@ return CouncilService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="19">
+        <Item class="ModuleScript" referent="20">
           <Properties>
             <string name="Name">DiplomacyService</string>
             <string name="Source"><![CDATA[--[[
@@ -5066,7 +5227,7 @@ return DiplomacyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">LandService</string>
             <string name="Source"><![CDATA[--[[
@@ -5145,7 +5306,7 @@ return LandService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">PlotService</string>
             <string name="Source"><![CDATA[--[[
@@ -5341,7 +5502,7 @@ return PlotService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--[[
@@ -5454,7 +5615,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">RaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -6345,7 +6506,7 @@ return RaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">RankService</string>
             <string name="Source"><![CDATA[--[[
@@ -6461,7 +6622,7 @@ return RankService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
@@ -6776,7 +6937,7 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">RiteService</string>
             <string name="Source"><![CDATA[--[[
@@ -6967,7 +7128,7 @@ return RiteService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">SaveService</string>
             <string name="Source"><![CDATA[--[[
@@ -7242,7 +7403,7 @@ return SaveService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
@@ -7436,7 +7597,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">TechService</string>
             <string name="Source"><![CDATA[--[[
@@ -7523,7 +7684,7 @@ return TechService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -7806,7 +7967,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">TownRaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -8256,7 +8417,7 @@ return TownRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">TradeService</string>
             <string name="Source"><![CDATA[--[[
@@ -8396,7 +8557,7 @@ return TradeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">VillageDefenseService</string>
             <string name="Source"><![CDATA[--[[
@@ -8867,7 +9028,7 @@ return VillageDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -9321,7 +9482,9 @@ local function newDay(self, colony)
 		local couple = couples[rng:NextInteger(1, #couples)]
 		local namesake = couple[rng:NextInteger(1, 2)]
 		local daughter = rng:NextNumber() < 0.5
-		local name = Config.Names[rng:NextInteger(1, #Config.Names)] .. " " .. firstName(namesake) .. (daughter and "sdottir" or "sson")
+		-- names alternate: odd ones are girls' names, even ones boys'
+		local pick = rng:NextInteger(0, #Config.Names // 2 - 1) * 2 + (daughter and 1 or 2)
+		local name = Config.Names[pick] .. " " .. firstName(namesake) .. (daughter and "sdottir" or "sson")
 		local home = homeOf(colony, couple[1])
 		local spawnAt = couple[1].body and (couple[1].body.Position - Vector3.new(0, couple[1].height, 0)) or nil
 		local v = self:Add(colony, true, spawnAt, name)
@@ -9417,7 +9580,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">WarbandService</string>
             <string name="Source"><![CDATA[--[[
@@ -10009,7 +10172,7 @@ return WarbandService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">WeatherService</string>
             <string name="Source"><![CDATA[--[[
@@ -10128,7 +10291,7 @@ return WeatherService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -10295,7 +10458,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -11130,15 +11293,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="39">
+  <Item class="StarterPlayer" referent="40">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="40">
+    <Item class="StarterPlayerScripts" referent="41">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="41">
+      <Item class="LocalScript" referent="42">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -11171,11 +11334,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="42">
+        <Item class="Folder" referent="43">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="43">
+          <Item class="ModuleScript" referent="44">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -11285,7 +11448,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="44">
+          <Item class="ModuleScript" referent="45">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -11347,7 +11510,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="45">
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -11428,7 +11591,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="46">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -11731,7 +11894,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="47">
+          <Item class="ModuleScript" referent="48">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -11858,7 +12021,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">CouncilController</string>
               <string name="Source"><![CDATA[--[[
@@ -12314,7 +12477,7 @@ return CouncilController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -13020,7 +13183,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="50">
+          <Item class="ModuleScript" referent="51">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -13101,7 +13264,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="51">
+          <Item class="ModuleScript" referent="52">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -13315,7 +13478,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="52">
+          <Item class="ModuleScript" referent="53">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -13408,7 +13571,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="53">
+          <Item class="ModuleScript" referent="54">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -13460,7 +13623,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="54">
+          <Item class="ModuleScript" referent="55">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -13783,7 +13946,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="55">
+          <Item class="ModuleScript" referent="56">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -13871,7 +14034,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="56">
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -14056,7 +14219,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="57">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -14254,7 +14417,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="58">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -14307,7 +14470,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -14398,7 +14561,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -14544,12 +14707,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="61">
+  <Item class="Workspace" referent="62">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="62">
+    <Item class="Part" referent="63">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -14570,13 +14733,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="63">
+    <Item class="BoolValue" referent="64">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="64">
+    <Item class="SpawnLocation" referent="65">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -14596,7 +14759,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="65">
+    <Item class="Part" referent="66">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -14613,13 +14776,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="66">
+      <Item class="SurfaceGui" referent="67">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="67">
+        <Item class="TextLabel" referent="68">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -14651,13 +14814,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="68">
+      <Item class="SurfaceGui" referent="69">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="69">
+        <Item class="TextLabel" referent="70">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

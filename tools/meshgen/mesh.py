@@ -390,19 +390,26 @@ def _arrays(tris, palette):
 
 def write_glb(path, parts, max_tris=9000):
     """parts: list of (name, Mesh). Big meshes are split into several nodes."""
-    palette = Palette(len({t[3] for _, mesh in parts for t in mesh.tris}))
+    # a part is (name, Mesh), or (name, [(piece name, Mesh), ...]) for a group
+    # whose pieces stay separate nodes (like a settler's head, body, arm, leg)
+    def meshes_of(item):
+        return item if isinstance(item, list) else [(None, item)]
+
+    palette = Palette(len({t[3] for _, item in parts for _, mesh in meshes_of(item) for t in mesh.tris}))
     chunks = []
-    groups = []  # (name, [chunk indices]) for each part
-    for name, mesh in parts:
-        tris = mesh.tris
-        n = max(1, math.ceil(len(tris) / max_tris))
+    groups = []  # (name, [chunk indices], forced group) for each part
+    for name, item in parts:
         idx = []
-        for k in range(n):
-            sub = tris[k * max_tris:(k + 1) * max_tris]
-            if sub:
-                idx.append(len(chunks))
-                chunks.append((name if n == 1 else f"{name}_{k + 1}", sub))
-        groups.append((name, idx))
+        for piece, mesh in meshes_of(item):
+            label = piece or name
+            tris = mesh.tris
+            n = max(1, math.ceil(len(tris) / max_tris))
+            for k in range(n):
+                sub = tris[k * max_tris:(k + 1) * max_tris]
+                if sub:
+                    idx.append(len(chunks))
+                    chunks.append((label if n == 1 else f"{label}_{k + 1}", sub))
+        groups.append((name, idx, isinstance(item, list)))
     arrays = [(name, *_arrays(tris, palette)) for name, tris in chunks]
     png = io.BytesIO()
     palette.image().save(png, format="PNG")
@@ -442,8 +449,8 @@ def write_glb(path, parts, max_tris=9000):
         nodes.append({"name": name, "mesh": len(meshes) - 1})
     # a big part split into chunks gets a parent node with its own name
     roots = []
-    for name, idx in groups:
-        if len(idx) == 1:
+    for name, idx, grouped in groups:
+        if len(idx) == 1 and not grouped:
             roots.append(idx[0])
         else:
             nodes.append({"name": name, "children": idx})

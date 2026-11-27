@@ -13,6 +13,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(script.Parent.Config)
+local SettlerRig = require(script.Parent.SettlerRig)
 
 local ModelFactory = {}
 
@@ -1501,6 +1502,76 @@ local MAIL = Color3.fromRGB(128, 132, 138)
 local STEEL = Color3.fromRGB(162, 166, 172)
 local GOLD = Color3.fromRGB(214, 172, 84)
 
+-- Women's names are every other one in Config.Names (Astrid, Sigrid, ...).
+local womenNames = {}
+for i, n in Config.Names do
+	if i % 2 == 1 then
+		womenNames[n] = true
+	end
+end
+function ModelFactory.isWoman(name: string): boolean
+	return womenNames[string.match(name, "^(%S+)") or name] == true
+end
+
+local RIG_PARTS = { Body = true, Head = true, Arm = true, Leg = true }
+
+-- Swaps a villager's blocks for the settler mesh pieces (Settler_<Man|Woman>_<gear>
+-- in the imported pack). The blocky rig stays, invisible, so walking and
+-- working animations still move the arms and legs.
+local function dressWithMesh(model: Model, pack: Instance, rig, s: number): boolean
+	local function pieceOf(piece: string): BasePart?
+		for _, d in pack:GetDescendants() do
+			if d:IsA("BasePart") and (d.Name == piece or d.Name == piece .. "_Node") then
+				return d
+			end
+		end
+		return nil
+	end
+	local sources = {}
+	for piece in RIG_PARTS do
+		sources[piece] = pieceOf(piece)
+		if not sources[piece] or not rig[piece] then
+			return false
+		end
+	end
+	for _, d in model:GetChildren() do
+		if d:IsA("BasePart") and not RIG_PARTS[d.Name] then
+			d:Destroy()
+		end
+	end
+	for _, part in model:GetChildren() do
+		if part:IsA("BasePart") and RIG_PARTS[part.Name] then
+			local info = rig[part.Name]
+			local mesh = sources[part.Name]:Clone()
+			mesh.Name = "Mesh" .. part.Name
+			mesh.Anchored = false
+			mesh.CanCollide = false
+			mesh.CanQuery = false
+			mesh.CanTouch = false
+			mesh.Massless = true
+			mesh.Size = info.size * s
+			mesh.CFrame = part.CFrame * CFrame.new(info.centre * s)
+			for _, c in mesh:GetChildren() do
+				if c:IsA("JointInstance") or c:IsA("WeldConstraint") then
+					c:Destroy()
+				end
+			end
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = part
+			weld.Part1 = mesh
+			weld.Parent = mesh
+			mesh.Parent = model
+			part.Transparency = 1
+			for _, c in part:GetChildren() do
+				if c:IsA("Decal") then
+					c:Destroy()
+				end
+			end
+		end
+	end
+	return true
+end
+
 function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stage: string?, gear: number?): Model
 	stage = stage or (isChild and "child" or "adult")
 	gear = (stage == "adult" or stage == "elder") and math.clamp(gear or 1, 1, 5) or 0
@@ -1699,6 +1770,21 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 		piece("CapFur", V3(hs * 1.12, hs * 0.16, hs * 1.12), head.CFrame * CFrame.new(0, hs * 0.24, 0), FUR, Enum.Material.Fabric, nil, head)
 	end
 
+	-- the settler meshes, when the pack is imported (grown-ups only)
+	if (stage == "adult" or stage == "elder") and ModelFactory.customAsset then
+		local woman = ModelFactory.isWoman(name)
+		local slot = "Settler_" .. (woman and "Woman" or "Man") .. "_" .. math.max(gear, 1)
+		local rig = SettlerRig[slot]
+		local pack = rig and ModelFactory.customAsset(slot)
+		if pack then
+			if dressWithMesh(model, pack, rig, s) then
+				model:SetAttribute("Helmeted", not woman and gear >= 3)
+				model:SetAttribute("Meshed", true)
+			end
+			pack:Destroy()
+		end
+	end
+
 	local tag = Instance.new("BillboardGui")
 	tag.Name = "NameTag"
 	tag.Size = UDim2.fromOffset(140, 22)
@@ -1817,7 +1903,7 @@ function ModelFactory.armWarrior(model: Model)
 		return p
 	end
 	local head = model:FindFirstChild("Head")
-	if head and head:IsA("BasePart") and not model:FindFirstChild("Helmet") then
+	if head and head:IsA("BasePart") and not model:FindFirstChild("Helmet") and not model:GetAttribute("Helmeted") then
 		local r = model:GetAttribute("HeadSize") or head.Size.X
 		piece("Helmet", Vector3.new(r * 1.08, r * 0.6, r * 1.08), head.CFrame * CFrame.new(0, r * 0.22, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, Enum.PartType.Ball, head)
 		piece("Nasal", Vector3.new(r * 0.12, r * 0.45, r * 0.12), head.CFrame * CFrame.new(0, 0, -r * 0.5), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, nil, head)
@@ -1972,6 +2058,9 @@ ModelFactory.Slots = {
 -- tucks it away into Assets when the game starts.
 local slotSet = {}
 for _, slot in ModelFactory.Slots do
+	slotSet[slot] = true
+end
+for slot in SettlerRig do
 	slotSet[slot] = true
 end
 
@@ -2187,7 +2276,8 @@ end
 -- one (a mesh can't carry them), as do attributes like a tower's ArcherPost.
 local function keepGlow(custom: Model, reference: Model)
 	for _, d in reference:GetDescendants() do
-		if d:IsA("BasePart") and (d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
+		-- crop rows stay the game's own too, so fields still change with the seasons
+		if d:IsA("BasePart") and (d.Name == "Barley" or d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
 			d.Parent = custom
 		end
 	end

@@ -15,7 +15,7 @@ import random
 
 import numpy as np
 
-from mesh import RX, RY, RZ, M, S, T, Mesh, blob, box, cylinder, hull, lathe, look_along, mix, shade, slab_between, strip_between
+from mesh import RX, RY, RZ, M, S, T, Mesh, blob, box, cylinder, hull, lathe, look_along, mix, shade, slab_between, strip_between  # noqa: F401
 
 # ----------------------------------------------------------------------------- palette
 
@@ -1045,6 +1045,340 @@ def prop_boat_upturned():
     return m
 
 
+# ----------------------------------------------------------------------------- work buildings
+
+
+def log_pile(m, centre, along_x=True, rows=3, length=5.0):
+    rng = m.rng
+    cx, cy, cz = centre
+    for row in range(rows):
+        for i in range(rows + 1 - row):
+            off = (i - (rows - row) / 2) * 1.0
+            y = cy + 0.5 + row * 0.85
+            if along_x:
+                p, q = (cx - length / 2, y, cz + off), (cx + length / 2, y, cz + off)
+            else:
+                p, q = (cx + off, y, cz - length / 2), (cx + off, y, cz + length / 2)
+            tris, mat = cyl_between(p, q, 0.48, shade(WOOD, 0.12, rng), 8)
+            tris = [(a, b, c, (196, 160, 112) if abs(np.dot(np.cross(b - a, c - a), V(0, 1, 0))) < 1e-6 and abs(a[1] - b[1]) + abs(b[1] - c[1]) < 1e-6 or False else col) for a, b, c, col in tris]
+            m.add(tris, mat)
+
+
+def wattle_fence(m, a, b, h=1.6):
+    """Woven hazel fence from a to b (ground points)."""
+    a, b = V(*a), V(*b)
+    d = b - a
+    ln = float(np.linalg.norm(d))
+    n = max(2, int(ln / 2.2))
+    for i in range(n + 1):
+        p = a + d * (i / n)
+        add_cyl(m, p, p + V(0, h + 0.3, 0), 0.12, WEATHER, 5)
+    for k in range(4):
+        y = 0.35 + k * (h - 0.3) / 3
+        add_beam(m, a + V(0, y, 0), b + V(0, y, 0), 0.16, shade((140, 112, 76), 0.08, m.rng))
+
+
+def small_hall(L, D, roof, seed):
+    return hall(L=L, D=D, wall_h=3.4, ridge_h=8.0, roof=roof, seed=seed, dragons=False, buttress=False)
+
+
+def farm():
+    """Fenced field: furrows of dark soil (the crop rows stay the game's own,
+    so they still change colour with the seasons), a field shed and a scarecrow."""
+    m = Mesh(91)
+    rng = m.rng
+    w = 23
+    add_box(m, (0, 0.08, 0), (w, 0.16, w), (92, 70, 50))
+    for i in range(9):
+        z = -w / 2 + 2.0 + i * (w - 4) / 8
+        add_box(m, (0, 0.24, z), (w - 3, 0.18, 0.5), (74, 56, 40))
+    h = w / 2
+    wattle_fence(m, (-h, 0, -h), (-3, 0, -h))
+    wattle_fence(m, (3, 0, -h), (h, 0, -h))
+    wattle_fence(m, (h, 0, -h), (h, 0, h))
+    wattle_fence(m, (h, 0, h), (-h, 0, h))
+    wattle_fence(m, (-h, 0, h), (-h, 0, -h))
+    # gate posts
+    for x in (-3, 3):
+        add_cyl(m, (x, 0, -h), (x, 2.6, -h), 0.22, DARK, 6)
+    # scarecrow in a tunic and hat
+    sx, sz = w / 4, w / 4 - 1
+    add_cyl(m, (sx, 0, sz), (sx, 5.2, sz), 0.15, WOOD, 5)
+    add_cyl(m, (sx - 1.6, 4.0, sz), (sx + 1.6, 4.0, sz), 0.12, WOOD, 5)
+    m.add(hull([V(sx + x, y, sz + z) for x in (-0.7, 0.7) for y in (2.6, 4.2) for z in (-0.3, 0.3)] + [V(sx, 2.3, sz)], (120, 60, 50)))
+    m.add(blob(0.55, THATCH, rng, 1, 0.15, 0.05), T(sx, 4.8, sz))
+    m.add(lathe([(0.9, 0), (0.9, 0.08), (0.45, 0.2), (0.4, 0.6), (0.0, 0.62)], 10, (96, 70, 44)), T(sx, 5.0, sz))
+    # a small field shed in the back corner with sacks and a cart wheel
+    shed = small_hall(6.5, 5.0, "thatch", 92)
+    m.add(shed.tris, M(T(-h + 4.2, 0, h - 3.4), RY(math.pi)))
+    for p in ((-h + 7.6, 0.6, h - 1.5), (-h + 8.4, 0.55, h - 2.3)):
+        m.add(blob(0.6, (168, 150, 112), rng, 1, 0.12, 0.05, (1, 1.2, 1)), T(*p))
+    return m
+
+
+def woodcutter():
+    m = Mesh(93)
+    rng = m.rng
+    m.add(small_hall(9, 7, "shingle", 94).tris, T(-2, 0, 2.5))
+    log_pile(m, (3, 0, -4.5))
+    # chopping stump with an axe stuck in it
+    add_cyl(m, (5, 0, 3), (5, 1.4, 3), 1.0, WEATHER, 10)
+    m.add(lathe([(0.95, 1.4), (0.0, 1.41)], 10, (190, 152, 104)), T(0, 0, 0)) if False else None
+    add_box(m, (5, 1.42, 3), (1.6, 0.04, 1.6), (190, 152, 104))
+    add_cyl(m, (5, 1.4, 3), (5.9, 3.2, 3), 0.1, (138, 100, 64), 6)
+    add_box(m, (5.15, 1.55, 3), (0.6, 0.5, 0.08), IRON, RZ(0.45))
+    # sawhorse with a log
+    for x in (-5.5, -3.5):
+        add_beam(m, (x, 0, -3.2), (x, 1.6, -2.6), 0.18, DARK)
+        add_beam(m, (x, 0, -2.0), (x, 1.6, -2.6), 0.18, DARK)
+    add_cyl(m, (-6.5, 1.8, -2.6), (-2.5, 1.8, -2.6), 0.4, shade(WOOD, 0.1, rng), 8)
+    # wood chips
+    for _ in range(14):
+        add_box(m, (5 + rng.uniform(-2, 2), 0.05, 3 + rng.uniform(-2, 2)), (0.3, 0.06, 0.15), (200, 170, 120), RY(rng.uniform(0, 3)))
+    return m
+
+
+def quarry():
+    m = Mesh(95)
+    rng = m.rng
+    add_box(m, (0, 0.15, 0), (15, 0.3, 15), (110, 108, 104))
+    # a rock face at the back, cut into steps
+    for i, (x, z, r) in enumerate(((-3, 4.5, 3.2), (2.5, 5, 2.8), (5.5, 2.5, 2.0), (-5.5, 1, 2.2))):
+        m.add(blob(r, shade(STONE, 0.1, rng), rng, 2, 0.12, 0.06, (1.1, 0.9, 0.8)), T(x, r * 0.7, z))
+    for (x, y, z, sx, sy, sz) in ((-3, 0.8, -3, 3.2, 1.6, 2.2), (0.6, 0.5, -1.5, 2.2, 1.0, 1.4), (3.5, 0.7, -4, 2.6, 1.4, 1.8), (3.4, 2.1, -4, 1.6, 1.2, 1.4)):
+        add_box(m, (x, y, z), (sx, sy, sz), shade((150, 146, 138), 0.06, rng), RY(rng.uniform(-0.2, 0.2)), bevel=0.08)
+    # wedges, mallet and a sledge for hauling blocks
+    for k in range(4):
+        add_box(m, (-1.5 + k * 0.4, 1.7, -3), (0.12, 0.3, 0.3), IRON)
+    add_box(m, (-6, 0.45, -5), (3.4, 0.3, 2.2), WEATHER)
+    for x in (-7.6, -4.4):
+        add_box(m, (x, 0.2, -5), (0.25, 0.4, 2.4), DARK)
+    # lifting crane
+    add_cyl(m, (5.5, 0, -5.5), (5.5, 8.2, -5.5), 0.35, DARK, 7)
+    add_beam(m, (5.5, 7.8, -6.4), (5.5, 7.8, 1.2), 0.4, DARK)
+    add_beam(m, (5.5, 3.5, -5.5), (5.5, 7.6, -3.2), 0.25, DARK)
+    add_cyl(m, (5.5, 7.6, 0.6), (5.5, 4.0, 0.6), 0.05, (150, 130, 96), 4)
+    add_box(m, (5.5, 3.4, 0.6), (1.2, 1.0, 1.2), (150, 146, 138), bevel=0.06)
+    return m
+
+
+def runestone(m, at, h, turn, seed=0):
+    x, z = at
+    rng = random.Random(seed)
+    prof = [(1.2, 0), (1.25, h * 0.4), (1.1, h * 0.8), (0.6, h), (0.0, h + 0.1)]
+    tris = lathe(prof, 8, (122, 122, 116), rng, 0.06, 0.08)
+    m.add(tris, M(T(x, 0, z), RY(turn), np.diag([1, 1, 0.38, 1])))
+    # a red-painted serpent band of runes winding up the face
+    for k in range(9):
+        t = k / 8
+        y = 0.6 + t * (h - 1.6)
+        xx = math.sin(t * math.pi * 1.5) * 0.7
+        add_box(m, (0, 0, 0), (0.28, 0.28, 0.08), (168, 44, 38), M(T(x, 0, z), RY(turn), T(xx, y, -0.47)))
+
+
+def lorehall():
+    m = Mesh(97)
+    m.add(hall(L=20, D=9.5, wall_h=4.0, ridge_h=10.0, roof="turf", seed=98, dragons=True, buttress=False).tris, T(0, 0, 2))
+    runestone(m, (-6, -6), 5, 0.2, 1)
+    runestone(m, (6, -6), 4.2, -0.25, 2)
+    # carved story pole by the door
+    add_cyl(m, (0, 0, -6.6), (0, 7.2, -6.6), 0.35, WEATHER, 8)
+    for k in range(4):
+        add_box(m, (0, 2 + k * 1.4, -6.95), (0.5, 0.9, 0.1), [(168, 44, 38), GOLD, BLUE, CREAM][k])
+    m.add(hull([V(0, 7.2, -6.6), V(0.4, 7.8, -6.6), V(-0.4, 7.8, -6.6), V(0, 8.0, -7.3), V(0, 7.6, -6.1)], (168, 44, 38)))
+    return m
+
+
+def smithy():
+    """An open forge shed. The glowing coals, fire and smoke come from the game,
+    sitting on this forge at (-3, 3.1, 2.5)."""
+    m = Mesh(99)
+    rng = m.rng
+    k = 8
+    for i in range(k):
+        for j in range(k):
+            add_box(m, (-7 + (i + 0.5) * 14 / k, 0.15, -7 + (j + 0.5) * 14 / k), (14 / k - 0.1, 0.3, 14 / k - 0.1), shade((88, 82, 74), 0.1, rng))
+    for x in (-6.5, 6.5):
+        for z in (-6.5, 6.5):
+            add_cyl(m, (x, 0, z), (x, 7.2, z), 0.4, DARK, 8)
+    for z in (-6.5, 6.5):
+        add_beam(m, (-6.8, 7.1, z), (6.8, 7.1, z), 0.45, DARK)
+    # shingle roof, ridge along X, with a smoke louvre over the forge
+    for s_ in (-1, 1):
+        for c in range(4):
+            v0, v1 = c / 4, (c + 1) / 4 + 0.05
+            pts = lambda v: [V(x, 10.4 - 3.6 * v, s_ * 8.4 * v) for x in (-8, -4, 0, 4, 8)]  # noqa: E731
+            a = pts(v0)
+            b = [p - V(0, 0.12, 0) for p in pts(v1)]
+            m.add(slab_between(a, b, 0.3, shade((92, 70, 52), 0.07, rng), rng, 0.05))
+    add_box(m, (-3, 10.9, 0), (2.6, 0.9, 2.2), TAR)
+    add_box(m, (-3, 11.5, 0), (3.2, 0.2, 2.8), (92, 70, 52))
+    # back wall of wattle and a tool rack
+    wattle_fence(m, (-6.5, 0, 6.5), (6.5, 0, 6.5), 3.5)
+    for i, x in enumerate((1.5, 2.3, 3.1, 3.9)):
+        add_cyl(m, (x, 2.0, 6.2), (x + 0.2, 4.2, 6.2), 0.07, (138, 100, 64), 5)
+        add_box(m, (x + 0.2, 4.2, 6.1), (0.5, 0.3, 0.12), IRON)
+    # the forge: a stone hearth with a hood, and bellows
+    for i in range(3):
+        for j in range(3):
+            add_box(m, (-3 + (i - 1) * 1.35, 0.5 + j * 1.0, 2.5), (1.3, 0.95, 3.5), shade(STONE, 0.12, rng), bevel=0.08)
+    add_box(m, (-3, 3.0, 2.5), (3.3, 0.15, 2.6), (40, 34, 30))
+    m.add(hull([V(-4.6, 4.6, 1.0), V(-1.4, 4.6, 1.0), V(-4.6, 4.6, 4.2), V(-1.4, 4.6, 4.2), V(-3.5, 6.5, 2.1), V(-2.5, 6.5, 2.1), V(-3.5, 6.5, 2.9), V(-2.5, 6.5, 2.9)], shade(STONE, 0.05, rng)))
+    add_box(m, (-3, 8.3, 2.5), (1.0, 3.6, 0.8), STONE)
+    m.add(hull([V(-5.2, 1.6, 4.4), V(-5.2, 2.6, 4.4), V(-5.2, 1.6, 2.6), V(-5.2, 2.6, 2.6), V(-6.6, 2.1, 3.5)], LEATHER))
+    # anvil on a stump
+    add_cyl(m, (3, 0, 0), (3, 1.8, 0), 0.9, WEATHER, 10)
+    m.add(hull([V(x, y, z) for x in (2.0, 4.0) for y in (1.8, 2.7) for z in (-0.45, 0.45)] + [V(4.8, 2.6, 0), V(4.8, 2.7, 0)], IRON))
+    add_cyl(m, (3.4, 2.75, 0.3), (3.2, 2.75, 1.1), 0.08, (138, 100, 64), 5)
+    add_box(m, (3.42, 2.8, 0.25), (0.4, 0.25, 0.25), IRON)
+    # quenching barrel
+    m.add(barrel_tris(rng, 2.0, 0.9), T(4, 0, 4.5))
+    add_box(m, (4, 1.95, 4.5), (1.5, 0.05, 1.5), (60, 84, 100))
+    return m
+
+
+def shrine():
+    """A small hof (temple) with stacked shingle roofs and dragon finials, the
+    carved idol in front, and two iron stands for the game's fire bowls."""
+    m = Mesh(101)
+    rng = m.rng
+    add_box(m, (0, 0.15, 0), (15, 0.3, 15), (110, 100, 86))
+    # stone steps and plinth
+    add_box(m, (0, 0.55, 3), (9.4, 0.5, 8.4), STONE, bevel=0.1)
+    # stave walls of the temple
+    hx, hz = 3.8, 3.4
+    cz = 3.0
+    for side in (-1, 1):
+        for i in range(10):
+            x = -hx + (i + 0.5) * (2 * hx / 10)
+            add_box(m, (x, 3.3, cz + side * hz), (2 * hx / 10 + 0.03, 5.0, 0.3), shade(DARK, 0.08, rng))
+        for j in range(9):
+            z = cz - hz + (j + 0.5) * (2 * hz / 9)
+            if side == -1 and abs(z - cz) < 0.9:
+                continue
+            add_box(m, (side * hx, 3.3, z), (0.3, 5.0, 2 * hz / 9 + 0.03), shade(DARK, 0.08, rng))
+    # door in the front
+    add_box(m, (0, 2.6, cz - hz - 0.05), (1.8, 3.6, 0.2), (40, 30, 24))
+    m.add(hull([V(-1.1, 4.4, cz - hz - 0.2), V(1.1, 4.4, cz - hz - 0.2), V(0, 5.4, cz - hz - 0.2), V(-1.1, 4.4, cz - hz - 0.4), V(1.1, 4.4, cz - hz - 0.4), V(0, 5.4, cz - hz - 0.4)], (168, 44, 38)))
+
+    def pyramid_roof(y0, half, h, col):
+        peak = V(0, y0 + h, cz)
+        corners = [V(-half, y0, cz - half), V(half, y0, cz - half), V(half, y0, cz + half), V(-half, y0, cz + half)]
+        for i in range(4):
+            a, b = corners[i], corners[(i + 1) % 4]
+            for r in range(3):
+                t0, t1 = r / 3, (r + 1) / 3 + 0.05
+                p0 = [peak + (a - peak) * t0, peak + (b - peak) * t0]
+                p1 = [peak + (a - peak) * t1 - V(0, 0.1, 0), peak + (b - peak) * t1 - V(0, 0.1, 0)]
+                m.add(slab_between(p0, p1, 0.25, shade(col, 0.06, rng), rng, 0.04))
+        return corners, peak
+
+    corners, _ = pyramid_roof(5.6, 5.4, 2.4, (70, 52, 38))
+    add_box(m, (0, 8.0, cz), (4.2, 1.4, 4.2), shade(DARK, 0.05, rng))
+    corners2, peak = pyramid_roof(8.6, 3.2, 2.8, (70, 52, 38))
+    add_cyl(m, (0, 11.2, cz), (0, 12.6, cz), 0.15, DARK, 6)
+    m.add(blob(0.3, GOLD, rng, 1, 0.0, 0.02), T(0, 12.7, cz))
+    # dragon heads curling out from the lower roof corners
+    for c in corners:
+        d = c - V(0, c[1], cz)
+        d[1] = 0
+        d /= np.linalg.norm(d)
+        base = c + V(0, 0.3, 0)
+        tip = base + d * 1.3 + V(0, 1.0, 0)
+        add_cyl(m, base, tip, 0.18, DARK, 5, 0.12)
+        m.add(hull([tip, tip + d * 0.8 + V(0, 0.1, 0), tip + V(0, 0.4, 0), tip + d * 0.2 + V(0.15, 0.2, 0), tip + d * 0.2 + V(-0.15, 0.2, 0)], GOLD))
+    # the carved idol in front: a tall post with a bearded face and a helm
+    add_cyl(m, (0, 0, -2.4), (0, 6.2, -2.4), 0.5, (96, 70, 48), 8)
+    m.add(hull([V(x, y, -2.4 + z) for x in (-0.55, 0.55) for y in (5.4, 7.0) for z in (-0.55, 0.45)] + [V(0, 6.2, -3.15)], (110, 80, 54)))
+    add_box(m, (0, 5.6, -2.98), (0.7, 0.9, 0.2), (80, 60, 40))
+    for x in (-0.22, 0.22):
+        add_box(m, (x, 6.5, -2.97), (0.18, 0.12, 0.05), (200, 160, 80))
+    m.add(lathe([(0.62, 7.0), (0.5, 7.4), (0.0, 7.7)], 10, IRON), T(0, 0, -2.4))
+    # iron stands for the fire bowls
+    for x in (-2.6, 2.6):
+        for k in range(3):
+            a = k / 3 * math.tau
+            add_cyl(m, (x + math.cos(a) * 0.5, 0, -2.6 + math.sin(a) * 0.5), (x, 2.0, -2.6), 0.07, IRON, 4)
+    return m
+
+
+def shipyard():
+    m = Mesh(103)
+    rng = m.rng
+    add_box(m, (-3, 0.3, 0), (10, 0.6, 30), WEATHER)
+    for i in range(12):
+        add_box(m, (-3, 0.62, -14 + i * 2.5), (10.2, 0.08, 0.3), DARK)
+    # a hull taking shape: keel, ribs and the first strakes
+    add_box(m, (-3, 1.0, 0), (0.8, 0.8, 24), WOOD)
+    for i in range(9):
+        z = -11 + i * 2.75
+        w = 3.5 + math.sin((i + 0.5) / 9 * math.pi) * 3
+        for s_ in (-1, 1):
+            pts = [V(-3 + s_ * (0.3 + w / 2 * math.sin(k / 6 * math.pi / 2)), 1.2 + 3.6 * (1 - math.cos(k / 6 * math.pi / 2)), z) for k in range(7)]
+            for a, b in zip(pts, pts[1:]):
+                add_beam(m, a, b, 0.28, WOOD)
+    grid = hull_sections(24, 8, 1.0, 1.4, strakes=6, stations=14)
+    for side in (1, -1):
+        for j in range(3):
+            a = [V(-3 + side * row[j][0], row[j][1] + 2.2, row[j][2]) for row in grid]
+            b = [V(-3 + side * row[j + 1][0], row[j + 1][1] + 2.2, row[j + 1][2]) for row in grid]
+            m.add(strip_between(a, b, (96, 68, 46) if j % 2 else (84, 58, 40), rng, 0.04))
+    # prow post rising at the -Z end
+    for k in range(6):
+        a = k / 5 * 1.2
+        p0 = V(-3, 1.4 + math.sin(a) * 5, -12.5 - math.sin(a * 0.5) * 1.6)
+        a1 = (k + 1) / 5 * 1.2
+        p1 = V(-3, 1.4 + math.sin(a1) * 5, -12.5 - math.sin(a1 * 0.5) * 1.6)
+        if k < 5:
+            add_beam(m, p0, p1, 0.5, DARK)
+    # trestles, timber stacks and a lifting frame
+    log_pile(m, (8, 0, 6), along_x=False)
+    log_pile(m, (8, 0, -6), along_x=False)
+    for x in (9, -11):
+        add_cyl(m, (x, 0, -14), (x, 10, -14), 0.4, DARK, 8)
+    add_beam(m, (-11.4, 10, -14), (9.4, 10, -14), 0.55, DARK)
+    add_cyl(m, (-3, 9.8, -14), (-3, 5.0, -14), 0.05, (150, 130, 96), 4)
+    for x in (4.5, 5.6):
+        add_box(m, (x, 0.9, 12), (0.9, 1.8, 3.0), shade(WEATHER, 0.1, rng))
+    for _ in range(18):
+        add_box(m, (rng.uniform(-8, 6), 0.68, rng.uniform(-12, 12)), (0.4, 0.06, 0.2), (200, 170, 120), RY(rng.uniform(0, 3)))
+    return m
+
+
+def hunting_lodge():
+    m = Mesh(105)
+    rng = m.rng
+    m.add(small_hall(9, 7, "thatch", 106).tris, T(-1.5, 0, 2.5))
+    # antlers over the door
+    for s_ in (-1, 1):
+        base = V(-1.5 + s_ * 0.3, 5.4, -1.3)
+        p1 = base + V(s_ * 0.6, 0.8, 0)
+        p2 = p1 + V(s_ * 0.3, 0.8, 0)
+        add_cyl(m, base, p1, 0.08, (222, 206, 178), 5)
+        add_cyl(m, p1, p2, 0.07, (222, 206, 178), 5)
+        add_cyl(m, p1, p1 + V(0, 0.6, -0.3), 0.05, (222, 206, 178), 4)
+    # hide drying frame with stretched hides
+    for x in (2, 6.5):
+        add_cyl(m, (x, 0, -5), (x, 5, -5), 0.18, WEATHER, 6)
+    add_cyl(m, (1.6, 4.8, -5), (6.9, 4.8, -5), 0.14, DARK, 6)
+    for i in range(2):
+        cx = 2.9 + i * 2.4
+        pts = [V(cx - 0.9, 4.6, -5), V(cx + 0.9, 4.6, -5), V(cx + 1.0, 3.2, -5), V(cx + 0.6, 1.8, -5), V(cx - 0.6, 1.8, -5), V(cx - 1.0, 3.2, -5)]
+        for k in range(1, len(pts) - 1):
+            m.tri(pts[0], pts[k], pts[k + 1], (160, 116, 80))
+            m.tri(pts[0], pts[k + 1], pts[k], (140, 100, 68))
+    # a game rack with a deer hanging and a chopping block
+    add_cyl(m, (5.5, 1, 3.5), (5.5, 1.8, 3.5), 0.7, WEATHER, 8)
+    for x in (-6, -4):
+        add_cyl(m, (x, 0, -4.5), (x, 3.6, -4.5), 0.14, WEATHER, 5)
+    add_cyl(m, (-6.3, 3.5, -4.5), (-3.7, 3.5, -4.5), 0.1, DARK, 5)
+    m.add(blob(1.0, (142, 98, 60), rng, 1, 0.08, 0.04, (0.45, 1.0, 0.4)), T(-5, 2.3, -4.5))
+    # quiver and bows leaning by the wall
+    add_cyl(m, (2.4, 0, -1.0), (2.6, 3.4, -1.0), 0.06, (110, 72, 44), 5)
+    add_cyl(m, (3.0, 0, -1.0), (3.1, 1.4, -1.0), 0.22, LEATHER, 7)
+    return m
+
+
 # ----------------------------------------------------------------------------- shield (not a slot, a handy extra)
 
 
@@ -1061,6 +1395,14 @@ ASSETS = {
     "Cottage": cottage,
     "Storehouse": storehouse,
     "Watchtower": watchtower,
+    "Farm": farm,
+    "Woodcutter": woodcutter,
+    "Quarry": quarry,
+    "LoreHall": lorehall,
+    "Smithy": smithy,
+    "Shrine": shrine,
+    "Shipyard": shipyard,
+    "HuntingLodge": hunting_lodge,
     "Palisade": palisade,
     "Tree_Pine": pine,
     "Tree_Spruce": spruce,

@@ -42,7 +42,8 @@ To go back to a block-built model, delete its mesh from Assets.
 
 | Kind | Slots |
 | --- | --- |
-| Buildings | Longhouse, GreatHall, Cottage, Storehouse, Watchtower, Palisade |
+| Buildings | Longhouse, GreatHall, Cottage, Storehouse, Watchtower, Palisade, Farm, Woodcutter, Quarry, LoreHall, Smithy, Shrine, Shipyard, HuntingLodge |
+| Settlers | Settler_Man_1 to Settler_Man_5, Settler_Woman_1 to Settler_Woman_5 (one per rank; each has Head, Body, Arm and Leg pieces) |
 | Nature | Tree_Pine, Tree_Spruce, Tree_Birch, Rock, Bush, Deer |
 | Ships | Longship |
 | Tools | Axe, Pickaxe, Bow, Sword, Torch |
