@@ -2,7 +2,11 @@
 
 A Roblox Viking settlement builder. Start with a longhouse and three settlers, gather wood, stone and food, build up your village, and grow your population through births and newcomers from neighbouring tribes. Later phases add technology, religion, culture, boats, and raiding (see [docs/DESIGN.md](docs/DESIGN.md)).
 
-This repository holds all the game's code. You edit it in **VS Code**, and **Rojo** syncs it live into **Roblox Studio**.
+> **Easiest way:** download [VikingCity.rbxlx](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/VikingCity.rbxlx) from the repo and double-click it to open in Roblox Studio, then press Play.
+>
+> No VS Code, Git or Rojo needed. This file is rebuilt from the code every time the code changes, so download it again to get the latest version.
+
+This repository holds all the game's code. You edit it in **VS Code**, and **Rojo** syncs it live into **Roblox Studio** (setup below, only needed when you want to edit code yourself).
 
 ---
 
@@ -43,7 +47,7 @@ You need: **Roblox Studio**, **VS Code**, and **Git** (Windows: install from <ht
 
 Open the folder in VS Code, start Rojo (step 4), open your place in Studio, click **Connect** in the Rojo plugin, press Play. Any change you save in VS Code appears in Studio instantly. Stop and press Play again to test it.
 
-Save your place in Studio as `VikingCity.rbxl` inside the repo folder if you like. Place files are ignored by Git; the code in `src/` is what matters.
+The `VikingCity.rbxlx` in the repo is generated from `src/` with `rojo build -o VikingCity.rbxlx` (or `scripts/build-place.sh`). Don't edit that file by hand; any place you save yourself under another name is ignored by Git.
 
 ---
 

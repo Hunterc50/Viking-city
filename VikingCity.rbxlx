@@ -1,0 +1,2388 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[--[[
+	Config
+	All the numbers that shape the game live here, so you can tweak balance
+	without touching any game logic. Shared by the server and the client.
+]]
+
+local Config = {}
+
+-- World / grid ------------------------------------------------------------
+Config.CELL = 8 -- studs per grid cell
+Config.PLOT_CELLS = 20 -- each colony plot is 20 x 20 cells
+Config.PLOT_GAP = 48 -- studs of wilderness between neighbouring plots
+Config.MAX_PLOTS = 8
+Config.GROUND_Y = 1 -- height of the top of the plot ground
+
+-- Simulation --------------------------------------------------------------
+Config.TICK = 1 -- seconds between simulation steps
+Config.DAY_LENGTH = 60 -- real seconds per in-game day
+
+-- Resources ---------------------------------------------------------------
+Config.ResourceOrder = { "Wood", "Stone", "Food" }
+Config.StartingResources = { Wood = 80, Stone = 20, Food = 40 }
+Config.BaseStorage = 200 -- max of each resource before any storehouse
+
+-- Villagers ---------------------------------------------------------------
+Config.Villagers = {
+	Starting = 3,
+	FoodPerAdultPerSecond = 0.1, -- 6 food per adult per day
+	FoodPerChildPerSecond = 0.05,
+	DaysToAdulthood = 2,
+	WalkSpeed = 7, -- studs per second for the little villager figures
+
+	BirthMinHappiness = 50,
+	BirthChancePerDay = 0.6,
+
+	ImmigrationMinHappiness = 65,
+	ImmigrationChancePerDay = 0.5,
+	ImmigrationMaxGroup = 3,
+
+	LeaveBelowHappiness = 25,
+}
+
+Config.Names = {
+	"Astrid", "Bjarni", "Sigrid", "Leif", "Ingrid", "Gunnar", "Solveig", "Ulf",
+	"Hilda", "Toke", "Runa", "Arne", "Halla", "Knut", "Ylva", "Sven",
+	"Thyra", "Orm", "Gudrun", "Ketil", "Eydis", "Hakon", "Brynja", "Vali",
+	"Ragna", "Dagr", "Signy", "Asger", "Tove", "Hrolf",
+}
+
+-- Fictional neighbouring tribes that send immigrants.
+Config.Tribes = { "Ravenfjord clan", "Ashvale folk", "Stormholm kin", "Elkmarsh tribe", "Greywater clan" }
+
+-- Wild resource nodes on each plot -----------------------------------------
+Config.Nodes = {
+	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8 },
+	Rock = { Count = 12, Regrow = 0, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2 },
+	Bush = { Count = 10, Regrow = 6, Gives = "Food", Amount = 6, Action = "Forage", Hold = 0.6 },
+}
+Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
+
+-- Buildings ---------------------------------------------------------------
+--[[
+	Size      = footprint in cells {x, z} before rotation
+	Cost      = resources spent to place it
+	Housing   = villagers it can shelter
+	Workers   = job slots
+	Produces  = resource per worker per second (scaled by happiness)
+	Storage   = extra capacity for every resource
+]]
+Config.Buildings = {
+	Longhouse = {
+		Display = "Longhouse",
+		Description = "Shelter for 5 villagers. Free housing attracts births and immigrants.",
+		Size = { 4, 2 },
+		Cost = { Wood = 40, Stone = 10 },
+		Housing = 5,
+	},
+	Woodcutter = {
+		Display = "Woodcutter",
+		Description = "2 workers fell timber.",
+		Size = { 2, 2 },
+		Cost = { Wood = 20 },
+		Workers = 2,
+		Produces = { Wood = 0.5 },
+	},
+	Quarry = {
+		Display = "Quarry",
+		Description = "2 workers cut stone.",
+		Size = { 2, 2 },
+		Cost = { Wood = 30 },
+		Workers = 2,
+		Produces = { Stone = 0.3 },
+	},
+	Farm = {
+		Display = "Barley Farm",
+		Description = "2 workers grow food.",
+		Size = { 3, 3 },
+		Cost = { Wood = 25 },
+		Workers = 2,
+		Produces = { Food = 0.4 },
+	},
+	Storehouse = {
+		Display = "Storehouse",
+		Description = "+200 storage for every resource.",
+		Size = { 2, 3 },
+		Cost = { Wood = 40, Stone = 20 },
+		Storage = 200,
+	},
+}
+
+-- Order of buttons in the build bar.
+Config.BuildOrder = { "Longhouse", "Woodcutter", "Quarry", "Farm", "Storehouse" }
+
+Config.DemolishRefund = 0.5 -- fraction of the cost returned
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">Grid</string>
+          <string name="Source"><![CDATA[--[[
+	Grid
+	Pure math helpers for the building grid. Cells are addressed by integer
+	(x, z) starting at 0 in the plot's corner. A building is placed by its
+	minimum corner cell plus a rotation (0 = default, 1 = turned 90 degrees).
+]]
+
+local Config = require(script.Parent.Config)
+
+local Grid = {}
+
+local CELL = Config.CELL
+local N = Config.PLOT_CELLS
+
+Grid.PLOT_SIZE = CELL * N
+
+function Grid.key(x: number, z: number): string
+	return x .. "," .. z
+end
+
+-- World-space corner (min x, min z, ground top) of plot number `index` (1-based).
+function Grid.plotOrigin(index: number): Vector3
+	return Vector3.new((index - 1) * (Grid.PLOT_SIZE + Config.PLOT_GAP), Config.GROUND_Y, 0)
+end
+
+-- Footprint in cells after rotation.
+function Grid.footprint(buildingType: string, rot: number): (number, number)
+	local def = Config.Buildings[buildingType]
+	local sx, sz = def.Size[1], def.Size[2]
+	if rot % 2 == 1 then
+		return sz, sx
+	end
+	return sx, sz
+end
+
+function Grid.inBounds(cx: number, cz: number, sx: number, sz: number): boolean
+	return cx >= 0 and cz >= 0 and cx + sx <= N and cz + sz <= N
+end
+
+-- Calls fn(x, z) for every cell covered by the rectangle.
+function Grid.eachCell(cx: number, cz: number, sx: number, sz: number, fn: (number, number) -> ())
+	for x = cx, cx + sx - 1 do
+		for z = cz, cz + sz - 1 do
+			fn(x, z)
+		end
+	end
+end
+
+-- `blocked` is a set: { ["x,z"] = true/anything }.
+function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number): (boolean, string?)
+	if not Grid.inBounds(cx, cz, sx, sz) then
+		return false, "Outside your land"
+	end
+	local free = true
+	Grid.eachCell(cx, cz, sx, sz, function(x, z)
+		if blocked[Grid.key(x, z)] then
+			free = false
+		end
+	end)
+	if not free then
+		return false, "Something is in the way (clear trees and rocks first)"
+	end
+	return true, nil
+end
+
+-- World position of the centre of a rectangle of cells, at ground level.
+function Grid.rectCenter(origin: Vector3, cx: number, cz: number, sx: number, sz: number): Vector3
+	return origin + Vector3.new((cx + sx / 2) * CELL, 0, (cz + sz / 2) * CELL)
+end
+
+-- The CFrame a building model should be pivoted to.
+function Grid.buildingCFrame(origin: Vector3, cx: number, cz: number, sx: number, sz: number, rot: number): CFrame
+	return CFrame.new(Grid.rectCenter(origin, cx, cz, sx, sz)) * CFrame.Angles(0, rot * math.pi / 2, 0)
+end
+
+-- Converts a world point to the min-corner cell of a footprint centred on it.
+function Grid.worldToCell(origin: Vector3, pos: Vector3, sx: number, sz: number): (number, number)
+	local local_ = pos - origin
+	local cx = math.floor(local_.X / CELL - sx / 2 + 0.5)
+	local cz = math.floor(local_.Z / CELL - sz / 2 + 0.5)
+	return cx, cz
+end
+
+function Grid.canAfford(resources, cost): boolean
+	for name, amount in cost do
+		if (resources[name] or 0) < amount then
+			return false
+		end
+	end
+	return true
+end
+
+function Grid.costText(cost): string
+	local parts = {}
+	for _, name in Config.ResourceOrder do
+		if cost[name] then
+			table.insert(parts, cost[name] .. " " .. name)
+		end
+	end
+	return table.concat(parts, "  ")
+end
+
+return Grid
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">ModelFactory</string>
+          <string name="Source"><![CDATA[--[[
+	ModelFactory
+	Builds simple placeholder models out of Parts so the game is playable with
+	no imported assets. Every model is built around (0, 0, 0) = centre of its
+	footprint at ground level, and its WorldPivot is set there, so callers just
+	do model:PivotTo(cframe).
+
+	Later you can swap any of these for real meshes made in Studio or Blender:
+	put a model in ReplicatedStorage and clone it here instead.
+]]
+
+local Config = require(script.Parent.Config)
+
+local ModelFactory = {}
+
+local CELL = Config.CELL
+
+local Colors = {
+	Wood = Color3.fromRGB(122, 84, 52),
+	DarkWood = Color3.fromRGB(78, 54, 36),
+	Thatch = Color3.fromRGB(178, 150, 92),
+	Turf = Color3.fromRGB(92, 120, 64),
+	Stone = Color3.fromRGB(128, 128, 132),
+	Soil = Color3.fromRGB(96, 68, 44),
+	Barley = Color3.fromRGB(214, 188, 96),
+	Leaf = Color3.fromRGB(46, 92, 52),
+	LeafLight = Color3.fromRGB(64, 116, 64),
+	Berry = Color3.fromRGB(170, 34, 46),
+	Skin = Color3.fromRGB(234, 196, 160),
+}
+ModelFactory.Colors = Colors
+
+local Tunics = {
+	Color3.fromRGB(150, 60, 50),
+	Color3.fromRGB(60, 90, 140),
+	Color3.fromRGB(90, 120, 70),
+	Color3.fromRGB(170, 140, 80),
+	Color3.fromRGB(110, 80, 120),
+	Color3.fromRGB(120, 110, 100),
+}
+
+local function addPart(model: Instance, props)
+	local p = Instance.new(props.Class or "Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if props.Shape then
+		p.Shape = props.Shape
+	end
+	p.Size = props.Size
+	p.CFrame = props.CFrame or CFrame.new(props.Position or Vector3.zero)
+	p.Color = props.Color or Colors.Wood
+	p.Material = props.Material or Enum.Material.Wood
+	p.Name = props.Name or "Part"
+	p.Parent = model
+	return p
+end
+
+-- A walled hut with a pitched roof whose ridge runs along local X.
+local function hut(model, cf: CFrame, w: number, d: number, wallH: number, roofColor: Color3, roofMaterial)
+	local wallTop = 0.6 + wallH
+	addPart(model, {
+		Size = Vector3.new(w + 1, 0.6, d + 1),
+		CFrame = cf * CFrame.new(0, 0.3, 0),
+		Color = Colors.DarkWood,
+	})
+	addPart(model, {
+		Name = "Walls",
+		Size = Vector3.new(w, wallH, d),
+		CFrame = cf * CFrame.new(0, 0.6 + wallH / 2, 0),
+		Color = Colors.Wood,
+		Material = Enum.Material.WoodPlanks,
+	})
+
+	local angle = math.rad(35)
+	local halfD = d / 2 + 1.2
+	local rise = halfD * math.tan(angle)
+	local slope = halfD / math.cos(angle) + 0.6
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "Roof",
+			Size = Vector3.new(w + 2, 0.6, slope),
+			CFrame = cf * CFrame.new(0, wallTop + rise / 2, side * halfD / 2) * CFrame.Angles(side * angle, 0, 0),
+			Color = roofColor,
+			Material = roofMaterial or Enum.Material.Grass,
+		})
+	end
+	addPart(model, {
+		Name = "Ridge",
+		Size = Vector3.new(w + 2.6, 0.8, 0.8),
+		CFrame = cf * CFrame.new(0, wallTop + rise + 0.1, 0),
+		Color = Colors.DarkWood,
+	})
+	addPart(model, {
+		Name = "Door",
+		Size = Vector3.new(2.6, 4.5, 0.3),
+		CFrame = cf * CFrame.new(0, 0.6 + 2.25, -d / 2 - 0.15),
+		Color = Colors.DarkWood,
+	})
+end
+
+local function logPile(model, cf: CFrame)
+	for i, offset in { Vector3.new(0, 0.6, -1.3), Vector3.new(0, 0.6, 0), Vector3.new(0, 0.6, 1.3), Vector3.new(0, 1.7, -0.65), Vector3.new(0, 1.7, 0.65) } do
+		addPart(model, {
+			Name = "Log" .. i,
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(6, 1.2, 1.2),
+			CFrame = cf * CFrame.new(offset),
+			Color = Colors.Wood,
+		})
+	end
+end
+
+local Builders = {}
+
+function Builders.Longhouse(model, w, d)
+	hut(model, CFrame.new(), w - 3, d - 4, 7, Colors.Turf, Enum.Material.Grass)
+	-- carved posts at the corners
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			addPart(model, {
+				Size = Vector3.new(1, 9, 1),
+				Position = Vector3.new(x * (w - 3) / 2, 4.5, z * (d - 4) / 2),
+				Color = Colors.DarkWood,
+			})
+		end
+	end
+end
+
+function Builders.Woodcutter(model, w, d)
+	hut(model, CFrame.new(-2.5, 0, 2), 8, 7, 5, Colors.Thatch, Enum.Material.Fabric)
+	logPile(model, CFrame.new(3, 0, -4))
+	addPart(model, {
+		Name = "Stump",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.4, 2, 2),
+		CFrame = CFrame.new(4.5, 0.7, 3) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = Colors.Wood,
+	})
+end
+
+function Builders.Quarry(model, w, d)
+	addPart(model, {
+		Size = Vector3.new(w - 1, 0.4, d - 1),
+		Position = Vector3.new(0, 0.2, 0),
+		Color = Colors.Stone,
+		Material = Enum.Material.Slate,
+	})
+	local blocks = {
+		{ Vector3.new(-3, 1.5, -3), Vector3.new(4, 2.6, 3) },
+		{ Vector3.new(3, 1.2, -2), Vector3.new(3, 2, 3) },
+		{ Vector3.new(-2, 2.2, 3), Vector3.new(5, 4, 4) },
+		{ Vector3.new(4, 0.9, 4), Vector3.new(2, 1.4, 2) },
+	}
+	for _, b in blocks do
+		addPart(model, { Size = b[2], Position = b[1], Color = Colors.Stone, Material = Enum.Material.Slate })
+	end
+	-- a simple wooden lifting frame
+	addPart(model, { Size = Vector3.new(0.6, 7, 0.6), Position = Vector3.new(5.5, 3.5, -5.5), Color = Colors.DarkWood })
+	addPart(model, { Size = Vector3.new(0.6, 0.6, 6), Position = Vector3.new(5.5, 7, -3), Color = Colors.DarkWood })
+end
+
+function Builders.Farm(model, w, d)
+	addPart(model, {
+		Size = Vector3.new(w - 1, 0.3, d - 1),
+		Position = Vector3.new(0, 0.15, 0),
+		Color = Colors.Soil,
+		Material = Enum.Material.Ground,
+	})
+	local rows = 6
+	for i = 1, rows do
+		local z = -d / 2 + 2 + (i - 1) * ((d - 4) / (rows - 1))
+		addPart(model, {
+			Name = "Barley",
+			Size = Vector3.new(w - 4, 1.4, 1.6),
+			Position = Vector3.new(0, 1, z),
+			Color = Colors.Barley,
+			Material = Enum.Material.Grass,
+		})
+	end
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			addPart(model, {
+				Size = Vector3.new(0.6, 2.5, 0.6),
+				Position = Vector3.new(x * (w / 2 - 0.8), 1.25, z * (d / 2 - 0.8)),
+				Color = Colors.DarkWood,
+			})
+		end
+	end
+end
+
+function Builders.Storehouse(model, w, d)
+	addPart(model, {
+		Size = Vector3.new(w - 2, 1.2, d - 2),
+		Position = Vector3.new(0, 0.6, 0),
+		Color = Colors.Stone,
+		Material = Enum.Material.Cobblestone,
+	})
+	-- the hut ridge runs along local X, so rotate it to run along the long Z side
+	hut(model, CFrame.new(0, 1.2, 0) * CFrame.Angles(0, math.pi / 2, 0), d - 6, w - 5, 6, Colors.Thatch, Enum.Material.Fabric)
+	for i, pos in { Vector3.new(-4, 2.2, -10.3), Vector3.new(-1.6, 2.2, -10.3), Vector3.new(4.5, 2.2, -10.3) } do
+		addPart(model, {
+			Name = "Crate" .. i,
+			Size = Vector3.new(2, 2, 2),
+			Position = pos,
+			Color = Colors.Wood,
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+end
+
+-- Builds a building model for `buildingType` in its unrotated orientation.
+function ModelFactory.building(buildingType: string): Model
+	local def = Config.Buildings[buildingType]
+	local w, d = def.Size[1] * CELL, def.Size[2] * CELL
+	local model = Instance.new("Model")
+	model.Name = buildingType
+	local builder = Builders[buildingType]
+	if builder then
+		builder(model, w, d)
+	else
+		addPart(model, { Size = Vector3.new(w - 1, 4, d - 1), Position = Vector3.new(0, 2, 0) })
+	end
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
+-- Makes a model see-through and non-solid, for the placement preview.
+function ModelFactory.makeGhost(model: Model)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Transparency = 0.45
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+		end
+	end
+end
+
+-- Wild resource nodes. Returns the model and the part the prompt goes on.
+function ModelFactory.node(kind: string, rng: Random): (Model, BasePart)
+	local model = Instance.new("Model")
+	model.Name = kind
+	local main
+	if kind == "Tree" then
+		local s = rng:NextNumber(0.85, 1.3)
+		main = addPart(model, {
+			Name = "Trunk",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(6 * s, 1.3 * s, 1.3 * s),
+			CFrame = CFrame.new(0, 3 * s, 0) * CFrame.Angles(0, 0, math.pi / 2),
+			Color = Colors.DarkWood,
+		})
+		addPart(model, {
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 6 * s,
+			Position = Vector3.new(0, 7.5 * s, 0),
+			Color = Colors.Leaf,
+			Material = Enum.Material.Grass,
+		})
+		addPart(model, {
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 4.2 * s,
+			Position = Vector3.new(0, 10.5 * s, 0),
+			Color = Colors.LeafLight,
+			Material = Enum.Material.Grass,
+		})
+	elseif kind == "Rock" then
+		local size = Vector3.new(rng:NextNumber(3, 5.5), rng:NextNumber(2, 3.5), rng:NextNumber(3, 5.5))
+		main = addPart(model, {
+			Name = "Rock",
+			Size = size,
+			CFrame = CFrame.new(0, size.Y / 2 - 0.3, 0) * CFrame.Angles(rng:NextNumber(-0.2, 0.2), rng:NextNumber(0, math.pi), rng:NextNumber(-0.2, 0.2)),
+			Color = Colors.Stone,
+			Material = Enum.Material.Slate,
+		})
+	else -- Bush
+		main = addPart(model, {
+			Name = "Bush",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 3.6,
+			Position = Vector3.new(0, 1.4, 0),
+			Color = Colors.LeafLight,
+			Material = Enum.Material.Grass,
+		})
+		for i = 1, 5 do
+			local a = i / 5 * math.pi * 2
+			addPart(model, {
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.one * 0.6,
+				Position = Vector3.new(math.cos(a) * 1.5, 1.7 + (i % 2) * 0.5, math.sin(a) * 1.5),
+				Color = Colors.Berry,
+				Material = Enum.Material.SmoothPlastic,
+			})
+		end
+	end
+	model.WorldPivot = CFrame.new()
+	return model, main
+end
+
+-- A tiny villager figure. The body is anchored and moved by the server;
+-- the head is welded to it so it follows.
+function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Model
+	local s = isChild and 0.65 or 1
+	local model = Instance.new("Model")
+	model.Name = name
+
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Anchored = true
+	body.CanCollide = false
+	body.Size = Vector3.new(1.4, 2.2, 0.9) * s
+	body.Color = Tunics[rng:NextInteger(1, #Tunics)]
+	body.Material = Enum.Material.Fabric
+	body.CFrame = CFrame.new(0, 1.1 * s, 0)
+	body.Parent = model
+
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Shape = Enum.PartType.Ball
+	head.Anchored = false
+	head.CanCollide = false
+	head.Massless = true
+	head.Size = Vector3.one * 1.1 * s
+	head.Color = Colors.Skin
+	head.Material = Enum.Material.SmoothPlastic
+	head.CFrame = body.CFrame * CFrame.new(0, 1.65 * s, 0)
+	head.Parent = model
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = body
+	weld.Part1 = head
+	weld.Parent = body
+
+	local tag = Instance.new("BillboardGui")
+	tag.Name = "NameTag"
+	tag.Size = UDim2.fromOffset(120, 22)
+	tag.StudsOffset = Vector3.new(0, 2.8 * s, 0)
+	tag.MaxDistance = 60
+	tag.AlwaysOnTop = false
+	tag.Adornee = body
+	local label = Instance.new("TextLabel")
+	label.Name = "Label"
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamMedium
+	label.TextSize = 13
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.TextStrokeTransparency = 0.5
+	label.Text = name
+	label.Parent = tag
+	tag.Parent = body
+
+	model.PrimaryPart = body
+	return model
+end
+
+return ModelFactory
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Remotes</string>
+          <string name="Source"><![CDATA[--[[
+	Remotes
+	The server creates the network objects; the client waits for them.
+	Require this module from either side and use e.g. Remotes.PlaceBuilding.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local EVENTS = {
+	"ColonyState", -- server -> client: full colony snapshot every tick
+	"Notify", -- server -> client: short message for the toast feed
+}
+
+local FUNCTIONS = {
+	"PlaceBuilding", -- client -> server: (type, cx, cz, rot) -> ok, message
+	"DemolishBuilding", -- client -> server: (buildingId) -> ok, message
+}
+
+local Remotes = {}
+
+if RunService:IsServer() then
+	local folder = Instance.new("Folder")
+	folder.Name = "Remotes"
+	for _, name in EVENTS do
+		local remote = Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = folder
+		Remotes[name] = remote
+	end
+	for _, name in FUNCTIONS do
+		local remote = Instance.new("RemoteFunction")
+		remote.Name = name
+		remote.Parent = folder
+		Remotes[name] = remote
+	end
+	folder.Parent = ReplicatedStorage
+else
+	local folder = ReplicatedStorage:WaitForChild("Remotes")
+	for _, name in EVENTS do
+		Remotes[name] = folder:WaitForChild(name)
+	end
+	for _, name in FUNCTIONS do
+		Remotes[name] = folder:WaitForChild(name)
+	end
+end
+
+return Remotes
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="6">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Script" referent="7">
+      <Properties>
+        <string name="Name">Server</string>
+        <token name="RunContext">0</token>
+        <string name="Source"><![CDATA[--[[
+	Server entry point.
+	Loads every ModuleScript in the Services folder, calls :Init() on all of
+	them (set-up, no cross-service calls yet), then :Start() (begin running).
+	To add a new system, drop a new module in src/server/Services.
+]]
+
+local servicesFolder = script:WaitForChild("Services")
+
+local services = {}
+for _, module in servicesFolder:GetChildren() do
+	if module:IsA("ModuleScript") then
+		services[module.Name] = require(module)
+	end
+end
+
+for _, service in services do
+	if service.Init then
+		service:Init(services)
+	end
+end
+
+for name, service in services do
+	if service.Start then
+		task.spawn(function()
+			service:Start()
+		end)
+	end
+	print("[VikingCity] started " .. name)
+end
+]]></string>
+      </Properties>
+      <Item class="Folder" referent="8">
+        <Properties>
+          <string name="Name">Services</string>
+        </Properties>
+        <Item class="ModuleScript" referent="9">
+          <Properties>
+            <string name="Name">BuildingService</string>
+            <string name="Source"><![CDATA[--[[
+	BuildingService
+	Validates and performs building placement and demolition requested by
+	clients. The server always re-checks everything (cost, bounds, overlap)
+	because clients can't be trusted.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+local ModelFactory = require(Shared.ModelFactory)
+
+local BuildingService = {}
+
+local services
+
+function BuildingService:Init(allServices)
+	services = allServices
+end
+
+-- Creates the building without any checks or cost. Returns the building record.
+function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number)
+	local ColonyService = services.ColonyService
+	local sx, sz = Grid.footprint(buildingType, rot)
+	local id = ColonyService:NewId(colony)
+
+	local model = ModelFactory.building(buildingType)
+	model.Name = buildingType .. "_" .. id
+	model:SetAttribute("BuildingId", id)
+	model:SetAttribute("BuildingType", buildingType)
+	model:SetAttribute("OwnerUserId", colony.player.UserId)
+	model:PivotTo(Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot))
+	model.Parent = colony.plot.Buildings
+
+	local building = {
+		id = id,
+		type = buildingType,
+		cx = cx,
+		cz = cz,
+		rot = rot,
+		sx = sx,
+		sz = sz,
+		model = model,
+		center = Grid.rectCenter(colony.origin, cx, cz, sx, sz),
+	}
+	colony.buildings[id] = building
+
+	Grid.eachCell(cx, cz, sx, sz, function(x, z)
+		ColonyService:Block(colony, x, z, "building")
+	end)
+	return building
+end
+
+function BuildingService:PlaceStarting(colony)
+	local sx, sz = Grid.footprint("Longhouse", 0)
+	local cx = math.floor((Config.PLOT_CELLS - sx) / 2)
+	local cz = math.floor((Config.PLOT_CELLS - sz) / 2)
+	self:Create(colony, "Longhouse", cx, cz, 0)
+end
+
+function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
+	local ColonyService = services.ColonyService
+	local colony = ColonyService:Get(player)
+	if not colony then
+		return false, "Your colony isn't ready yet"
+	end
+	-- Validate the types of everything the client sent.
+	if typeof(buildingType) ~= "string" or not Config.Buildings[buildingType] then
+		return false, "Unknown building"
+	end
+	if typeof(cx) ~= "number" or typeof(cz) ~= "number" or typeof(rot) ~= "number" then
+		return false, "Bad position"
+	end
+	cx, cz, rot = math.floor(cx), math.floor(cz), math.floor(rot) % 4
+	if rot ~= rot or cx ~= cx or cz ~= cz then -- NaN / infinity guard
+		return false, "Bad position"
+	end
+
+	local def = Config.Buildings[buildingType]
+	local sx, sz = Grid.footprint(buildingType, rot)
+	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz)
+	if not ok then
+		return false, reason
+	end
+	if not ColonyService:Spend(colony, def.Cost) then
+		return false, "Not enough resources (" .. Grid.costText(def.Cost) .. ")"
+	end
+
+	self:Create(colony, buildingType, cx, cz, rot)
+	ColonyService:Sync(colony)
+	return true, def.Display .. " built"
+end
+
+function BuildingService:TryDemolish(player: Player, id)
+	local ColonyService = services.ColonyService
+	local colony = ColonyService:Get(player)
+	if not colony or typeof(id) ~= "number" then
+		return false, "Nothing to demolish"
+	end
+	local building = colony.buildings[id]
+	if not building then
+		return false, "That isn't yours"
+	end
+	local def = Config.Buildings[building.type]
+	if def.Housing then
+		local count = 0
+		for _, b in colony.buildings do
+			if b.type == building.type then
+				count += 1
+			end
+		end
+		if count <= 1 then
+			return false, "You can't tear down your last " .. def.Display
+		end
+	end
+
+	colony.buildings[id] = nil
+	building.model:Destroy()
+	Grid.eachCell(building.cx, building.cz, building.sx, building.sz, function(x, z)
+		ColonyService:Unblock(colony, x, z)
+	end)
+	for name, amount in def.Cost do
+		ColonyService:Add(colony, name, math.floor(amount * Config.DemolishRefund))
+	end
+	services.VillagerService:OnBuildingRemoved(colony, id)
+	ColonyService:Sync(colony)
+	return true, def.Display .. " demolished"
+end
+
+function BuildingService:Start()
+	Remotes.PlaceBuilding.OnServerInvoke = function(player, buildingType, cx, cz, rot)
+		return self:TryPlace(player, buildingType, cx, cz, rot)
+	end
+	Remotes.DemolishBuilding.OnServerInvoke = function(player, id)
+		return self:TryDemolish(player, id)
+	end
+end
+
+return BuildingService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="10">
+          <Properties>
+            <string name="Name">ColonyService</string>
+            <string name="Source"><![CDATA[--[[
+	ColonyService
+	Owns each player's colony: resources, the grid of blocked cells, and the
+	main simulation loop. Other services read and change the colony table
+	through the helpers here, and ColonyService sends a snapshot to the
+	player's HUD every tick.
+
+	colony = {
+		player, plotIndex, origin, plot,
+		resources = { Wood = n, Stone = n, Food = n },
+		blocked = { ["x,z"] = "building" | "node" },
+		buildings = { [id] = building },
+		villagers = { [id] = villager },
+		nodes = { [key] = node },
+		happiness, day, dayTimer, starving, nextId, gridDirty,
+	}
+]]
+
+local Players = game:GetService("Players")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+
+local ColonyService = {}
+
+local services
+local colonies = {} -- [player] = colony
+
+function ColonyService:Init(allServices)
+	services = allServices
+end
+
+function ColonyService:Get(player: Player)
+	return colonies[player]
+end
+
+function ColonyService:All()
+	return colonies
+end
+
+function ColonyService:NewId(colony): number
+	colony.nextId += 1
+	return colony.nextId
+end
+
+-- Resources -----------------------------------------------------------------
+
+function ColonyService:Storage(colony): number
+	local total = Config.BaseStorage
+	for _, b in colony.buildings do
+		total += Config.Buildings[b.type].Storage or 0
+	end
+	return total
+end
+
+function ColonyService:Housing(colony): number
+	local total = 0
+	for _, b in colony.buildings do
+		total += Config.Buildings[b.type].Housing or 0
+	end
+	return total
+end
+
+function ColonyService:Add(colony, resource: string, amount: number)
+	local cap = self:Storage(colony)
+	colony.resources[resource] = math.clamp((colony.resources[resource] or 0) + amount, 0, cap)
+end
+
+function ColonyService:CanAfford(colony, cost): boolean
+	return Grid.canAfford(colony.resources, cost)
+end
+
+function ColonyService:Spend(colony, cost): boolean
+	if not self:CanAfford(colony, cost) then
+		return false
+	end
+	for name, amount in cost do
+		colony.resources[name] -= amount
+	end
+	return true
+end
+
+-- Grid ----------------------------------------------------------------------
+
+function ColonyService:Block(colony, x: number, z: number, what: string)
+	colony.blocked[Grid.key(x, z)] = what
+	colony.gridDirty = true
+end
+
+function ColonyService:Unblock(colony, x: number, z: number)
+	colony.blocked[Grid.key(x, z)] = nil
+	colony.gridDirty = true
+end
+
+-- Messages ------------------------------------------------------------------
+
+function ColonyService:Notify(colony, text: string, kind: string?)
+	Remotes.Notify:FireClient(colony.player, text, kind or "info")
+end
+
+-- Sync ----------------------------------------------------------------------
+
+function ColonyService:Sync(colony)
+	local adults, children, workers = 0, 0, 0
+	for _, v in colony.villagers do
+		if v.isChild then
+			children += 1
+		else
+			adults += 1
+			if v.job then
+				workers += 1
+			end
+		end
+	end
+
+	local resources = {}
+	for _, name in Config.ResourceOrder do
+		resources[name] = math.floor(colony.resources[name] or 0)
+	end
+
+	local state = {
+		resources = resources,
+		storage = self:Storage(colony),
+		population = adults + children,
+		adults = adults,
+		children = children,
+		workers = workers,
+		idle = adults - workers,
+		housing = self:Housing(colony),
+		happiness = math.floor(colony.happiness + 0.5),
+		starving = colony.starving,
+		day = colony.day,
+		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
+	}
+
+	if colony.gridDirty then
+		local blocked = {}
+		for key in colony.blocked do
+			table.insert(blocked, key)
+		end
+		state.blocked = blocked
+		colony.gridDirty = false
+	end
+
+	Remotes.ColonyState:FireClient(colony.player, state)
+end
+
+-- Lifecycle -----------------------------------------------------------------
+
+function ColonyService:Create(player: Player)
+	local index, origin, plot = services.PlotService:Assign(player)
+	if not index then
+		return
+	end
+
+	local colony = {
+		player = player,
+		plotIndex = index,
+		origin = origin,
+		plot = plot,
+		resources = table.clone(Config.StartingResources),
+		blocked = {},
+		buildings = {},
+		villagers = {},
+		nodes = {},
+		happiness = 60,
+		day = 1,
+		dayTimer = 0,
+		starving = false,
+		nextId = 0,
+		gridDirty = true,
+	}
+	colonies[player] = colony
+
+	services.BuildingService:PlaceStarting(colony)
+	services.ResourceNodeService:SpawnInitial(colony)
+	services.VillagerService:SpawnStarting(colony)
+
+	self:Notify(colony, "Your people have landed. Build a farm and a woodcutter to get started!", "good")
+	self:Sync(colony)
+end
+
+function ColonyService:Start()
+	Players.PlayerAdded:Connect(function(player)
+		self:Create(player)
+	end)
+	for _, player in Players:GetPlayers() do
+		if not colonies[player] then
+			self:Create(player)
+		end
+	end
+	Players.PlayerRemoving:Connect(function(player)
+		local colony = colonies[player]
+		if colony then
+			services.VillagerService:Cleanup(colony)
+		end
+		colonies[player] = nil
+	end)
+
+	-- Main simulation loop.
+	while true do
+		local dt = task.wait(Config.TICK)
+		for _, colony in colonies do
+			local ok, err = pcall(function()
+				services.VillagerService:Tick(colony, dt)
+				services.ResourceNodeService:Tick(colony, dt)
+				self:Sync(colony)
+			end)
+			if not ok then
+				warn("[ColonyService] tick error: " .. tostring(err))
+			end
+		end
+	end
+end
+
+return ColonyService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="11">
+          <Properties>
+            <string name="Name">PlotService</string>
+            <string name="Source"><![CDATA[--[[
+	PlotService
+	Gives each player their own square of land, builds the ground for it,
+	and moves their character there when they spawn.
+]]
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local PlotService = {}
+
+local plotsFolder: Folder
+local used = {} -- [index] = player
+
+local function makePart(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		p[k] = v
+	end
+	return p
+end
+
+function PlotService:Init()
+	plotsFolder = Instance.new("Folder")
+	plotsFolder.Name = "Plots"
+	plotsFolder.Parent = workspace
+
+	-- A big grassy landmass so the game works even in an empty place.
+	if not workspace:FindFirstChild("Baseplate") then
+		makePart({
+			Name = "Land",
+			Size = Vector3.new(2048, 4, 2048),
+			Position = Vector3.new(512, Config.GROUND_Y - 2.5, 0),
+			Color = Color3.fromRGB(86, 120, 70),
+			Material = Enum.Material.Grass,
+			Parent = workspace,
+		})
+	end
+
+	-- A pleasant late-afternoon light.
+	Lighting.ClockTime = 15.5
+	Lighting.Brightness = 2
+end
+
+function PlotService:Start()
+	Players.PlayerRemoving:Connect(function(player)
+		self:Release(player)
+	end)
+end
+
+-- Returns plotIndex, origin, plotModel. Called by ColonyService.
+function PlotService:Assign(player: Player)
+	local index
+	for i = 1, Config.MAX_PLOTS do
+		if not used[i] then
+			index = i
+			break
+		end
+	end
+	if not index then
+		warn("[PlotService] no free plots for " .. player.Name)
+		return nil
+	end
+	used[index] = player
+
+	local origin = Grid.plotOrigin(index)
+	local size = Grid.PLOT_SIZE
+
+	local plot = Instance.new("Model")
+	plot.Name = "Plot_" .. index
+	plot:SetAttribute("OwnerUserId", player.UserId)
+
+	makePart({
+		Name = "Ground",
+		Size = Vector3.new(size, 1, size),
+		Position = origin + Vector3.new(size / 2, -0.5, size / 2),
+		Color = Color3.fromRGB(104, 140, 78),
+		Material = Enum.Material.Grass,
+		Parent = plot,
+	})
+	-- A dirt apron in front of the plot where the player spawns.
+	makePart({
+		Name = "Apron",
+		Size = Vector3.new(size, 1, Config.CELL * 2),
+		Position = origin + Vector3.new(size / 2, -0.55, -Config.CELL),
+		Color = Color3.fromRGB(120, 96, 66),
+		Material = Enum.Material.Ground,
+		CanQuery = false,
+		Parent = plot,
+	})
+
+	-- Wooden marker posts at the corners so you can see your borders.
+	for _, x in { 0, size } do
+		for _, z in { 0, size } do
+			makePart({
+				Name = "BorderPost",
+				Size = Vector3.new(1, 6, 1),
+				Position = origin + Vector3.new(x, 3, z),
+				Color = Color3.fromRGB(78, 54, 36),
+				Material = Enum.Material.Wood,
+				Parent = plot,
+			})
+		end
+	end
+
+	local sign = Instance.new("BillboardGui")
+	sign.Size = UDim2.fromOffset(260, 40)
+	sign.StudsOffset = Vector3.new(0, 4, 0)
+	sign.MaxDistance = 400
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 240, 210)
+	label.TextStrokeTransparency = 0.4
+	label.Text = player.DisplayName .. "'s settlement"
+	label.Parent = sign
+	sign.Parent = plot:FindFirstChild("BorderPost")
+
+	for _, name in { "Buildings", "Nodes", "Villagers" } do
+		local f = Instance.new("Folder")
+		f.Name = name
+		f.Parent = plot
+	end
+
+	plot.Parent = plotsFolder
+
+	player:SetAttribute("PlotIndex", index)
+	player:SetAttribute("PlotOrigin", origin)
+	player.CameraMaxZoomDistance = 160
+
+	local function spawnAtPlot(character: Model)
+		task.defer(function()
+			character:PivotTo(CFrame.new(origin + Vector3.new(size / 2, 4, -Config.CELL)) * CFrame.Angles(0, math.pi, 0))
+		end)
+	end
+	player.CharacterAdded:Connect(spawnAtPlot)
+	if player.Character then
+		spawnAtPlot(player.Character)
+	end
+
+	return index, origin, plot
+end
+
+function PlotService:Release(player: Player)
+	for i, p in used do
+		if p == player then
+			used[i] = nil
+			local plot = plotsFolder:FindFirstChild("Plot_" .. i)
+			if plot then
+				plot:Destroy()
+			end
+		end
+	end
+end
+
+return PlotService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="12">
+          <Properties>
+            <string name="Name">ResourceNodeService</string>
+            <string name="Source"><![CDATA[--[[
+	ResourceNodeService
+	Scatters trees, rocks and berry bushes on each plot. The player walks up
+	and holds E (or taps the prompt) to gather them by hand, which also
+	clears land for building. Trees and bushes slowly regrow.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+
+local ResourceNodeService = {}
+
+local services
+local rng = Random.new()
+
+function ResourceNodeService:Init(allServices)
+	services = allServices
+end
+
+local function randomFreeCell(colony)
+	for _ = 1, 60 do
+		local x = rng:NextInteger(0, Config.PLOT_CELLS - 1)
+		local z = rng:NextInteger(0, Config.PLOT_CELLS - 1)
+		if not colony.blocked[Grid.key(x, z)] then
+			return x, z
+		end
+	end
+	return nil
+end
+
+local function countKind(colony, kind: string): number
+	local n = 0
+	for _, node in colony.nodes do
+		if node.kind == kind then
+			n += 1
+		end
+	end
+	return n
+end
+
+function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
+	local ColonyService = services.ColonyService
+	local def = Config.Nodes[kind]
+	local key = Grid.key(x, z)
+
+	local model, main = ModelFactory.node(kind, rng)
+	local jitter = Vector3.new(rng:NextNumber(-1.5, 1.5), 0, rng:NextNumber(-1.5, 1.5))
+	model:PivotTo(CFrame.new(Grid.rectCenter(colony.origin, x, z, 1, 1) + jitter) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+	model.Parent = colony.plot.Nodes
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = def.Action
+	prompt.ObjectText = kind == "Bush" and "Berry bush" or kind
+	prompt.HoldDuration = def.Hold
+	prompt.MaxActivationDistance = 10
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = main
+
+	local node = { kind = kind, x = x, z = z, model = model }
+	colony.nodes[key] = node
+	ColonyService:Block(colony, x, z, "node")
+
+	prompt.Triggered:Connect(function(player)
+		if player ~= colony.player or colony.nodes[key] ~= node then
+			return
+		end
+		colony.nodes[key] = nil
+		model:Destroy()
+		ColonyService:Unblock(colony, x, z)
+		ColonyService:Add(colony, def.Gives, def.Amount)
+		ColonyService:Notify(colony, "+" .. def.Amount .. " " .. def.Gives, "gain")
+		ColonyService:Sync(colony)
+	end)
+end
+
+function ResourceNodeService:SpawnInitial(colony)
+	for kind, def in Config.Nodes do
+		for _ = 1, def.Count do
+			local x, z = randomFreeCell(colony)
+			if x then
+				self:Spawn(colony, kind, x, z)
+			end
+		end
+	end
+end
+
+function ResourceNodeService:Tick(colony, dt: number)
+	colony.regrowTimer = (colony.regrowTimer or 0) + dt
+	if colony.regrowTimer < Config.NodeRegrowInterval then
+		return
+	end
+	colony.regrowTimer = 0
+	for kind, def in Config.Nodes do
+		if def.Regrow > 0 and countKind(colony, kind) < def.Regrow then
+			local x, z = randomFreeCell(colony)
+			if x then
+				self:Spawn(colony, kind, x, z)
+			end
+		end
+	end
+end
+
+return ResourceNodeService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="13">
+          <Properties>
+            <string name="Name">VillagerService</string>
+            <string name="Source"><![CDATA[--[[
+	VillagerService
+	Your people. Each villager is a record plus a small figure that walks
+	around the plot. Every tick this service:
+	  1. gives idle adults a job at a building with a free slot
+	  2. lets workers produce resources
+	  3. feeds everyone (and notices starvation)
+	  4. moves happiness toward a target based on food and shelter
+	  5. once per in-game day: children grow up, babies are born, immigrants
+	     arrive from neighbouring tribes, or unhappy villagers leave
+	  6. moves the little figures around
+]]
+
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+
+local VillagerService = {}
+
+local services
+local rng = Random.new()
+local V = Config.Villagers
+
+function VillagerService:Init(allServices)
+	services = allServices
+end
+
+-- Helpers -------------------------------------------------------------------
+
+local function counts(colony)
+	local adults, children = 0, 0
+	for _, v in colony.villagers do
+		if v.isChild then
+			children += 1
+		else
+			adults += 1
+		end
+	end
+	return adults, children
+end
+
+local function clampToPlot(colony, pos: Vector3): Vector3
+	local o = colony.origin
+	local size = Grid.PLOT_SIZE
+	return Vector3.new(math.clamp(pos.X, o.X + 2, o.X + size - 2), o.Y, math.clamp(pos.Z, o.Z + 2, o.Z + size - 2))
+end
+
+-- A random spot just outside the edge of a building.
+local function pointNear(colony, building): Vector3
+	local hx = building.sx * Config.CELL / 2 + 2
+	local hz = building.sz * Config.CELL / 2 + 2
+	local p
+	if rng:NextNumber() < 0.5 then
+		p = building.center + Vector3.new(rng:NextNumber(-hx, hx), 0, (rng:NextNumber() < 0.5 and -hz or hz))
+	else
+		p = building.center + Vector3.new((rng:NextNumber() < 0.5 and -hx or hx), 0, rng:NextNumber(-hz, hz))
+	end
+	return clampToPlot(colony, p)
+end
+
+local function randomHome(colony)
+	local homes = {}
+	for _, b in colony.buildings do
+		if Config.Buildings[b.type].Housing then
+			table.insert(homes, b)
+		end
+	end
+	if #homes == 0 then
+		return nil
+	end
+	return homes[rng:NextInteger(1, #homes)]
+end
+
+local function updateLabel(colony, v)
+	local label = v.model:FindFirstChild("NameTag", true)
+	label = label and label:FindFirstChild("Label")
+	if not label then
+		return
+	end
+	if v.isChild then
+		label.Text = v.name .. " (child)"
+	elseif v.job and colony.buildings[v.job] then
+		label.Text = v.name .. " (" .. Config.Buildings[colony.buildings[v.job].type].Display .. ")"
+	else
+		label.Text = v.name
+	end
+end
+
+local function makeModel(colony, v, groundPos: Vector3)
+	if v.model then
+		v.model:Destroy()
+	end
+	v.model = ModelFactory.villager(v.name, v.isChild, rng)
+	v.body = v.model.PrimaryPart
+	v.height = v.body.Size.Y / 2
+	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
+	v.model.Parent = colony.plot.Villagers
+	v.busyUntil = 0
+	updateLabel(colony, v)
+end
+
+-- Adding / removing ---------------------------------------------------------
+
+function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?)
+	local id = services.ColonyService:NewId(colony)
+	local v = {
+		id = id,
+		name = Config.Names[rng:NextInteger(1, #Config.Names)],
+		isChild = isChild,
+		age = 0,
+		job = nil,
+	}
+	if not groundPos then
+		local home = randomHome(colony)
+		groundPos = home and pointNear(colony, home) or colony.origin + Vector3.new(Grid.PLOT_SIZE / 2, 0, Grid.PLOT_SIZE / 2)
+	end
+	makeModel(colony, v, groundPos)
+	colony.villagers[id] = v
+	return v
+end
+
+function VillagerService:Remove(colony, v)
+	colony.villagers[v.id] = nil
+	if v.model then
+		v.model:Destroy()
+	end
+end
+
+function VillagerService:SpawnStarting(colony)
+	for _ = 1, V.Starting do
+		self:Add(colony, false)
+	end
+end
+
+function VillagerService:OnBuildingRemoved(colony, buildingId: number)
+	for _, v in colony.villagers do
+		if v.job == buildingId then
+			v.job = nil
+			updateLabel(colony, v)
+		end
+	end
+end
+
+function VillagerService:Cleanup(colony)
+	-- Models live inside the plot, which PlotService destroys.
+	colony.villagers = {}
+end
+
+-- Simulation steps ------------------------------------------------------------
+
+local function assignJobs(colony)
+	local filled = {}
+	for _, v in colony.villagers do
+		if v.job then
+			if colony.buildings[v.job] then
+				filled[v.job] = (filled[v.job] or 0) + 1
+			else
+				v.job = nil
+			end
+		end
+	end
+
+	local openings = {}
+	for id, b in colony.buildings do
+		local slots = Config.Buildings[b.type].Workers or 0
+		for _ = 1, slots - (filled[id] or 0) do
+			table.insert(openings, id)
+		end
+	end
+	table.sort(openings)
+
+	for _, v in colony.villagers do
+		if #openings == 0 then
+			break
+		end
+		if not v.isChild and not v.job then
+			v.job = table.remove(openings, 1)
+			v.busyUntil = 0 -- walk to work right away
+			updateLabel(colony, v)
+		end
+	end
+end
+
+local function produce(colony, dt: number)
+	local ColonyService = services.ColonyService
+	local efficiency = 0.5 + colony.happiness / 200
+	if colony.starving then
+		efficiency *= 0.5
+	end
+	local workers = {}
+	for _, v in colony.villagers do
+		if v.job then
+			workers[v.job] = (workers[v.job] or 0) + 1
+		end
+	end
+	for id, b in colony.buildings do
+		local produces = Config.Buildings[b.type].Produces
+		local n = workers[id]
+		if produces and n then
+			for resource, rate in produces do
+				ColonyService:Add(colony, resource, rate * n * dt * efficiency)
+			end
+		end
+	end
+end
+
+local function eat(colony, dt: number)
+	local adults, children = counts(colony)
+	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt
+	local food = colony.resources.Food or 0
+	local wasStarving = colony.starving
+	if food >= need then
+		colony.resources.Food = food - need
+		colony.starving = false
+	else
+		colony.resources.Food = 0
+		colony.starving = need > 0
+	end
+	if colony.starving and not wasStarving then
+		services.ColonyService:Notify(colony, "Your people are starving! Build farms or forage berries.", "bad")
+	end
+end
+
+local function updateHappiness(colony, dt: number)
+	local adults, children = counts(colony)
+	local pop = adults + children
+	local housing = services.ColonyService:Housing(colony)
+	local dailyFood = adults * V.FoodPerAdultPerSecond * Config.DAY_LENGTH
+
+	local target = 55
+	if colony.starving then
+		target -= 45
+	elseif (colony.resources.Food or 0) >= dailyFood * 2 then
+		target += 15 -- two days of food in store
+	end
+	local homeless = math.max(0, pop - housing)
+	target -= homeless * 8
+	target = math.clamp(target, 0, 100)
+
+	colony.happiness += (target - colony.happiness) * math.min(1, 0.05 * dt)
+	colony.homeless = homeless
+end
+
+local function newDay(self, colony)
+	local ColonyService = services.ColonyService
+	colony.day += 1
+
+	-- Children grow up.
+	for _, v in colony.villagers do
+		v.age += 1
+		if v.isChild and v.age >= V.DaysToAdulthood then
+			v.isChild = false
+			makeModel(colony, v, v.body.Position - Vector3.new(0, v.height, 0))
+			ColonyService:Notify(colony, v.name .. " has come of age and can now work.", "good")
+		end
+	end
+
+	local adults, children = counts(colony)
+	local free = ColonyService:Housing(colony) - adults - children
+	local h = colony.happiness
+
+	-- Unhappy people leave first.
+	if h < V.LeaveBelowHappiness and adults > 1 then
+		for _, v in colony.villagers do
+			if not v.isChild then
+				ColonyService:Notify(colony, v.name .. " was unhappy and left the settlement.", "bad")
+				self:Remove(colony, v)
+				break
+			end
+		end
+		return
+	end
+
+	-- Births.
+	if adults >= 2 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay then
+		local v = self:Add(colony, true)
+		free -= 1
+		ColonyService:Notify(colony, "A child named " .. v.name .. " was born!", "good")
+	end
+
+	-- Immigration from neighbouring tribes.
+	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay then
+		local n = rng:NextInteger(1, math.min(V.ImmigrationMaxGroup, free))
+		local tribe = Config.Tribes[rng:NextInteger(1, #Config.Tribes)]
+		local arrival = colony.origin + Vector3.new(rng:NextNumber(10, Grid.PLOT_SIZE - 10), 0, -4)
+		for _ = 1, n do
+			self:Add(colony, false, arrival + Vector3.new(rng:NextNumber(-3, 3), 0, 0))
+		end
+		ColonyService:Notify(colony, n .. (n == 1 and " settler" or " settlers") .. " from the " .. tribe .. " joined you.", "good")
+	elseif free <= 0 and h >= V.ImmigrationMinHappiness then
+		ColonyService:Notify(colony, "Travellers passed by, but you had no free housing. Build a longhouse!", "info")
+	end
+end
+
+local function walk(colony, v, now: number)
+	if now < v.busyUntil or not v.body then
+		return
+	end
+	local target
+	local job = v.job and colony.buildings[v.job]
+	if job and rng:NextNumber() < 0.85 then
+		target = pointNear(colony, job)
+	else
+		local home = randomHome(colony)
+		if home and rng:NextNumber() < 0.7 then
+			target = pointNear(colony, home)
+		else
+			target = clampToPlot(colony, v.body.Position + Vector3.new(rng:NextNumber(-20, 20), 0, rng:NextNumber(-20, 20)))
+		end
+	end
+
+	local from = v.body.Position
+	local to = Vector3.new(target.X, colony.origin.Y + v.height, target.Z)
+	local flat = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local dist = flat.Magnitude
+	if dist < 1 then
+		v.busyUntil = now + 2
+		return
+	end
+	local speed = V.WalkSpeed * (v.isChild and 1.2 or 1)
+	local duration = dist / speed
+	v.body.CFrame = CFrame.lookAt(from, from + flat)
+	TweenService:Create(v.body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) }):Play()
+	-- workers linger at their job; others idle a while
+	v.busyUntil = now + duration + rng:NextNumber(job and 3 or 2, job and 8 or 6)
+end
+
+function VillagerService:Tick(colony, dt: number)
+	assignJobs(colony)
+	produce(colony, dt)
+	eat(colony, dt)
+	updateHappiness(colony, dt)
+
+	colony.dayTimer += dt
+	if colony.dayTimer >= Config.DAY_LENGTH then
+		colony.dayTimer -= Config.DAY_LENGTH
+		newDay(self, colony)
+	end
+
+	local now = os.clock()
+	for _, v in colony.villagers do
+		walk(colony, v, now)
+	end
+end
+
+return VillagerService
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="14">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="15">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="LocalScript" referent="16">
+        <Properties>
+          <string name="Name">Client</string>
+          <string name="Source"><![CDATA[--[[
+	Client entry point.
+	Loads every ModuleScript in the Controllers folder, then calls :Init()
+	and :Start() on each, the same pattern as the server.
+]]
+
+local controllersFolder = script:WaitForChild("Controllers")
+
+local controllers = {}
+for _, module in controllersFolder:GetChildren() do
+	if module:IsA("ModuleScript") then
+		controllers[module.Name] = require(module)
+	end
+end
+
+for _, controller in controllers do
+	if controller.Init then
+		controller:Init(controllers)
+	end
+end
+
+for _, controller in controllers do
+	if controller.Start then
+		task.spawn(function()
+			controller:Start()
+		end)
+	end
+end
+]]></string>
+        </Properties>
+        <Item class="Folder" referent="17">
+          <Properties>
+            <string name="Name">Controllers</string>
+          </Properties>
+          <Item class="ModuleScript" referent="18">
+            <Properties>
+              <string name="Name">BuildController</string>
+              <string name="Source"><![CDATA[--[[
+	BuildController
+	Placement mode: shows a see-through preview of the chosen building that
+	snaps to your plot's grid. Green = you can build there, red = you can't.
+	Click to build, R to rotate, Q to cancel.
+
+	Demolish mode: hover one of your buildings (it turns red) and click.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+local ModelFactory = require(Shared.ModelFactory)
+
+local BuildController = {}
+
+local modeChanged = Instance.new("BindableEvent")
+BuildController.ModeChanged = modeChanged.Event
+
+local player = Players.LocalPlayer
+local controllers
+
+local mode = nil -- nil | { kind = "place", type = string } | { kind = "demolish" }
+local rot = 0
+local ghost: Model? = nil
+local highlight: Highlight
+local current = nil -- placement candidate { cx, cz, ok } or demolish target model
+local busy = false
+
+local GOOD = Color3.fromRGB(90, 220, 110)
+local BAD = Color3.fromRGB(235, 80, 70)
+
+local function plotGround(): BasePart?
+	local index = player:GetAttribute("PlotIndex")
+	local plots = workspace:FindFirstChild("Plots")
+	local plot = index and plots and plots:FindFirstChild("Plot_" .. index)
+	return plot and plot:FindFirstChild("Ground")
+end
+
+local function mouseRay(): (Vector3, Vector3)
+	local camera = workspace.CurrentCamera
+	local pos = UserInputService:GetMouseLocation()
+	local ray = camera:ViewportPointToRay(pos.X, pos.Y)
+	return ray.Origin, ray.Direction * 1000
+end
+
+local function clearGhost()
+	if ghost then
+		ghost:Destroy()
+		ghost = nil
+	end
+	highlight.Adornee = nil
+	current = nil
+end
+
+local function setMode(newMode)
+	clearGhost()
+	mode = newMode
+	if mode and mode.kind == "place" then
+		ghost = ModelFactory.building(mode.type)
+		ModelFactory.makeGhost(ghost)
+		ghost.Parent = workspace
+		highlight.Adornee = ghost
+	end
+	modeChanged:Fire(mode)
+end
+
+function BuildController:SelectBuild(buildingType: string)
+	if mode and mode.type == buildingType then
+		setMode(nil) -- clicking the same button again cancels
+	else
+		setMode({ kind = "place", type = buildingType })
+	end
+end
+
+function BuildController:SelectDemolish()
+	if mode and mode.kind == "demolish" then
+		setMode(nil)
+	else
+		setMode({ kind = "demolish" })
+	end
+end
+
+function BuildController:Cancel()
+	setMode(nil)
+end
+
+local function updatePlacement()
+	local ground = plotGround()
+	local origin = player:GetAttribute("PlotOrigin")
+	if not ground or not origin or not ghost then
+		return
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { ground }
+	local from, dir = mouseRay()
+	local hit = workspace:Raycast(from, dir, params)
+	if not hit then
+		ghost.Parent = nil
+		current = nil
+		return
+	end
+	ghost.Parent = workspace
+
+	local sx, sz = Grid.footprint(mode.type, rot)
+	local cx, cz = Grid.worldToCell(origin, hit.Position, sx, sz)
+	-- keep the preview inside the plot so it doesn't jump off the edge
+	cx = math.clamp(cx, 0, Config.PLOT_CELLS - sx)
+	cz = math.clamp(cz, 0, Config.PLOT_CELLS - sz)
+
+	local state = controllers.StateController.State
+	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz)
+	local affordable = state ~= nil and Grid.canAfford(state.resources, Config.Buildings[mode.type].Cost)
+	local ok = free and affordable
+
+	ghost:PivotTo(Grid.buildingCFrame(origin, cx, cz, sx, sz, rot))
+	highlight.FillColor = ok and GOOD or BAD
+	highlight.OutlineColor = ok and GOOD or BAD
+	current = { cx = cx, cz = cz, ok = ok, affordable = affordable }
+end
+
+local function findOwnBuilding(inst: Instance?): Model?
+	while inst and inst ~= workspace do
+		if inst:IsA("Model") and inst:GetAttribute("BuildingId") then
+			if inst:GetAttribute("OwnerUserId") == player.UserId then
+				return inst
+			end
+			return nil
+		end
+		inst = inst.Parent
+	end
+	return nil
+end
+
+local function updateDemolish()
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { player.Character }
+	local from, dir = mouseRay()
+	local hit = workspace:Raycast(from, dir, params)
+	local target = hit and findOwnBuilding(hit.Instance)
+	current = target
+	highlight.Adornee = target
+	highlight.FillColor = BAD
+	highlight.OutlineColor = BAD
+end
+
+local function confirm()
+	if busy or not mode then
+		return
+	end
+	local StateController = controllers.StateController
+	if mode.kind == "place" then
+		if not current then
+			return
+		end
+		if not current.affordable then
+			StateController:LocalNotify("Not enough resources for " .. Config.Buildings[mode.type].Display, "bad")
+			return
+		end
+		if not current.ok then
+			StateController:LocalNotify("Can't build there. Clear trees and rocks first.", "bad")
+			return
+		end
+		busy = true
+		local ok, msg = Remotes.PlaceBuilding:InvokeServer(mode.type, current.cx, current.cz, rot)
+		busy = false
+		StateController:LocalNotify(msg, ok and "good" or "bad")
+		-- stay in placement mode so you can place several in a row
+	elseif mode.kind == "demolish" then
+		if not current then
+			return
+		end
+		busy = true
+		local ok, msg = Remotes.DemolishBuilding:InvokeServer(current:GetAttribute("BuildingId"))
+		busy = false
+		StateController:LocalNotify(msg, ok and "good" or "bad")
+	end
+end
+
+function BuildController:Init(allControllers)
+	controllers = allControllers
+end
+
+function BuildController:Start()
+	highlight = Instance.new("Highlight")
+	highlight.Name = "BuildHighlight"
+	highlight.FillTransparency = 0.55
+	highlight.OutlineTransparency = 0
+	highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+	highlight.Enabled = false
+	-- Parent it to a plain Folder: a Highlight with no Adornee lights up its
+	-- parent, and we never want that to be the whole workspace.
+	local fx = Instance.new("Folder")
+	fx.Name = "ClientBuildFX"
+	fx.Parent = workspace
+	highlight.Parent = fx
+	highlight:GetPropertyChangedSignal("Adornee"):Connect(function()
+		highlight.Enabled = highlight.Adornee ~= nil
+	end)
+
+	RunService.RenderStepped:Connect(function()
+		if not mode then
+			return
+		end
+		if mode.kind == "place" then
+			updatePlacement()
+		else
+			updateDemolish()
+		end
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			confirm()
+		elseif input.KeyCode == Enum.KeyCode.R and mode and mode.kind == "place" then
+			rot = (rot + 1) % 4
+		elseif input.KeyCode == Enum.KeyCode.Q and mode then
+			setMode(nil)
+		end
+	end)
+end
+
+return BuildController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="19">
+            <Properties>
+              <string name="Name">HudController</string>
+              <string name="Source"><![CDATA[--[[
+	HudController
+	Draws the on-screen interface entirely from code:
+	  - resource bar (top left)
+	  - colony panel: population, jobs, happiness, day (top right)
+	  - build bar with a button per building, plus Demolish (bottom)
+	  - message feed (top centre)
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local HudController = {}
+
+local controllers
+local player = Players.LocalPlayer
+
+local THEME = {
+	Panel = Color3.fromRGB(34, 28, 22),
+	PanelLight = Color3.fromRGB(58, 47, 36),
+	Accent = Color3.fromRGB(214, 170, 92),
+	Text = Color3.fromRGB(245, 235, 215),
+	Muted = Color3.fromRGB(180, 165, 140),
+	Good = Color3.fromRGB(130, 200, 110),
+	Bad = Color3.fromRGB(230, 100, 90),
+}
+
+local RESOURCE_COLORS = {
+	Wood = Color3.fromRGB(150, 100, 60),
+	Stone = Color3.fromRGB(150, 150, 158),
+	Food = Color3.fromRGB(220, 190, 90),
+}
+
+local function new(className: string, props, children)
+	local inst = Instance.new(className)
+	for k, v in props do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	for _, child in children or {} do
+		child.Parent = inst
+	end
+	if props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+local function corner(r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r or 8) })
+end
+
+local function padding(px)
+	return new("UIPadding", {
+		PaddingLeft = UDim.new(0, px),
+		PaddingRight = UDim.new(0, px),
+		PaddingTop = UDim.new(0, px),
+		PaddingBottom = UDim.new(0, px),
+	})
+end
+
+local function label(props)
+	local defaults = {
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		TextColor3 = THEME.Text,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}
+	for k, v in props do
+		defaults[k] = v
+	end
+	return new("TextLabel", defaults)
+end
+
+local function moodWord(h: number): string
+	if h >= 75 then
+		return "Joyful"
+	elseif h >= 55 then
+		return "Content"
+	elseif h >= 35 then
+		return "Uneasy"
+	end
+	return "Miserable"
+end
+
+function HudController:Init(allControllers)
+	controllers = allControllers
+end
+
+function HudController:Start()
+	local gui = new("ScreenGui", {
+		Name = "VikingHud",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = player:WaitForChild("PlayerGui"),
+	})
+
+	---------------------------------------------------------------- resources
+	local resBar = new("Frame", {
+		Name = "Resources",
+		Position = UDim2.fromOffset(12, 12),
+		Size = UDim2.fromOffset(420, 44),
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.1,
+		Parent = gui,
+	}, {
+		corner(10),
+		padding(8),
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 14), VerticalAlignment = Enum.VerticalAlignment.Center }),
+	})
+
+	local resLabels = {}
+	for i, name in Config.ResourceOrder do
+		local item = new("Frame", { Size = UDim2.fromOffset(122, 28), BackgroundTransparency = 1, LayoutOrder = i, Parent = resBar })
+		new("Frame", {
+			Size = UDim2.fromOffset(16, 16),
+			Position = UDim2.new(0, 0, 0.5, -8),
+			BackgroundColor3 = RESOURCE_COLORS[name],
+			Parent = item,
+		}, { corner(4) })
+		resLabels[name] = label({
+			Size = UDim2.new(1, -22, 1, 0),
+			Position = UDim2.fromOffset(22, 0),
+			Text = name .. " 0",
+			Parent = item,
+		})
+	end
+
+	---------------------------------------------------------------- colony panel
+	local panel = new("Frame", {
+		Name = "Colony",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 12),
+		Size = UDim2.fromOffset(230, 150),
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.1,
+		Parent = gui,
+	}, {
+		corner(10),
+		padding(10),
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local dayLabel = label({ Size = UDim2.new(1, 0, 0, 20), Font = Enum.Font.GothamBold, TextColor3 = THEME.Accent, LayoutOrder = 1, Parent = panel })
+	local dayBar = new("Frame", { Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = THEME.PanelLight, LayoutOrder = 2, Parent = panel }, { corner(2) })
+	local dayFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = THEME.Accent, Parent = dayBar }, { corner(2) })
+	local popLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 3, Parent = panel })
+	local jobLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 4, TextColor3 = THEME.Muted, TextSize = 14, Parent = panel })
+	local moodLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 5, Parent = panel })
+	local warnLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 6, TextColor3 = THEME.Bad, TextSize = 14, Parent = panel })
+
+	---------------------------------------------------------------- build bar
+	local buildBar = new("Frame", {
+		Name = "BuildBar",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -12),
+		Size = UDim2.fromOffset(0, 70),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.1,
+		Parent = gui,
+	}, {
+		corner(10),
+		padding(8),
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+
+	local hint = label({
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -90),
+		Size = UDim2.fromOffset(640, 22),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextSize = 15,
+		TextStrokeTransparency = 0.4,
+		Text = "Pick a building below. Walk up to trees, rocks and bushes and hold E to gather.",
+		Parent = gui,
+	})
+
+	local buttons = {}
+	local function makeButton(key: string, title: string, sub: string, order: number)
+		local b = new("TextButton", {
+			Name = key,
+			Size = UDim2.fromOffset(112, 54),
+			BackgroundColor3 = THEME.PanelLight,
+			AutoButtonColor = true,
+			Text = "",
+			LayoutOrder = order,
+			Parent = buildBar,
+		}, { corner(8) })
+		new("UIStroke", { Name = "Stroke", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = THEME.Accent, Thickness = 2, Enabled = false, Parent = b })
+		label({ Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 6), Font = Enum.Font.GothamBold, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Center, Text = title, Parent = b })
+		local costLabel = label({
+			Name = "Cost",
+			Size = UDim2.new(1, -6, 0, 18),
+			Position = UDim2.fromOffset(3, 30),
+			TextSize = 12,
+			TextColor3 = THEME.Muted,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextScaled = false,
+			Text = sub,
+			Parent = b,
+		})
+		buttons[key] = { button = b, cost = costLabel }
+		return b
+	end
+
+	local BuildController = controllers.BuildController
+	for i, buildingType in Config.BuildOrder do
+		local def = Config.Buildings[buildingType]
+		local b = makeButton(buildingType, def.Display, Grid.costText(def.Cost), i)
+		b.Activated:Connect(function()
+			BuildController:SelectBuild(buildingType)
+		end)
+		b.MouseEnter:Connect(function()
+			hint.Text = def.Display .. ": " .. def.Description
+		end)
+	end
+	local demolish = makeButton("Demolish", "Demolish", "refund 50%", #Config.BuildOrder + 1)
+	demolish.BackgroundColor3 = Color3.fromRGB(90, 40, 34)
+	demolish.Activated:Connect(function()
+		BuildController:SelectDemolish()
+	end)
+
+	BuildController.ModeChanged:Connect(function(mode)
+		for key, entry in buttons do
+			entry.button.Stroke.Enabled = mode ~= nil and (mode.type == key or (mode.kind == "demolish" and key == "Demolish"))
+		end
+		if mode == nil then
+			hint.Text = "Pick a building below. Walk up to trees, rocks and bushes and hold E to gather."
+		elseif mode.kind == "place" then
+			hint.Text = "Click to place " .. Config.Buildings[mode.type].Display .. ".  R = rotate,  Q = cancel"
+		else
+			hint.Text = "Click one of your buildings to tear it down.  Q = cancel"
+		end
+	end)
+
+	---------------------------------------------------------------- message feed
+	local feed = new("Frame", {
+		Name = "Feed",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 12),
+		Size = UDim2.fromOffset(460, 200),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 4), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local feedOrder = 0
+	local kindColor = { good = THEME.Good, bad = THEME.Bad, gain = THEME.Accent, info = THEME.Text }
+
+	controllers.StateController.Notified:Connect(function(text, kind)
+		feedOrder += 1
+		local item = new("TextLabel", {
+			Size = UDim2.fromOffset(0, 28),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = THEME.Panel,
+			BackgroundTransparency = 0.15,
+			Font = Enum.Font.GothamMedium,
+			TextSize = 15,
+			TextColor3 = kindColor[kind] or THEME.Text,
+			Text = text,
+			LayoutOrder = feedOrder,
+			Parent = feed,
+		}, { corner(6), new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }) })
+		-- keep at most 5 messages
+		local items = {}
+		for _, c in feed:GetChildren() do
+			if c:IsA("TextLabel") then
+				table.insert(items, c)
+			end
+		end
+		table.sort(items, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		for i = 1, #items - 5 do
+			items[i]:Destroy()
+		end
+		task.delay(kind == "gain" and 1.5 or 5, function()
+			if item.Parent then
+				local t = TweenService:Create(item, TweenInfo.new(0.5), { TextTransparency = 1, BackgroundTransparency = 1 })
+				t:Play()
+				t.Completed:Wait()
+				item:Destroy()
+			end
+		end)
+	end)
+
+	---------------------------------------------------------------- updates
+	controllers.StateController.Changed:Connect(function(state)
+		for _, name in Config.ResourceOrder do
+			resLabels[name].Text = string.format("%s %d/%d", name, state.resources[name] or 0, state.storage)
+		end
+		dayLabel.Text = "Day " .. state.day
+		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
+		popLabel.Text = string.format("Population %d / %d homes", state.population, state.housing)
+		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)
+		moodLabel.Text = string.format("Happiness %d (%s)", state.happiness, moodWord(state.happiness))
+		moodLabel.TextColor3 = state.happiness >= 55 and THEME.Good or (state.happiness >= 35 and THEME.Text or THEME.Bad)
+		if state.starving then
+			warnLabel.Text = "Starving! Get food fast."
+		elseif state.population > state.housing then
+			warnLabel.Text = "Not enough housing!"
+		elseif state.idle > 0 then
+			warnLabel.Text = "Idle villagers: build workplaces."
+			warnLabel.TextColor3 = THEME.Muted
+		else
+			warnLabel.Text = ""
+		end
+		if state.starving or state.population > state.housing then
+			warnLabel.TextColor3 = THEME.Bad
+		end
+
+		for _, buildingType in Config.BuildOrder do
+			local affordable = Grid.canAfford(state.resources, Config.Buildings[buildingType].Cost)
+			buttons[buildingType].cost.TextColor3 = affordable and THEME.Muted or THEME.Bad
+		end
+	end)
+end
+
+return HudController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="20">
+            <Properties>
+              <string name="Name">StateController</string>
+              <string name="Source"><![CDATA[--[[
+	StateController
+	Keeps the latest colony snapshot from the server and tells other
+	controllers when it changes.
+
+	StateController.State    -- latest snapshot (nil until the first one)
+	StateController.Blocked  -- set of blocked grid cells { ["x,z"] = true }
+	StateController.Changed  -- Event, fires with the snapshot
+	StateController.Notified -- Event, fires with (text, kind)
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Remotes = require(Shared.Remotes)
+
+local StateController = {}
+
+local changed = Instance.new("BindableEvent")
+local notified = Instance.new("BindableEvent")
+StateController.Changed = changed.Event
+StateController.Notified = notified.Event
+StateController.State = nil
+StateController.Blocked = {}
+
+function StateController:Start()
+	Remotes.ColonyState.OnClientEvent:Connect(function(state)
+		if state.blocked then
+			local set = {}
+			for _, key in state.blocked do
+				set[key] = true
+			end
+			self.Blocked = set
+		end
+		self.State = state
+		changed:Fire(state)
+	end)
+	Remotes.Notify.OnClientEvent:Connect(function(text, kind)
+		notified:Fire(text, kind)
+	end)
+end
+
+-- Lets other client code show a message in the same feed.
+function StateController:LocalNotify(text: string, kind: string?)
+	notified:Fire(text, kind or "info")
+end
+
+return StateController
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>

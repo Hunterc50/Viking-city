@@ -1,6 +1,8 @@
 # Roblox place files (the source of truth is src/, not the place file)
 *.rbxl
 *.rbxlx
+# ...except the ready-to-open build, which is committed on purpose
+!/VikingCity.rbxlx
 *.rbxl.lock
 *.rbxlx.lock
 sourcemap.json
