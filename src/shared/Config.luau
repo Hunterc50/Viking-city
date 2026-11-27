@@ -164,7 +164,7 @@ Config.Buildings = {
 	},
 	Brewhouse = {
 		Display = "Brewhouse",
-		Description = "A brewer turns honey and grain into mead. +6 happiness, and the mead you sell brings in a little silver.",
+		Description = "A brewer turns honey and grain into mead. +6 happiness, a little silver from mead sales, and your feasts last twice as long.",
 		Size = { 2, 2 },
 		Cost = { Wood = 40, Stone = 10, Food = 20 },
 		Workers = 1,

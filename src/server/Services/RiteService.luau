@@ -101,11 +101,14 @@ function RiteService:Feast(colony): (boolean, string)
 	if not services.ColonyService:Spend(colony, F.Cost) then
 		return false, "A feast needs " .. Grid.costText(F.Cost) .. "."
 	end
-	r.feastUntil = colony.day + F.Days
-	r.feastReady = colony.day + F.CooldownDays
+	-- with your own Brewhouse the mead lasts, and so does the feast
+	local brewed = services.ColonyService:HasBuilding(colony, "Brewhouse")
+	local days = F.Days + (brewed and 1 or 0)
+	r.feastUntil = colony.day + days
+	r.feastReady = math.max(colony.day + F.CooldownDays, r.feastUntil)
 	bonfire(colony, hall, 60)
 	Sounds.play("QuestDone", hall.center)
-	services.ColonyService:Notify(colony, "Skål! Mead flows and the hall roars with song. +" .. F.Happiness .. " happiness for a day.", "quest")
+	services.ColonyService:Notify(colony, "Skål! Mead flows and the hall roars with song. +" .. F.Happiness .. " happiness for " .. (days == 1 and "a day." or days .. " days (your own mead)."), "quest")
 	services.ColonyService:Sync(colony)
 	return true, "Feast held"
 end
