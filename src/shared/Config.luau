@@ -240,6 +240,21 @@ Config.Combat = {
 	StrikeCooldown = 0.6,
 }
 
+-- Trading at the stall on your beach. Each offer swaps Give for Get.
+-- Prices shift with the seasons (Season = multiplier on what you GIVE).
+Config.Trade = {
+	Offers = {
+		{ Give = { Wood = 40 }, Get = { Silver = 4 } },
+		{ Give = { Stone = 30 }, Get = { Silver = 4 } },
+		{ Give = { Food = 50 }, Get = { Silver = 5 }, Season = { Autumn = 0.8, Winter = 1.6 } },
+		{ Give = { Hides = 4 }, Get = { Silver = 6 } },
+		{ Give = { Silver = 5 }, Get = { Food = 40 }, Season = { Winter = 1.6, Summer = 0.8 } },
+		{ Give = { Silver = 5 }, Get = { Wood = 50 } },
+		{ Give = { Silver = 6 }, Get = { Stone = 40 } },
+		{ Give = { Silver = 10 }, Get = { Lore = 8 } },
+	},
+}
+
 -- The saga: a chain of goals that teaches the game, shown top left.
 -- Kind: "stat" (something you did, counted), "building", "population",
 -- "tech" (number researched). Rewards are added when a goal is done.
@@ -249,6 +264,7 @@ Config.Quests = {
 	{ Title = "A woodcutter's hut", Text = "Build a Woodcutter. Idle villagers will take the jobs.", Kind = "building", Building = "Woodcutter", Goal = 1, Reward = { Wood = 20 } },
 	{ Title = "Break some stone", Text = "Press 2 for the Pickaxe and hold E on a rock.", Kind = "stat", Stat = "mine", Goal = 2, Reward = { Stone = 15 } },
 	{ Title = "The hunt", Text = "Press 3 for the Bow and shoot a deer in the meadow behind your plot.", Kind = "stat", Stat = "deer", Goal = 1, Reward = { Food = 20 } },
+	{ Title = "Strike a bargain", Text = "Visit Ottar's stall on your beach (hold E) and make a trade.", Kind = "stat", Stat = "trade", Goal = 1, Reward = { Silver = 5 } },
 	{ Title = "Room to grow", Text = "Build an A-frame Cottage (Housing tab). Free beds bring babies and newcomers.", Kind = "building", Building = "Cottage", Goal = 1, Reward = { Wood = 20, Stone = 10 } },
 	{ Title = "Keepers of lore", Text = "Build a Lore Hall. Its skalds earn Lore for research.", Kind = "building", Building = "LoreHall", Goal = 1, Reward = { Lore = 10 } },
 	{ Title = "New knowledge", Text = "Press T and research anything.", Kind = "tech", Goal = 1, Reward = { Wood = 30 } },
