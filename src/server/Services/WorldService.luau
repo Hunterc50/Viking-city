@@ -921,8 +921,15 @@ local function clearPlaceholders()
 	end
 end
 
+-- Tells the minimap where the rivers run (it draws them with riverCentre's maths).
+local function shareRivers()
+	workspace:SetAttribute("RiverBases", riversOn and Vector2.new(RIVERS[1], RIVERS[2]) or nil)
+	workspace:SetAttribute("RiverZ", Vector2.new(SHORE_Z - 30, RIVER_TOP_Z))
+end
+
 function WorldService:Init()
 	clearPlaceholders()
+	shareRivers()
 	if workspace:GetAttribute("WorldBaked") then
 		if hasGround() then
 			-- The valley was saved into the place (see Bake), so whatever you
@@ -936,6 +943,7 @@ function WorldService:Init()
 	end
 	setupLighting()
 	buildTerrainSafely()
+	shareRivers()
 	scatterScenery()
 	buildLandings()
 	print("[WorldService] valley built")

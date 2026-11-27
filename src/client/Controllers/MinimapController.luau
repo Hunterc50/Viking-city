@@ -95,6 +95,35 @@ function MinimapController:Start()
 	-- the fjord: a wide band of water beyond the beach
 	local water = addFixed(Vector3.new(800, 0, -40 - 400), Vector2.new(4000, 800), Color3.fromRGB(56, 88, 112), nil, false, 1)
 	water.BackgroundTransparency = 0.1
+	-- the two rivers, drawn as a chain of short pieces (same curve as the server's)
+	local riverFrames = {}
+	local function drawRivers()
+		for _, f in riverFrames do
+			f:Destroy()
+		end
+		table.clear(riverFrames)
+		for i = #fixed, 1, -1 do
+			if fixed[i].river then
+				table.remove(fixed, i)
+			end
+		end
+		local bases = workspace:GetAttribute("RiverBases")
+		local span = workspace:GetAttribute("RiverZ")
+		if typeof(bases) ~= "Vector2" or typeof(span) ~= "Vector2" then
+			return
+		end
+		for _, base in { bases.X, bases.Y } do
+			for z = span.X, span.Y, 16 do
+				local x = base + math.sin(z / 110 + base) * 30 + math.sin(z / 47) * 12
+				local f = addFixed(Vector3.new(x, 0, z), Vector2.new(16, 18), Color3.fromRGB(56, 88, 112), nil, false, 1)
+				fixed[#fixed].river = true
+				table.insert(riverFrames, f)
+			end
+		end
+	end
+	drawRivers()
+	workspace:GetAttributeChangedSignal("RiverBases"):Connect(drawRivers)
+
 	local plotFrames = {}
 	for i = 1, Config.MAX_PLOTS do
 		local o = Grid.plotOrigin(i)
