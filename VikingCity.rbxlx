@@ -3774,14 +3774,47 @@ Sounds.Slots = {
 	WarHorn = { Id = "", Volume = 1 }, -- a long horn blast when a raid begins
 }
 
+-- A slot left empty can still be filled from Studio: upload the game's own
+-- sound (music/sfx/<Name>.ogg), insert it, and leave the Sound named after
+-- the slot (WarHorn, Wind, Waves, Fire) in Workspace. It is found here.
+local found = {} -- [name] = id or false
+local lastLook = {}
+local function idFor(name: string): string?
+	local slot = Sounds.Slots[name]
+	if not slot then
+		return nil
+	end
+	if slot.Id ~= "" then
+		return slot.Id
+	end
+	if found[name] then
+		return found[name]
+	end
+	if lastLook[name] and os.clock() - lastLook[name] < 30 then
+		return nil
+	end
+	lastLook[name] = os.clock()
+	for _, root in { workspace, game:GetService("ReplicatedStorage") } do
+		for _, d in root:GetDescendants() do
+			if d:IsA("Sound") and d.Name == name and d.SoundId ~= "" then
+				found[name] = d.SoundId
+				return d.SoundId
+			end
+		end
+	end
+	return nil
+end
+Sounds.idFor = idFor
+
 -- Plays slot `name` once, at a part or a position (or everywhere if nil).
 function Sounds.play(name: string, where: (Instance | Vector3)?)
 	local slot = Sounds.Slots[name]
-	if not slot or slot.Id == "" then
+	local id = idFor(name)
+	if not slot or not id then
 		return
 	end
 	local sound = Instance.new("Sound")
-	sound.SoundId = slot.Id
+	sound.SoundId = id
 	sound.Volume = slot.Volume or 0.5
 	sound.PlaybackSpeed = slot.Pitch or 1
 	sound.RollOffMaxDistance = 160
@@ -3808,12 +3841,13 @@ end
 -- A looping sound inside `parent` for slot `name`, or nil if the slot is empty.
 function Sounds.loop(name: string, parent: Instance): Sound?
 	local slot = Sounds.Slots[name]
-	if not slot or slot.Id == "" then
+	local id = idFor(name)
+	if not slot or not id then
 		return nil
 	end
 	local sound = Instance.new("Sound")
 	sound.Name = name
-	sound.SoundId = slot.Id
+	sound.SoundId = id
 	sound.Volume = slot.Volume or 0.5
 	sound.PlaybackSpeed = slot.Pitch or 1
 	sound.Looped = true

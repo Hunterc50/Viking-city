@@ -32,5 +32,19 @@ Explorer; leave it there and save. The game finds it by that name.
 
 The music is uploaded under your account, so it can only play in your own games.
 
+## Sound effects (optional)
+
+The folder `music/sfx` has four more of the game's own sounds: **WarHorn**
+(raids and sieges), **Wind**, **Waves** (the shore) and **Fire** (burning
+buildings and feasts). Until you add them, those moments are silent.
+
+Upload them the same way as the theme:
+[WarHorn](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/music/sfx/WarHorn.ogg),
+[Wind](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/music/sfx/Wind.ogg),
+[Waves](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/music/sfx/Waves.ogg),
+[Fire](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/music/sfx/Fire.ogg).
+Then either send Claude the numbers, or put each one in Workspace from the
+Toolbox and keep its name (WarHorn, Wind, Waves, Fire). The game finds them by name.
+
 To change the music, edit `tools/music/compose.py` and run
 `python3 tools/music/compose.py`.
