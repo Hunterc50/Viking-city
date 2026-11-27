@@ -192,6 +192,19 @@ Other commands, if you have the Command Bar:
 - `require(game.ServerScriptService.Server.EditTools).Models()` only adds the ModelWorkshop row (for example, after you deleted one model and want it back).
 - `require(game.ServerScriptService.Server.EditTools).Reset()` removes the saved valley so the game makes a fresh one every Play again.
 
+### Using free models from the Toolbox (easiest way to make it prettier)
+
+1. Open the **Toolbox** (View or Window menu > Toolbox) and stay on the **Models** tab (Creator Store).
+2. Search for what you want, for example "viking longhouse", "pine tree", "low poly rock", "viking ship", "deer".
+3. Click a model to drop it into your place. Look at it: if it's far too big or small, that's fine, the game resizes buildings to fit their spot on the grid.
+4. In the **Explorer**, find the new model (it's usually at the bottom of **Workspace**). Drag it into **ReplicatedStorage > Assets**.
+5. Rename it to the slot it should replace, like `Longhouse` or `Tree_Pine` (the full list is below). Exact spelling matters.
+6. Press Play. Every Longhouse (or pine tree) in the game now uses your model, including the rival holds.
+
+Safety: the game removes any scripts inside these models before using them, so a free model can't run its own code. Still, prefer models with lots of likes from well-known creators, and only use models that are free to use.
+
+Trees, rocks and bushes keep the size you give them (with a little random variety), so scale them in Studio first (Scale tool, or the model's **Scale** property) until they look right next to your Viking.
+
 ### Using real 3D models (meshes)
 
 You can also replace any model with an imported one:
