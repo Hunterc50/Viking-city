@@ -367,12 +367,108 @@ local function scatterScenery()
 		end
 	end
 
-	-- a jetty on the fjord in front of every plot
+	-- a jetty on the fjord in front of every plot, some with a longship
+	local sails = { Color3.fromRGB(160, 40, 36), Color3.fromRGB(46, 70, 120), Color3.fromRGB(150, 120, 50) }
 	for i = 1, Config.MAX_PLOTS do
 		local o = Grid.plotOrigin(i)
+		local dockX = o.X + Grid.PLOT_SIZE * 0.25
 		local dock = ModelFactory.dock(48)
-		dock:PivotTo(CFrame.new(o.X + Grid.PLOT_SIZE * 0.25, 0, -34))
+		dock:PivotTo(CFrame.new(dockX, 0, -34))
 		dock.Parent = folder
+		if i % 2 == 1 then
+			local ship = ModelFactory.longship(40, sails[(i // 2) % #sails + 1])
+			ship:PivotTo(CFrame.new(dockX + 9, 0, -62) * CFrame.Angles(0, math.rad(rng:NextNumber(-4, 4)), 0))
+			ship.Parent = folder
+		end
+		-- torches lighting the path at each corner of the plot
+		for _, x in { o.X + 2, o.X + Grid.PLOT_SIZE - 2 } do
+			local torch = Instance.new("Model")
+			torch.Name = "Torch"
+			local pole = ModelFactory.addPart(torch, {
+				Size = Vector3.new(0.5, 6, 0.5),
+				Position = Vector3.new(x, TOP + 3, -2),
+				Color = ModelFactory.Colors.DarkWood,
+			})
+			local flame = ModelFactory.addPart(torch, {
+				Size = Vector3.new(0.7, 0.7, 0.7),
+				Position = pole.Position + Vector3.new(0, 3.3, 0),
+				Color = Color3.fromRGB(255, 140, 50),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+			})
+			local fire = Instance.new("Fire")
+			fire.Size = 1.6
+			fire.Heat = 5
+			fire.Parent = flame
+			local light = Instance.new("PointLight")
+			light.Color = Color3.fromRGB(255, 150, 70)
+			light.Range = 18
+			light.Brightness = 1.6
+			light.Parent = flame
+			torch.Parent = folder
+		end
+	end
+end
+
+-- A trading longship that sails slowly up and down the fjord forever.
+local function sailingShip()
+	local ship = ModelFactory.longship(48, Color3.fromRGB(150, 40, 36))
+	ship.Name = "TradingShip"
+	ship.Parent = workspace:FindFirstChild("Scenery") or workspace
+	local z = -300
+	local x0, x1 = MIN_X + 200, MAX_X - 200
+	task.spawn(function()
+		local dir = 1
+		local x = x0
+		local speed = 9
+		while ship.Parent do
+			local dt = task.wait(1 / 20)
+			x += dir * speed * dt
+			if x > x1 or x < x0 then
+				dir = -dir
+				x = math.clamp(x, x0, x1)
+			end
+			local bob = math.sin(os.clock() * 0.8) * 0.25
+			local roll = math.sin(os.clock() * 0.6) * math.rad(2)
+			local heading = dir > 0 and -math.pi / 2 or math.pi / 2
+			ship:PivotTo(CFrame.new(x, bob, z + math.sin(x / 300) * 60) * CFrame.Angles(0, heading, 0) * CFrame.Angles(0, 0, roll))
+		end
+	end)
+end
+
+-- Day and night: a full day takes DAY_SECONDS, nights pass faster.
+local DAY_SECONDS = 480
+local function dayNightCycle()
+	local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	local t = (15.6 - 6) / 14 * (DAY_SECONDS * 0.75) -- start in the afternoon
+	while true do
+		local dt = task.wait(0.1)
+		t = (t + dt) % DAY_SECONDS
+		local dayPart = DAY_SECONDS * 0.75
+		local clock
+		if t < dayPart then
+			clock = 6 + 14 * (t / dayPart) -- 06:00 to 20:00
+		else
+			clock = (20 + 10 * ((t - dayPart) / (DAY_SECONDS - dayPart))) % 24 -- 20:00 to 06:00
+		end
+		Lighting.ClockTime = clock
+		-- 0 at midday, 1 deep at night
+		local night = 0
+		if clock >= 18.5 or clock < 6.5 then
+			local h = clock >= 18.5 and clock - 18.5 or clock + 5.5
+			night = math.clamp(math.min(h, 12 - h) / 1.5, 0, 1)
+		end
+		local golden = math.clamp(1 - math.abs(clock - 18) / 2, 0, 1) + math.clamp(1 - math.abs(clock - 7) / 1.5, 0, 1)
+		if grade then
+			grade.TintColor = Color3.fromRGB(255, 244, 228):Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night)
+			grade.Brightness = 0.02 + night * 0.05
+		end
+		if atmosphere then
+			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night)
+			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6
+		end
+		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night)
 	end
 end
 
@@ -419,6 +515,12 @@ local function setupLighting()
 	bloom.Threshold = 0.95
 	bloom.Parent = Lighting
 
+	local clouds = Terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
+	clouds.Cover = 0.55
+	clouds.Density = 0.55
+	clouds.Color = Color3.fromRGB(245, 240, 232)
+	clouds.Parent = Terrain
+
 	local rays = Instance.new("SunRaysEffect")
 	rays.Intensity = 0.05
 	rays.Spread = 0.7
@@ -439,6 +541,11 @@ function WorldService:Init()
 	buildTerrain()
 	scatterScenery()
 	print("[WorldService] valley built")
+end
+
+function WorldService:Start()
+	sailingShip()
+	dayNightCycle()
 end
 
 -- Height of the terrain at x, z (used by wildlife).

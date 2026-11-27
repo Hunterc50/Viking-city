@@ -288,8 +288,55 @@ end
 
 local Builders = {}
 
+local function campfire(model, pos: Vector3)
+	for i = 1, 8 do
+		local a = i / 8 * math.pi * 2
+		addPart(model, {
+			Name = "FireStone",
+			Size = V3(0.9, 0.6, 0.9),
+			CFrame = CFrame.new(pos + V3(math.cos(a) * 1.5, 0.3, math.sin(a) * 1.5)) * CFrame.Angles(0, a, 0),
+			Color = Colors.Stone,
+			Material = Enum.Material.Slate,
+		})
+	end
+	for i = 1, 3 do
+		addPart(model, {
+			Name = "FireLog",
+			Size = V3(0.4, 0.4, 2.2),
+			CFrame = CFrame.new(pos + V3(0, 0.4, 0)) * CFrame.Angles(0, i * math.pi / 3, 0.15),
+			Color = Colors.DarkWood,
+			CanCollide = false,
+		})
+	end
+	local core = addPart(model, {
+		Name = "Embers",
+		Size = V3(1, 0.3, 1),
+		Position = pos + V3(0, 0.3, 0),
+		Color = Color3.fromRGB(255, 110, 40),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	})
+	local fire = Instance.new("Fire")
+	fire.Size = 3
+	fire.Heat = 6
+	fire.Color = Color3.fromRGB(255, 140, 50)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fire.Parent = core
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 70)
+	light.Range = 22
+	light.Brightness = 2
+	light.Shadows = true
+	light.Parent = core
+end
+ModelFactory.campfire = campfire
+
 function Builders.Longhouse(model, w, d)
 	hall(model, CFrame.new(), { w = w - 4, d = d - 5, wallH = 7, roof = "thatch", smoke = true })
+	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 1.2))
+	-- a carved post with a banner by the door
+	post(model, V3(w / 2 - 4, 0, -d / 2 + 1), 9, 0.5)
+	addPart(model, { Name = "Banner", Size = V3(0.15, 3.6, 2), Position = V3(w / 2 - 4, 6.6, -d / 2 + 2.1), Color = Color3.fromRGB(150, 40, 36), Material = Enum.Material.Fabric, CanCollide = false })
 end
 
 function Builders.Cottage(model, w, d)
@@ -620,6 +667,95 @@ function ModelFactory.dock(length: number): Model
 	-- a little rowing boat tied up at the end
 	addPart(model, { Name = "Boat", Size = V3(3, 1.2, 9), Position = V3(-5.5, 0.1, -length + 4), Color = Colors.Wood, Material = Enum.Material.WoodPlanks })
 	addPart(model, { Size = V3(2.2, 0.3, 7.6), Position = V3(-5.5, 0.6, -length + 4), Color = Colors.DarkWood })
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
+-- A longship, bow toward local -Z, pivot at the waterline in the middle.
+function ModelFactory.longship(length: number?, sailColor: Color3?): Model
+	local L = length or 44
+	local model = Instance.new("Model")
+	model.Name = "Longship"
+	local maxW = L * 0.2
+	local segs = 12
+	local segLen = L / segs
+	local hullColor = Color3.fromRGB(96, 68, 46)
+	for i = 1, segs do
+		local t = (i - 0.5) / segs
+		local width = maxW * math.sin(math.pi * t) ^ 0.55
+		local z = -L / 2 + (i - 0.5) * segLen
+		local rise = (math.abs(t - 0.5) * 2) ^ 3 * 2.5 -- the hull sweeps up at both ends
+		addPart(model, {
+			Name = "Keel",
+			Size = V3(math.max(width * 0.55, 0.8), 0.5, segLen + 0.2),
+			Position = V3(0, -1.2 + rise * 0.5, z),
+			Color = hullColor,
+			Material = Enum.Material.WoodPlanks,
+		})
+		for _, side in { 1, -1 } do
+			for strake = 0, 1 do
+				addPart(model, {
+					Name = "Strake",
+					Size = V3(0.35, 1.3, segLen + 0.3),
+					CFrame = CFrame.new(side * (width / 2 - 0.3 + strake * 0.45), -0.4 + strake * 1.15 + rise, z) * CFrame.Angles(0, 0, side * math.rad(22 + strake * 10)),
+					Color = strake == 0 and hullColor or Color3.fromRGB(80, 56, 38),
+					Material = Enum.Material.WoodPlanks,
+				})
+			end
+		end
+	end
+	-- curling prow and stern posts
+	for _, dir in { -1, 1 } do
+		for k = 0, 6 do
+			local a = k / 6 * math.pi * 0.9
+			addPart(model, {
+				Name = dir < 0 and "Prow" or "Stern",
+				Size = V3(0.5, 1.4, 0.9),
+				CFrame = CFrame.new(0, 1.5 + math.sin(a) * 3.2 + k * 0.35, dir * (L / 2 + math.cos(a) * 0.2 - 0.8 + math.sin(a) * 1.4)) * CFrame.Angles(dir * a * 0.7, 0, 0),
+				Color = Color3.fromRGB(74, 52, 36),
+			})
+		end
+	end
+	-- deck, mast, yard and striped sail
+	addPart(model, { Name = "Deck", Size = V3(maxW * 0.8, 0.3, L * 0.72), Position = V3(0, -0.3, 0), Color = Colors.Weathered, Material = Enum.Material.WoodPlanks })
+	post(model, V3(0, -0.3, -1), 20, 0.7)
+	addPart(model, { Name = "Yard", Size = V3(16, 0.5, 0.5), Position = V3(0, 18, -1.3), Color = Colors.DarkWood })
+	local stripeColor = sailColor or Color3.fromRGB(160, 40, 36)
+	for i = 1, 5 do
+		addPart(model, {
+			Name = "Sail",
+			Size = V3(3, 11, 0.2),
+			Position = V3(-6 + (i - 1) * 3, 12.3, -1.6),
+			Color = i % 2 == 0 and Color3.fromRGB(236, 228, 210) or stripeColor,
+			Material = Enum.Material.Fabric,
+			CanCollide = false,
+		})
+	end
+	-- round shields along both sides
+	local shieldColors = { Color3.fromRGB(200, 160, 50), Color3.fromRGB(160, 44, 40), Color3.fromRGB(50, 80, 130), Color3.fromRGB(230, 225, 210) }
+	for _, side in { 1, -1 } do
+		for i = 1, 8 do
+			local z = -L * 0.3 + (i - 1) * (L * 0.6 / 7)
+			local t = (z + L / 2) / L
+			local width = maxW * math.sin(math.pi * t) ^ 0.55
+			addPart(model, {
+				Name = "Shield",
+				Shape = Enum.PartType.Cylinder,
+				Size = V3(0.3, 2, 2),
+				Position = V3(side * (width / 2 + 0.6), 1.3, z),
+				Color = shieldColors[(i + (side > 0 and 0 or 1)) % 4 + 1],
+				Material = Enum.Material.Wood,
+				CanCollide = false,
+			})
+			addPart(model, {
+				Name = "Oar",
+				Size = V3(7, 0.25, 0.25),
+				CFrame = CFrame.new(side * (width / 2 + 3), 0, z + 0.9) * CFrame.Angles(0, 0, side * math.rad(-25)),
+				Color = Colors.Wood,
+				CanCollide = false,
+			})
+		end
+	end
 	model.WorldPivot = CFrame.new()
 	return model
 end
@@ -1007,6 +1143,15 @@ function ModelFactory.deer(rng: Random): Model
 	model.PrimaryPart = body
 	model:SetAttribute("GroundOffset", body.Position.Y)
 	return model
+end
+
+local partLongship = ModelFactory.longship
+function ModelFactory.longship(length: number?, sailColor: Color3?): Model
+	local custom = customAsset("Longship")
+	if custom then
+		return prepare(custom, true)
+	end
+	return partLongship(length, sailColor)
 end
 
 function ModelFactory.tool(kind: string): Tool
