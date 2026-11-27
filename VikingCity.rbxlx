@@ -5340,6 +5340,212 @@ return DiplomacyService
         </Item>
         <Item class="ModuleScript" referent="21">
           <Properties>
+            <string name="Name">EventService</string>
+            <string name="Source"><![CDATA[--[[
+	EventService
+	Small happenings that keep a village's life going: a skald visits, a
+	great catch of herring, wolves at the stores, amber on the beach, a family
+	asking to settle, a rich harvest, storm damage. Every few minutes one
+	event that fits the season and your village happens, with a message.
+	What you have built changes how some of them go: a Watchtower drives the
+	wolves off, a Storehouse keeps the rats out.
+]]
+
+local Players = game:GetService("Players")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Grid = require(Shared.Grid)
+
+local EventService = {}
+
+local services
+local rng = Random.new()
+
+local FIRST = 180 -- seconds after joining before the first event
+local MIN_GAP, MAX_GAP = 240, 420
+
+function EventService:Init(all)
+	services = all
+end
+
+local function population(colony): number
+	local n = 0
+	for _ in colony.villagers do
+		n += 1
+	end
+	return n
+end
+
+local function season(): string
+	return workspace:GetAttribute("Season") or "Summer"
+end
+
+local function gain(colony, loot)
+	for res, n in loot do
+		services.ColonyService:Add(colony, res, n)
+	end
+	return Grid.costText(loot)
+end
+
+local function lose(colony, res: string, share: number): number
+	local have = colony.resources[res] or 0
+	local n = math.floor(have * share)
+	if n > 0 then
+		colony.resources[res] = have - n
+	end
+	return n
+end
+
+-- Each event: when it can happen (weight 0 = not now) and what it does.
+local EVENTS = {
+	{
+		name = "Skald",
+		weight = function()
+			return 1
+		end,
+		run = function(colony)
+			colony.happiness = math.min(100, (colony.happiness or 60) + 8)
+			local text = gain(colony, { Lore = 12 })
+			return "A wandering skald sings of old heroes in your hall. Your people are cheered (+" .. text .. ").", "good"
+		end,
+	},
+	{
+		name = "Herring",
+		weight = function()
+			return season() == "Winter" and 0.3 or 1
+		end,
+		run = function(colony)
+			local text = gain(colony, { Food = 15 + population(colony) * 3 })
+			return "The herring are running! Your people haul in nets full of fish (+" .. text .. ").", "good"
+		end,
+	},
+	{
+		name = "Wolves",
+		weight = function(colony)
+			return (season() == "Winter" and 1.6 or 0.6) * ((colony.resources.Food or 0) > 30 and 1 or 0)
+		end,
+		run = function(colony)
+			if services.ColonyService:HasBuilding(colony, "Watchtower") then
+				local text = gain(colony, { Hides = 6 })
+				return "Wolves crept toward your stores, but your watchmen saw them and drove them off (+" .. text .. ").", "good"
+			end
+			local n = lose(colony, "Food", 0.15)
+			return "Wolves got into your stores in the night and took " .. n .. " Food. A Watchtower would keep watch.", "bad"
+		end,
+	},
+	{
+		name = "Amber",
+		weight = function()
+			return season() == "Winter" and 0.4 or 0.8
+		end,
+		run = function(colony)
+			local text = gain(colony, { Silver = rng:NextInteger(6, 12) })
+			return "A storm tide washed amber up on your beach. Traders pay well for it (+" .. text .. ").", "good"
+		end,
+	},
+	{
+		name = "Newcomers",
+		weight = function(colony)
+			local free = services.ColonyService:Housing(colony) - population(colony)
+			local cap = services.RankService:PopCap(colony) - population(colony)
+			return (free >= 2 and cap >= 2) and 1.2 or 0
+		end,
+		run = function(colony)
+			local VillagerService = services.VillagerService
+			local a = VillagerService:Add(colony, false)
+			local b = VillagerService:Add(colony, false)
+			return a.name .. " and " .. b.name .. " left a feuding jarl in the south and ask to live under your roof. You take them in.", "good"
+		end,
+	},
+	{
+		name = "Harvest",
+		weight = function(colony)
+			return (season() == "Autumn" and services.ColonyService:HasBuilding(colony, "Farm")) and 1.5 or 0
+		end,
+		run = function(colony)
+			local text = gain(colony, { Food = 30 + population(colony) * 2 })
+			return "A rich harvest! The barley stands tall and heavy this year (+" .. text .. ").", "good"
+		end,
+	},
+	{
+		name = "Rats",
+		weight = function(colony)
+			return ((colony.resources.Food or 0) > 60 and not services.ColonyService:HasBuilding(colony, "Storehouse")) and 0.7 or 0
+		end,
+		run = function(colony)
+			local n = lose(colony, "Food", 0.1)
+			return "Rats got into the grain and spoiled " .. n .. " Food. A Storehouse keeps them out.", "bad"
+		end,
+	},
+	{
+		name = "StormDamage",
+		weight = function(colony)
+			return ((workspace:GetAttribute("StormLevel") or 0) > 0.3 and (colony.resources.Wood or 0) > 20) and 2 or 0
+		end,
+		run = function(colony)
+			local n = lose(colony, "Wood", 0.12)
+			return "The storm tore at your roofs. Repairs took " .. n .. " Wood.", "bad"
+		end,
+	},
+}
+
+local function pick(colony)
+	local total = 0
+	local weights = {}
+	for i, e in EVENTS do
+		local ok, w = pcall(e.weight, colony)
+		w = ok and w or 0
+		weights[i] = w
+		total += w
+	end
+	if total <= 0 then
+		return nil
+	end
+	local r = rng:NextNumber() * total
+	for i, e in EVENTS do
+		r -= weights[i]
+		if r <= 0 then
+			return e
+		end
+	end
+	return nil
+end
+
+function EventService:Start()
+	local nextAt = {}
+	Players.PlayerRemoving:Connect(function(player)
+		nextAt[player] = nil
+	end)
+	while true do
+		task.wait(5)
+		local now = os.clock()
+		for _, colony in services.ColonyService:All() do
+			local player = colony.player
+			if not nextAt[player] then
+				nextAt[player] = now + FIRST
+			elseif now >= nextAt[player] then
+				nextAt[player] = now + rng:NextNumber(MIN_GAP, MAX_GAP)
+				local event = pick(colony)
+				if event then
+					local ok, text, kind = pcall(event.run, colony)
+					if ok and text then
+						services.ColonyService:Notify(colony, text, kind)
+						services.ColonyService:Sync(colony)
+					elseif not ok then
+						warn("[EventService] " .. event.name .. ": " .. tostring(text))
+					end
+				end
+			end
+		end
+	end
+end
+
+return EventService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="22">
+          <Properties>
             <string name="Name">LandService</string>
             <string name="Source"><![CDATA[--[[
 	LandService
@@ -5417,7 +5623,7 @@ return LandService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">PathWearService</string>
             <string name="Source"><![CDATA[--[[
@@ -5507,7 +5713,7 @@ return PathWearService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">PlotService</string>
             <string name="Source"><![CDATA[--[[
@@ -5703,7 +5909,7 @@ return PlotService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--[[
@@ -5816,7 +6022,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">RaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -6961,7 +7167,7 @@ return RaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">RankService</string>
             <string name="Source"><![CDATA[--[[
@@ -7077,7 +7283,7 @@ return RankService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
@@ -7393,7 +7599,7 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">RiteService</string>
             <string name="Source"><![CDATA[--[[
@@ -7584,7 +7790,7 @@ return RiteService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">SaveService</string>
             <string name="Source"><![CDATA[--[[
@@ -7859,7 +8065,7 @@ return SaveService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
@@ -8138,7 +8344,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">TechService</string>
             <string name="Source"><![CDATA[--[[
@@ -8225,7 +8431,7 @@ return TechService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -8513,7 +8719,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">TownRaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -8963,7 +9169,7 @@ return TownRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">TradeService</string>
             <string name="Source"><![CDATA[--[[
@@ -9103,7 +9309,7 @@ return TradeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">VillageDefenseService</string>
             <string name="Source"><![CDATA[--[[
@@ -9574,7 +9780,7 @@ return VillageDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -10186,7 +10392,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">WarbandService</string>
             <string name="Source"><![CDATA[--[[
@@ -10888,7 +11094,7 @@ return WarbandService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">WeatherService</string>
             <string name="Source"><![CDATA[--[[
@@ -11007,7 +11213,7 @@ return WeatherService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -11174,7 +11380,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -12156,15 +12362,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="41">
+  <Item class="StarterPlayer" referent="42">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="42">
+    <Item class="StarterPlayerScripts" referent="43">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="43">
+      <Item class="LocalScript" referent="44">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -12197,11 +12403,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="44">
+        <Item class="Folder" referent="45">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="45">
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -12311,7 +12517,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="46">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -12418,7 +12624,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="47">
+          <Item class="ModuleScript" referent="48">
             <Properties>
               <string name="Name">AuroraController</string>
               <string name="Source"><![CDATA[--[[
@@ -12521,7 +12727,7 @@ return AuroraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -12602,7 +12808,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -12905,7 +13111,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="50">
+          <Item class="ModuleScript" referent="51">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -13033,7 +13239,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="51">
+          <Item class="ModuleScript" referent="52">
             <Properties>
               <string name="Name">CouncilController</string>
               <string name="Source"><![CDATA[--[[
@@ -13502,7 +13708,7 @@ return CouncilController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="52">
+          <Item class="ModuleScript" referent="53">
             <Properties>
               <string name="Name">GuideController</string>
               <string name="Source"><![CDATA[--[[
@@ -13745,7 +13951,7 @@ return GuideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="53">
+          <Item class="ModuleScript" referent="54">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -14451,7 +14657,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="54">
+          <Item class="ModuleScript" referent="55">
             <Properties>
               <string name="Name">IntroController</string>
               <string name="Source"><![CDATA[--[[
@@ -14788,7 +14994,7 @@ return IntroController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="55">
+          <Item class="ModuleScript" referent="56">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -14869,7 +15075,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="56">
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -15083,7 +15289,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="57">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -15176,7 +15382,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="58">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -15228,7 +15434,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -15551,7 +15757,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -15639,7 +15845,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="61">
+          <Item class="ModuleScript" referent="62">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -15824,7 +16030,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="62">
+          <Item class="ModuleScript" referent="63">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -16022,7 +16228,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="63">
+          <Item class="ModuleScript" referent="64">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -16075,7 +16281,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="64">
+          <Item class="ModuleScript" referent="65">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -16301,7 +16507,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="65">
+          <Item class="ModuleScript" referent="66">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -16447,12 +16653,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="66">
+  <Item class="Workspace" referent="67">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="67">
+    <Item class="Part" referent="68">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -16473,13 +16679,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="68">
+    <Item class="BoolValue" referent="69">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="69">
+    <Item class="SpawnLocation" referent="70">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -16499,7 +16705,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="70">
+    <Item class="Part" referent="71">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -16516,13 +16722,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="71">
+      <Item class="SurfaceGui" referent="72">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="72">
+        <Item class="TextLabel" referent="73">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -16554,13 +16760,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="73">
+      <Item class="SurfaceGui" referent="74">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="74">
+        <Item class="TextLabel" referent="75">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
