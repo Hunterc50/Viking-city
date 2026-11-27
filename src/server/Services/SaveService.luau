@@ -78,8 +78,17 @@ function SaveService:Snapshot(colony)
 		table.insert(buildings, { t = b.type, x = b.cx, z = b.cz, r = b.rot })
 	end
 	local villagers = {}
+	local index = {}
 	for _, v in colony.villagers do
-		table.insert(villagers, { n = v.name, c = v.isChild, a = v.age })
+		table.insert(villagers, v)
+		index[v.id] = #villagers
+	end
+	for i, v in villagers do
+		local parents = {}
+		for _, pid in v.parents or {} do
+			table.insert(parents, index[pid])
+		end
+		villagers[i] = { n = v.name, c = v.isChild, a = v.age, p = v.partner and index[v.partner], f = parents }
 	end
 	local resources = {}
 	for name, amount in colony.resources do
@@ -134,9 +143,27 @@ function SaveService:Restore(colony, data)
 	end
 
 	local villagers = data.villagers or {}
-	for _, saved in villagers do
-		local v = services.VillagerService:Add(colony, saved.c == true, nil, type(saved.n) == "string" and saved.n or nil)
-		v.age = tonumber(saved.a) or 0
+	local made = {}
+	for i, saved in villagers do
+		made[i] = services.VillagerService:Add(colony, saved.c == true, nil, type(saved.n) == "string" and saved.n or nil, tonumber(saved.a) or 0)
+	end
+	-- re-link families
+	for i, saved in villagers do
+		local v = made[i]
+		local partner = saved.p and made[saved.p]
+		if partner then
+			v.partner = partner.id
+		end
+		if type(saved.f) == "table" then
+			v.parents = {}
+			for _, pi in saved.f do
+				if made[pi] then
+					table.insert(v.parents, made[pi].id)
+				end
+			end
+		end
+	end
+	for _, v in made do
 		services.VillagerService:RefreshLabel(colony, v)
 	end
 	if #villagers == 0 then

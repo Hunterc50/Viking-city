@@ -27,7 +27,10 @@ Config.Villagers = {
 	Starting = 3,
 	FoodPerAdultPerSecond = 0.1, -- 6 food per adult per day
 	FoodPerChildPerSecond = 0.05,
-	DaysToAdulthood = 2,
+	BabyDays = 1, -- babies toddle after a parent for their first day
+	DaysToAdulthood = 3, -- then children play, and grow up after 3 days
+	ElderAge = 30, -- adults grey and grow beards after 30 days
+	MarriageChancePerDay = 0.5, -- two single adults may marry and share a home
 	WalkSpeed = 7, -- studs per second for the little villager figures
 
 	BirthMinHappiness = 50,

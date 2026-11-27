@@ -1098,10 +1098,16 @@ end
 -- A small villager figure. The body is anchored and moved by the server;
 -- the head, hair and legs are welded to it so they follow.
 -- GroundOffset attribute = body centre height above ground.
-function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Model
-	local s = isChild and 0.65 or 1
+-- stage: "baby", "child", "adult" or "elder" (defaults from isChild).
+-- Arms and legs hang from Welds whose C0 the client swings while walking
+-- (attributes Hip = joint CFrame, HalfLen = half the limb length).
+function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stage: string?): Model
+	stage = stage or (isChild and "child" or "adult")
+	local s = ({ baby = 0.45, child = 0.65, adult = 1, elder = 0.95 })[stage] or 1
 	local model = Instance.new("Model")
 	model.Name = name
+	model:SetAttribute("Villager", true)
+	model:SetAttribute("Stage", stage)
 
 	local legH = 1.1 * s
 	local bodyH = 1.8 * s
@@ -1110,7 +1116,7 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Mod
 	body.Anchored = true
 	body.CanCollide = false
 	body.Size = V3(1.5, bodyH, 0.95) * V3(s, 1, s)
-	body.Color = Tunics[rng:NextInteger(1, #Tunics)]
+	body.Color = stage == "baby" and Color3.fromRGB(226, 216, 196) or Tunics[rng:NextInteger(1, #Tunics)]
 	body.Material = Enum.Material.Fabric
 	body.CFrame = CFrame.new(0, legH + bodyH / 2, 0)
 	body.Parent = model
@@ -1123,6 +1129,7 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Mod
 		end
 		p.Anchored = false
 		p.CanCollide = false
+		p.CanQuery = false
 		p.Massless = true
 		p.Size = size
 		p.Color = color
@@ -1136,11 +1143,45 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Mod
 		return p
 	end
 
-	attach("Head", Vector3.one * 1.1 * s, CFrame.new(0, bodyH / 2 + 0.55 * s, 0), Colors.Skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	attach("Hair", V3(1.15, 0.5, 1.15) * s, CFrame.new(0, bodyH / 2 + 0.95 * s, 0.1 * s), Hair[rng:NextInteger(1, #Hair)], Enum.Material.Fabric)
+	-- a limb hanging from `hip` (in body space), swung by its Weld
+	local function limb(partName, size: Vector3, hip: CFrame, color, side: number)
+		local p = Instance.new("Part")
+		p.Name = partName
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		p.Size = size
+		p.Color = color
+		p.Material = Enum.Material.Fabric
+		p.CFrame = body.CFrame * hip * CFrame.new(0, -size.Y / 2, 0)
+		p.Parent = model
+		local weld = Instance.new("Weld")
+		weld.Name = "Joint"
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.C0 = hip * CFrame.new(0, -size.Y / 2, 0)
+		weld.Parent = p
+		p:SetAttribute("Hip", hip)
+		p:SetAttribute("HalfLen", size.Y / 2)
+		p:SetAttribute("Side", side)
+		return p
+	end
+
+	local hairColor = stage == "elder" and Color3.fromRGB(210, 210, 214) or Hair[rng:NextInteger(1, #Hair)]
+	attach("Head", Vector3.one * 1.1 * s * (stage == "baby" and 1.25 or 1), CFrame.new(0, bodyH / 2 + 0.55 * s, 0), Colors.Skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	if stage ~= "baby" then
+		attach("Hair", V3(1.15, 0.5, 1.15) * s, CFrame.new(0, bodyH / 2 + 0.95 * s, 0.1 * s), hairColor, Enum.Material.Fabric)
+	end
+	if stage == "elder" then
+		attach("Beard", V3(0.8, 0.7, 0.3) * s, CFrame.new(0, bodyH / 2 + 0.2 * s, -0.5 * s), hairColor, Enum.Material.Fabric)
+	end
 	attach("Belt", V3(1.55 * s, 0.25 * s, 1 * s), CFrame.new(0, -bodyH * 0.15, 0), Colors.DarkWood, Enum.Material.Fabric)
-	for _, x in { -0.35, 0.35 } do
-		attach("Leg", V3(0.5, legH, 0.6) * V3(s, 1, s), CFrame.new(x * s, -bodyH / 2 - legH / 2, 0), Color3.fromRGB(70, 62, 54), Enum.Material.Fabric)
+	for i, x in { -0.35, 0.35 } do
+		limb("Leg", V3(0.5 * s, legH, 0.6 * s), CFrame.new(x * s, -bodyH / 2, 0), Color3.fromRGB(70, 62, 54), i == 1 and 1 or -1)
+	end
+	for i, x in { -0.95, 0.95 } do
+		limb("Arm", V3(0.4 * s, bodyH * 0.8, 0.45 * s), CFrame.new(x * s, bodyH / 2 - 0.1 * s, 0), body.Color:Lerp(Color3.new(0, 0, 0), 0.15), i == 1 and -1 or 1)
 	end
 
 	local tag = Instance.new("BillboardGui")

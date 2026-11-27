@@ -6,8 +6,12 @@
 	  2. lets workers produce resources
 	  3. feeds everyone (and notices starvation)
 	  4. moves happiness toward a target based on food and shelter
-	  5. once per in-game day: children grow up, babies are born, immigrants
-	     arrive from neighbouring tribes, or unhappy villagers leave
+	  5. once per in-game day: villagers age (baby -> child -> adult ->
+	     elder), single adults may marry and share a home, married couples
+	     have babies, immigrants arrive from neighbouring tribes, or unhappy
+	     villagers leave
+	Families: a child is named after a parent (Astrid Bjornsdottir), keeps
+	close to its parents while small, and lives in the family home.
 	  6. moves the little figures around
 ]]
 
@@ -74,18 +78,53 @@ local function randomHome(colony)
 	return homes[rng:NextInteger(1, #homes)]
 end
 
+local function stageOf(v): string
+	if v.isChild then
+		return (v.age < V.BabyDays) and "baby" or "child"
+	end
+	return (v.age >= V.ElderAge) and "elder" or "adult"
+end
+
+-- The villager's home building (kept with their family), picking one if needed.
+local function homeOf(colony, v)
+	local home = v.home and colony.buildings[v.home]
+	if home then
+		return home
+	end
+	local partner = v.partner and colony.villagers[v.partner]
+	home = partner and partner.home and colony.buildings[partner.home]
+	if not home and v.parents then
+		for _, pid in v.parents do
+			local parent = colony.villagers[pid]
+			home = parent and parent.home and colony.buildings[parent.home]
+			if home then
+				break
+			end
+		end
+	end
+	home = home or randomHome(colony)
+	v.home = home and home.id or nil
+	return home
+end
+
+local function firstName(v): string
+	return (string.split(v.name, " "))[1]
+end
+
 local function updateLabel(colony, v)
 	local label = v.model:FindFirstChild("NameTag", true)
 	label = label and label:FindFirstChild("Label")
 	if not label then
 		return
 	end
-	if v.isChild then
-		label.Text = v.name .. " (child)"
+	local stage = stageOf(v)
+	local heart = v.partner and colony.villagers[v.partner] and " ♥" or ""
+	if stage == "baby" or stage == "child" then
+		label.Text = v.name .. " (" .. stage .. ")"
 	elseif v.job and colony.buildings[v.job] then
-		label.Text = v.name .. " (" .. Config.Buildings[colony.buildings[v.job].type].Display .. ")"
+		label.Text = v.name .. heart .. " (" .. Config.Buildings[colony.buildings[v.job].type].Display .. ")"
 	else
-		label.Text = v.name
+		label.Text = v.name .. heart .. (stage == "elder" and " (elder)" or "")
 	end
 end
 
@@ -93,7 +132,8 @@ local function makeModel(colony, v, groundPos: Vector3)
 	if v.model then
 		v.model:Destroy()
 	end
-	v.model = ModelFactory.villager(v.name, v.isChild, rng)
+	v.stage = stageOf(v)
+	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage)
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
@@ -109,13 +149,14 @@ end
 
 -- Adding / removing ---------------------------------------------------------
 
-function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?, name: string?)
+function VillagerService:Add(colony, isChild: boolean, groundPos: Vector3?, name: string?, age: number?)
 	local id = services.ColonyService:NewId(colony)
 	local v = {
 		id = id,
 		name = name or Config.Names[rng:NextInteger(1, #Config.Names)],
 		isChild = isChild,
-		age = 0,
+		-- days lived here; newcomers arrive as grown adults
+		age = age or (isChild and 0 or rng:NextInteger(4, 12)),
 		job = nil,
 	}
 	if not groundPos then
@@ -129,14 +170,28 @@ end
 
 function VillagerService:Remove(colony, v)
 	colony.villagers[v.id] = nil
+	local partner = v.partner and colony.villagers[v.partner]
+	if partner then
+		partner.partner = nil
+		updateLabel(colony, partner)
+	end
 	if v.model then
 		v.model:Destroy()
 	end
 end
 
 function VillagerService:SpawnStarting(colony)
-	for _ = 1, V.Starting do
-		self:Add(colony, false)
+	local first = {}
+	for i = 1, V.Starting do
+		first[i] = self:Add(colony, false)
+	end
+	-- the first two settlers are a married couple
+	if first[1] and first[2] then
+		first[1].partner, first[2].partner = first[2].id, first[1].id
+		local home = homeOf(colony, first[1])
+		first[2].home = home and home.id or nil
+		updateLabel(colony, first[1])
+		updateLabel(colony, first[2])
 	end
 end
 
@@ -286,13 +341,43 @@ local function newDay(self, colony)
 	local ColonyService = services.ColonyService
 	colony.day += 1
 
-	-- Children grow up.
+	-- Everyone ages: babies start walking, children come of age, adults grey.
 	for _, v in colony.villagers do
 		v.age += 1
 		if v.isChild and v.age >= V.DaysToAdulthood then
 			v.isChild = false
+		end
+		local stage = stageOf(v)
+		if stage ~= v.stage then
 			makeModel(colony, v, v.body.Position - Vector3.new(0, v.height, 0))
-			ColonyService:Notify(colony, v.name .. " has come of age and can now work.", "good")
+			if stage == "child" then
+				ColonyService:Notify(colony, v.name .. " is toddling about on their own now.", "info")
+			elseif stage == "adult" then
+				ColonyService:Notify(colony, v.name .. " has come of age and can now work.", "good")
+			elseif stage == "elder" then
+				ColonyService:Notify(colony, v.name .. " is now one of the village elders.", "info")
+			end
+		end
+	end
+
+	-- Two single adults may marry and move into one home.
+	if rng:NextNumber() < V.MarriageChancePerDay then
+		local singles = {}
+		for _, v in colony.villagers do
+			if not v.isChild and not (v.partner and colony.villagers[v.partner]) then
+				v.partner = nil
+				table.insert(singles, v)
+			end
+		end
+		if #singles >= 2 then
+			local a = table.remove(singles, rng:NextInteger(1, #singles))
+			local b = table.remove(singles, rng:NextInteger(1, #singles))
+			a.partner, b.partner = b.id, a.id
+			local home = homeOf(colony, a)
+			b.home = home and home.id or nil
+			updateLabel(colony, a)
+			updateLabel(colony, b)
+			ColonyService:Notify(colony, a.name .. " and " .. b.name .. " were wed! They share a home now.", "good")
 		end
 	end
 
@@ -312,11 +397,26 @@ local function newDay(self, colony)
 		return
 	end
 
-	-- Births.
-	if adults >= 2 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay * (ColonyService:Has(colony, "PathHearth") and 2 or 1) then
-		local v = self:Add(colony, true)
+	-- Births: a married couple has a baby, named after one of them.
+	local couples = {}
+	for _, v in colony.villagers do
+		local partner = v.partner and colony.villagers[v.partner]
+		if partner and v.id < partner.id and not v.isChild then
+			table.insert(couples, { v, partner })
+		end
+	end
+	if #couples > 0 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay * (ColonyService:Has(colony, "PathHearth") and 2 or 1) then
+		local couple = couples[rng:NextInteger(1, #couples)]
+		local namesake = couple[rng:NextInteger(1, 2)]
+		local daughter = rng:NextNumber() < 0.5
+		local name = Config.Names[rng:NextInteger(1, #Config.Names)] .. " " .. firstName(namesake) .. (daughter and "sdottir" or "sson")
+		local home = homeOf(colony, couple[1])
+		local spawnAt = couple[1].body and (couple[1].body.Position - Vector3.new(0, couple[1].height, 0)) or nil
+		local v = self:Add(colony, true, spawnAt, name)
+		v.parents = { couple[1].id, couple[2].id }
+		v.home = home and home.id or nil
 		free -= 1
-		ColonyService:Notify(colony, "A child named " .. v.name .. " was born!", "good")
+		ColonyService:Notify(colony, couple[1].name .. " and " .. couple[2].name .. " had a baby: " .. name .. "!", "good")
 	end
 
 	-- Immigration from neighbouring tribes.
@@ -340,14 +440,28 @@ local function walk(colony, v, now: number)
 	end
 	local target
 	local job = v.job and colony.buildings[v.job]
-	if job and rng:NextNumber() < 0.85 then
+	local stage = v.stage or stageOf(v)
+	-- little ones stay close to a parent
+	local parent
+	if stage == "baby" or stage == "child" then
+		for _, pid in v.parents or {} do
+			local p = colony.villagers[pid]
+			if p and p.body and (not parent or rng:NextNumber() < 0.5) then
+				parent = p
+			end
+		end
+	end
+	if parent and rng:NextNumber() < (stage == "baby" and 0.9 or 0.55) then
+		target = clampToPlot(colony, parent.body.Position + Vector3.new(rng:NextNumber(-4, 4), 0, rng:NextNumber(-4, 4)))
+	elseif job and rng:NextNumber() < 0.85 then
 		target = pointNear(colony, job)
 	else
-		local home = randomHome(colony)
+		local home = homeOf(colony, v)
+		local wander = stage == "child" and 30 or (stage == "baby" and 6 or 20)
 		if home and rng:NextNumber() < 0.7 then
 			target = pointNear(colony, home)
 		else
-			target = clampToPlot(colony, v.body.Position + Vector3.new(rng:NextNumber(-20, 20), 0, rng:NextNumber(-20, 20)))
+			target = clampToPlot(colony, v.body.Position + Vector3.new(rng:NextNumber(-wander, wander), 0, rng:NextNumber(-wander, wander)))
 		end
 	end
 
@@ -359,7 +473,7 @@ local function walk(colony, v, now: number)
 		v.busyUntil = now + 2
 		return
 	end
-	local speed = V.WalkSpeed * (v.isChild and 1.2 or 1)
+	local speed = V.WalkSpeed * (({ baby = 0.45, child = 1.25, elder = 0.7 })[stage] or 1)
 	local duration = dist / speed
 	v.body.CFrame = CFrame.lookAt(from, from + flat)
 	TweenService:Create(v.body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) }):Play()

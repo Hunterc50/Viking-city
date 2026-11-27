@@ -16,7 +16,9 @@ This repository holds all the game's code. You edit it in **VS Code**, and **Roj
 - Your own plot with a starting longhouse and 3 villagers.
 - Tools: **Axe** (key 1) for trees, **Pickaxe** (key 2) for rocks, **Bow** (key 3) for hunting deer in the meadow behind your plot. Hold E on berry bushes to forage by hand.
 - 7 buildings: Longhouse and A-frame Cottage (housing), Woodcutter, Quarry, Barley Farm (jobs), Storehouse (storage), Palisade wall.
-- Villagers take jobs, walk to work, eat, and get happier or sadder. Happy villages with free housing grow through births and immigrants from neighbouring tribes.
+- Villagers take jobs, walk to work (arms and legs swinging), eat, and get happier or sadder. Single adults marry and share a home, couples have babies named after a parent (like Astrid Bjornsdottir), babies toddle after their parents, children play and grow up, and old-timers become grey-bearded elders. Newcomers also arrive from neighbouring tribes.
+- Your village saves automatically (see "Saving your village").
+- Sea battles against a raider longship and other players' ships, and Clash-style raids on other players' villages.
 - A city-builder camera, a HUD with resources, population, happiness and day, a build bar and a message feed.
 
 ---
@@ -75,6 +77,8 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
 
 The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
+
+Families: a ♥ by a villager's name means they're married. Babies are only born to married couples with a free bed, so keep spare housing. Babies grow into children after 1 day and adults after 3.
 
 Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Each Longhouse holds 5 people and each Cottage 3. Immigrants only come when you have free housing and your people are happy.
 
@@ -212,6 +216,7 @@ src/
       ToolController.luau   bow shooting and tool swings
       HudController.luau    the on-screen interface
       BuildController.luau  placement preview and demolish mode
+      VillagerAnimController.luau  arm and leg swing for walking villagers
 docs/DESIGN.md          the full game design and roadmap
 ```
 
