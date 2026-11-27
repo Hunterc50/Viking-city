@@ -65,7 +65,7 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Rotate building | **R** while placing |
 | Cancel | **Q**, or click the same button again |
 | Demolish | Click **Demolish** (right end of the tabs), then click one of your buildings (50% refund) |
-| Raid Greywater Hold | Walk west past your plot to the walled village. Sound the war horn at the gate (E) if you want a proper fight |
+| Raid a rival hold | **Greywater Hold** is west past your plot; **Ravensfell**, a smaller hold with stone and smithy loot, is at the far east end past the last plot. Sound the war horn at the gate (E) if you want a proper fight |
 | Fight | Hold the Sword (5) and click near a guard, or shoot with the Bow (3). The Axe and Pickaxe only do a little damage. Greywater Hold has 9 axemen and 4 archers on towers, so research Ring Mail and Iron Blades first |
 | Burn buildings | Hold the Torch (4) and press **F** at a rival building. Fire spreads and chars it |
 | Plunder | Hold **E** at the chests by their storehouses for food, silver and wood |

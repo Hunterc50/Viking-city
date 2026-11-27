@@ -231,6 +231,37 @@ Config.Rival = {
 	RegenSeconds = 300, -- after a raid the hold rebuilds itself in 5 minutes
 }
 
+-- A second, smaller hold at the far east end of the valley, past the last
+-- plot. Its gate faces west, toward the player plots.
+Config.Rival2 = {
+	Name = "Ravensfell",
+	Center = Vector3.new(Config.MAX_PLOTS * (Config.PLOT_CELLS * Config.CELL + Config.PLOT_GAP) - Config.PLOT_GAP + 170, 1, 90),
+	Radius = 72,
+	GateAngle = math.pi,
+	Defenders = 7,
+	Archers = 3,
+	DefenderHealth = 130,
+	DefenderDamage = 12,
+	ArcherDamage = 8,
+	ArcherRange = 90,
+	ArcherCooldown = 2.8,
+	DefenderAggro = 60,
+	Villagers = 3,
+	ChestLoot = { Food = 90, Silver = 35, Stone = 60, Hides = 4 },
+	BurnSeconds = 25,
+	RegenSeconds = 300,
+	Layout = {
+		{ "Longhouse", Vector3.new(0, 0, 36) },
+		{ "Cottage", Vector3.new(-40, 0, -18) },
+		{ "Cottage", Vector3.new(40, 0, -20) },
+		{ "Smithy", Vector3.new(-38, 0, 24) },
+		{ "Storehouse", Vector3.new(0, 0, -42) },
+	},
+}
+
+-- Every rival hold in the valley.
+Config.Rivals = { Config.Rival, Config.Rival2 }
+
 Config.Combat = {
 	-- melee damage per blow by what you're holding: tools barely scratch,
 	-- the Sword is the real weapon

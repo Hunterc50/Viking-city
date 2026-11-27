@@ -44,6 +44,10 @@ local MIN_Z, MAX_Z = -800, 840
 -- The flat, buildable part of the valley
 -- (extends west to hold the rival village, Config.Rival)
 local FLAT_MIN_X, FLAT_MAX_X = -290, PLOTS_END_X + 40
+for _, rival in Config.Rivals do
+	FLAT_MIN_X = math.min(FLAT_MIN_X, rival.Center.X - rival.Radius - 30)
+	FLAT_MAX_X = math.max(FLAT_MAX_X, rival.Center.X + rival.Radius + 30)
+end
 local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 115
 local SHORE_Z = -40 -- where the beach starts to slope into the fjord
 local SEED = 7.31
@@ -132,10 +136,14 @@ local function inPlotArea(x: number, z: number): boolean
 	return false
 end
 
-local RIVAL = Config.Rival
 local function inRivalArea(x: number, z: number): boolean
-	local dx, dz = x - RIVAL.Center.X, z - RIVAL.Center.Z
-	return dx * dx + dz * dz < (RIVAL.Radius + 22) ^ 2
+	for _, rival in Config.Rivals do
+		local dx, dz = x - rival.Center.X, z - rival.Center.Z
+		if dx * dx + dz * dz < (rival.Radius + 22) ^ 2 then
+			return true
+		end
+	end
+	return false
 end
 
 local function inApron(x: number, z: number): boolean
