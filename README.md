@@ -75,6 +75,7 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Trade | Walk to **Ottar's stall** (striped awning) on the beach in front of your plot and hold **E**. Swap wood, stone, food and hides for silver, or silver for goods. Food is dear in winter and cheap at harvest |
 | Sea battle | At the helm press **F** to loose a volley of arrows at the nearest enemy ship, or ram it at full speed. Every ship has a hull bar; at zero it sinks. A Greywater raider ship patrols the fjord: sink it for silver, food and wood. Moor by your own jetty to repair |
 | Raid another player | Walk to the **war horn post** on the west edge of their plot and hold **E**. Beat their militia in time, then plunder the chest by their longhouse for 20% of their stores. Villages are never destroyed; a raided village gets a 10-minute shield, and new villages are safe until day 3 |
+| Defend your village | From day 4, rival warbands raid you every few days (you get a warning first). They head for your Storehouse; any raider who reaches it steals a share. **Palisades** slow them (they must hack through), **Watchtowers** with an archer at work shoot them, and you fight with the Sword and Bow. Nothing is ever destroyed |
 | Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
 
 The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
@@ -243,6 +244,7 @@ src/
       SaveService.luau          saves and loads each village with a DataStore
       QuestService.luau         the Saga: a chain of goals with rewards
       TradeService.luau         Ottar's trading stalls on the beach
+      VillageDefenseService.luau  rival warbands raiding your village, watchtowers
       BoatService.luau          sailing, ship health, volleys, ramming, the raider ship
       TownRaidService.luau      raiding other players' villages (militia, plunder, shields)
   client/   -> StarterPlayer.StarterPlayerScripts.Client

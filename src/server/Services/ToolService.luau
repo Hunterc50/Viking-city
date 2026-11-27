@@ -189,6 +189,12 @@ local function shoot(player: Player, aim)
 			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
 		end)
 	end
+	local raider = hit and services.VillageDefenseService:FindRaider(hit.Instance)
+	if raider then
+		task.delay(flight, function()
+			services.VillageDefenseService:DamageRaider(raider, Config.Combat.ArrowDamage * (longbows and 1.5 or 1))
+		end)
+	end
 	local militia = hit and services.TownRaidService:FindMilitia(hit.Instance)
 	if militia then
 		task.delay(flight, function()
@@ -231,6 +237,9 @@ local function strike(player: Player)
 	end
 	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.RaidService:DamageDefender(guard, damage, player)
+	end
+	for _, raider in services.VillageDefenseService:RaidersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
+		services.VillageDefenseService:DamageRaider(raider, damage)
 	end
 	for _, militia in services.TownRaidService:MilitiaNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.TownRaidService:DamageMilitia(militia, damage, player)

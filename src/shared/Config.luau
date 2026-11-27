@@ -168,9 +168,16 @@ Config.Buildings = {
 	},
 	Palisade = {
 		Display = "Palisade",
-		Description = "A section of sharpened-log wall. Place many in a row.",
+		Description = "A section of sharpened-log wall. Raiders must hack through it, which slows them down. Place many in a row.",
 		Size = { 1, 1 },
 		Cost = { Wood = 3 },
+	},
+	Watchtower = {
+		Display = "Watchtower",
+		Description = "A tall lookout. Its archer shoots at raiders who attack your village.",
+		Size = { 2, 2 },
+		Cost = { Wood = 40, Stone = 15 },
+		Workers = 1,
 	},
 }
 
@@ -181,13 +188,13 @@ Config.BuildCategories = {
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
-	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Shipyard" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
 }
 
 -- Every building in menu order (built from the tabs above).
@@ -304,7 +311,29 @@ Config.Quests = {
 	{ Title = "Shipwrights", Text = "Build a Shipyard (War & Sea tab).", Kind = "building", Building = "Shipyard", Goal = 1, Reward = { Wood = 40 } },
 	{ Title = "Take to the sea", Text = "Research Karve (T), then hold E at the end of your jetty to launch.", Kind = "stat", Stat = "launch", Goal = 1, Reward = { Food = 30 } },
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
+	{ Title = "Hold the line", Text = "Build a Watchtower, then beat off a raid on your village.", Kind = "stat", Stat = "defend", Goal = 1, Reward = { Silver = 15, Wood = 40 } },
 	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+}
+
+-- Rival warbands raid YOUR village every few days. Fight them off, build
+-- Palisades to slow them and Watchtowers (with an archer) to shoot them.
+-- Raiders who reach your stores carry off a share; nothing is destroyed.
+Config.VillageRaids = {
+	Enabled = true,
+	FirstDay = 4, -- no raids before this day
+	EveryDays = { 2, 4 }, -- then one every 2 to 4 days
+	WarningSeconds = 40,
+	BaseRaiders = 2, -- plus one per 4 days survived, up to MaxRaiders
+	MaxRaiders = 8,
+	RaiderHealth = 90,
+	RaiderDamage = 9,
+	StealShare = 0.12, -- each raider who reaches the stores takes 12% of each resource
+	StealCap = 60,
+	TowerRange = 75,
+	TowerDamage = 30,
+	TowerCooldown = 2,
+	Reward = { Silver = 10, Hides = 2 }, -- for beating off the whole warband
+	LeaveAfter = 150, -- seconds before the raiders give up and go home
 }
 
 -- Raiding other players' villages (they must be in the same server).

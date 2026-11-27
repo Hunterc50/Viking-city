@@ -551,6 +551,41 @@ function Builders.Palisade(model, w, d)
 	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 6, 0.9), Color = Colors.DarkWood })
 end
 
+function Builders.Watchtower(model, w, d)
+	-- four tall legs, a plank deck with a railing and a little shingle roof
+	local h = 14
+	local hw, hd = w / 2 - 2, d / 2 - 2
+	for _, c in { V3(-hw, 0, -hd), V3(hw, 0, -hd), V3(-hw, 0, hd), V3(hw, 0, hd) } do
+		post(model, c, h + 4, 0.9)
+	end
+	for _, y in { 4, 9 } do
+		for _, side in { 1, -1 } do
+			addPart(model, { Name = "Brace", Size = V3(hw * 2, 0.4, 0.4), Position = V3(0, y, side * hd), Color = Colors.DarkWood })
+			addPart(model, { Name = "Brace", Size = V3(0.4, 0.4, hd * 2), Position = V3(side * hw, y, 0), Color = Colors.DarkWood })
+		end
+	end
+	addPart(model, { Name = "Deck", Size = V3(hw * 2 + 3, 0.6, hd * 2 + 3), Position = V3(0, h, 0), Color = Colors.Wood, Material = Enum.Material.WoodPlanks })
+	for _, side in { 1, -1 } do
+		addPart(model, { Name = "Rail", Size = V3(hw * 2 + 3, 1.2, 0.3), Position = V3(0, h + 0.9, side * (hd + 1.4)), Color = Colors.DarkWood })
+		addPart(model, { Name = "Rail", Size = V3(0.3, 1.2, hd * 2 + 3), Position = V3(side * (hw + 1.4), h + 0.9, 0), Color = Colors.DarkWood })
+	end
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "Roof",
+			Size = V3(hw * 2 + 4, 0.5, hd + 2.6),
+			CFrame = CFrame.new(0, h + 4.9, side * (hd / 2 + 0.9)) * CFrame.Angles(side * math.rad(32), 0, 0),
+			Color = Colors.Shingle,
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+	-- a ladder up the front
+	for y = 1, h - 1, 1.5 do
+		addPart(model, { Name = "Rung", Size = V3(1.8, 0.25, 0.25), Position = V3(0, y, -hd - 0.6), Color = Colors.Wood })
+	end
+	lantern(model, CFrame.new(hw + 1, h + 2.5, -hd - 1))
+	model:SetAttribute("ArcherPost", V3(0, h + 0.4, 0))
+end
+
 local function runestone(model, pos: Vector3, h: number, turn: number)
 	local stone = addPart(model, {
 		Name = "Runestone",
@@ -1369,7 +1404,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
-	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower",
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Longship",
 }

@@ -197,9 +197,16 @@ Config.Buildings = {
 	},
 	Palisade = {
 		Display = "Palisade",
-		Description = "A section of sharpened-log wall. Place many in a row.",
+		Description = "A section of sharpened-log wall. Raiders must hack through it, which slows them down. Place many in a row.",
 		Size = { 1, 1 },
 		Cost = { Wood = 3 },
+	},
+	Watchtower = {
+		Display = "Watchtower",
+		Description = "A tall lookout. Its archer shoots at raiders who attack your village.",
+		Size = { 2, 2 },
+		Cost = { Wood = 40, Stone = 15 },
+		Workers = 1,
 	},
 }
 
@@ -210,13 +217,13 @@ Config.BuildCategories = {
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
-	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Shipyard" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
 }
 
 -- Every building in menu order (built from the tabs above).
@@ -333,7 +340,29 @@ Config.Quests = {
 	{ Title = "Shipwrights", Text = "Build a Shipyard (War & Sea tab).", Kind = "building", Building = "Shipyard", Goal = 1, Reward = { Wood = 40 } },
 	{ Title = "Take to the sea", Text = "Research Karve (T), then hold E at the end of your jetty to launch.", Kind = "stat", Stat = "launch", Goal = 1, Reward = { Food = 30 } },
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
+	{ Title = "Hold the line", Text = "Build a Watchtower, then beat off a raid on your village.", Kind = "stat", Stat = "defend", Goal = 1, Reward = { Silver = 15, Wood = 40 } },
 	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+}
+
+-- Rival warbands raid YOUR village every few days. Fight them off, build
+-- Palisades to slow them and Watchtowers (with an archer) to shoot them.
+-- Raiders who reach your stores carry off a share; nothing is destroyed.
+Config.VillageRaids = {
+	Enabled = true,
+	FirstDay = 4, -- no raids before this day
+	EveryDays = { 2, 4 }, -- then one every 2 to 4 days
+	WarningSeconds = 40,
+	BaseRaiders = 2, -- plus one per 4 days survived, up to MaxRaiders
+	MaxRaiders = 8,
+	RaiderHealth = 90,
+	RaiderDamage = 9,
+	StealShare = 0.12, -- each raider who reaches the stores takes 12% of each resource
+	StealCap = 60,
+	TowerRange = 75,
+	TowerDamage = 30,
+	TowerCooldown = 2,
+	Reward = { Silver = 10, Hides = 2 }, -- for beating off the whole warband
+	LeaveAfter = 150, -- seconds before the raiders give up and go home
 }
 
 -- Raiding other players' villages (they must be in the same server).
@@ -1093,6 +1122,41 @@ function Builders.Palisade(model, w, d)
 	end
 	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 3, 0.9), Color = Colors.DarkWood })
 	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 6, 0.9), Color = Colors.DarkWood })
+end
+
+function Builders.Watchtower(model, w, d)
+	-- four tall legs, a plank deck with a railing and a little shingle roof
+	local h = 14
+	local hw, hd = w / 2 - 2, d / 2 - 2
+	for _, c in { V3(-hw, 0, -hd), V3(hw, 0, -hd), V3(-hw, 0, hd), V3(hw, 0, hd) } do
+		post(model, c, h + 4, 0.9)
+	end
+	for _, y in { 4, 9 } do
+		for _, side in { 1, -1 } do
+			addPart(model, { Name = "Brace", Size = V3(hw * 2, 0.4, 0.4), Position = V3(0, y, side * hd), Color = Colors.DarkWood })
+			addPart(model, { Name = "Brace", Size = V3(0.4, 0.4, hd * 2), Position = V3(side * hw, y, 0), Color = Colors.DarkWood })
+		end
+	end
+	addPart(model, { Name = "Deck", Size = V3(hw * 2 + 3, 0.6, hd * 2 + 3), Position = V3(0, h, 0), Color = Colors.Wood, Material = Enum.Material.WoodPlanks })
+	for _, side in { 1, -1 } do
+		addPart(model, { Name = "Rail", Size = V3(hw * 2 + 3, 1.2, 0.3), Position = V3(0, h + 0.9, side * (hd + 1.4)), Color = Colors.DarkWood })
+		addPart(model, { Name = "Rail", Size = V3(0.3, 1.2, hd * 2 + 3), Position = V3(side * (hw + 1.4), h + 0.9, 0), Color = Colors.DarkWood })
+	end
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "Roof",
+			Size = V3(hw * 2 + 4, 0.5, hd + 2.6),
+			CFrame = CFrame.new(0, h + 4.9, side * (hd / 2 + 0.9)) * CFrame.Angles(side * math.rad(32), 0, 0),
+			Color = Colors.Shingle,
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+	-- a ladder up the front
+	for y = 1, h - 1, 1.5 do
+		addPart(model, { Name = "Rung", Size = V3(1.8, 0.25, 0.25), Position = V3(0, y, -hd - 0.6), Color = Colors.Wood })
+	end
+	lantern(model, CFrame.new(hw + 1, h + 2.5, -hd - 1))
+	model:SetAttribute("ArcherPost", V3(0, h + 0.4, 0))
 end
 
 local function runestone(model, pos: Vector3, h: number, turn: number)
@@ -1913,7 +1977,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
-	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower",
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Longship",
 }
@@ -5533,6 +5597,12 @@ local function shoot(player: Player, aim)
 			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
 		end)
 	end
+	local raider = hit and services.VillageDefenseService:FindRaider(hit.Instance)
+	if raider then
+		task.delay(flight, function()
+			services.VillageDefenseService:DamageRaider(raider, Config.Combat.ArrowDamage * (longbows and 1.5 or 1))
+		end)
+	end
 	local militia = hit and services.TownRaidService:FindMilitia(hit.Instance)
 	if militia then
 		task.delay(flight, function()
@@ -5575,6 +5645,9 @@ local function strike(player: Player)
 	end
 	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.RaidService:DamageDefender(guard, damage, player)
+	end
+	for _, raider in services.VillageDefenseService:RaidersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
+		services.VillageDefenseService:DamageRaider(raider, damage)
 	end
 	for _, militia in services.TownRaidService:MilitiaNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.TownRaidService:DamageMilitia(militia, damage, player)
@@ -6184,6 +6257,440 @@ return TradeService
         </Item>
         <Item class="ModuleScript" referent="27">
           <Properties>
+            <string name="Name">VillageDefenseService</string>
+            <string name="Source"><![CDATA[--[[
+	VillageDefenseService
+	Every few days (Config.VillageRaids) a warband from one of the rival
+	holds raids YOUR village:
+	  - you get a warning first, then they march in from the edge of your plot
+	  - they head for your stores (Storehouse, or your Longhouse)
+	  - Palisades are in the way: they have to stop and hack through (the
+	    wall is down for a while, then your people put it back up)
+	  - Watchtowers with an archer at work shoot them; you fight with your
+	    Sword and Bow
+	  - every raider who reaches the stores carries off a share and leaves
+	Nothing is ever destroyed. Beat the whole warband for a reward.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+local Sounds = require(Shared.Sounds)
+
+local VillageDefenseService = {}
+
+local VR = Config.VillageRaids
+local services
+local rng = Random.new()
+local folder: Folder
+local raids = {} -- [colony] = raid
+local WALK_ANIM = "rbxassetid://507777826"
+
+function VillageDefenseService:Init(allServices)
+	services = allServices
+	folder = Instance.new("Folder")
+	folder.Name = "VillageRaiders"
+	folder.Parent = workspace
+end
+
+local function flat(v: Vector3): Vector3
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+local function notify(colony, text: string, kind: string?)
+	services.ColonyService:Notify(colony, text, kind)
+end
+
+-- Where the raiders are going: a storehouse, else any home.
+local function storesOf(colony)
+	local best
+	for _, b in colony.buildings do
+		if b.type == "Storehouse" then
+			return b
+		end
+		if not best and Config.Buildings[b.type].Housing then
+			best = b
+		end
+	end
+	return best
+end
+
+local function spawnRaider(raid, pos: Vector3, holdName: string)
+	local desc = Instance.new("HumanoidDescription")
+	local skin = Color3.fromRGB(220, 182, 146)
+	desc.HeadColor = skin
+	desc.LeftArmColor = skin
+	desc.RightArmColor = skin
+	desc.TorsoColor = Color3.fromRGB(46, 52, 70)
+	desc.LeftLegColor = Color3.fromRGB(50, 44, 38)
+	desc.RightLegColor = Color3.fromRGB(50, 44, 38)
+	local ok, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not model then
+		warn("[VillageDefenseService] could not create raider: " .. tostring(model))
+		return
+	end
+	model.Name = holdName .. " Raider"
+	model:SetAttribute("Raider", true)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	humanoid.DisplayName = holdName .. " Raider"
+	humanoid.MaxHealth = VR.RaiderHealth
+	humanoid.Health = VR.RaiderHealth
+	humanoid.WalkSpeed = 12
+	local head = model:FindFirstChild("Head")
+	local hand = model:FindFirstChild("RightHand")
+	local function gear(onto, name, size, offset, color, material, shape)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = material or Enum.Material.Metal
+		if shape then
+			p.Shape = shape
+		end
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = onto.CFrame * offset
+		p.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = onto
+		w.Part1 = p
+		w.Parent = p
+	end
+	if head then
+		gear(head, "Helmet", Vector3.new(1.35, 0.7, 1.35), CFrame.new(0, 0.45, 0), Color3.fromRGB(70, 72, 78), Enum.Material.Metal, Enum.PartType.Ball)
+	end
+	if hand then
+		gear(hand, "Haft", Vector3.new(0.25, 3.2, 0.25), CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0), Color3.fromRGB(110, 76, 46), Enum.Material.Wood)
+		gear(hand, "AxeHead", Vector3.new(0.2, 1, 1.1), CFrame.new(0, 0.1, -1.9), Color3.fromRGB(120, 122, 130))
+	end
+	model:PivotTo(CFrame.new(pos + Vector3.new(0, 3, 0)))
+	model.Parent = folder
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then
+		pcall(function()
+			root:SetNetworkOwner(nil)
+		end)
+	end
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+	local walkTrack
+	pcall(function()
+		local anim = Instance.new("Animation")
+		anim.AnimationId = WALK_ANIM
+		walkTrack = animator:LoadAnimation(anim)
+	end)
+	humanoid.Running:Connect(function(speed)
+		if walkTrack then
+			if speed > 0.5 and not walkTrack.IsPlaying then
+				walkTrack:Play()
+			elseif speed <= 0.5 and walkTrack.IsPlaying then
+				walkTrack:Stop()
+			end
+		end
+	end)
+	local r = { model = model, humanoid = humanoid, root = root, lastHit = 0, lastPos = pos, stuckFor = 0 }
+	humanoid.Died:Connect(function()
+		r.dead = true
+		task.delay(5, function()
+			model:Destroy()
+		end)
+		VillageDefenseService:CheckBeaten(raid)
+	end)
+	table.insert(raid.raiders, r)
+end
+
+-- Raid lifecycle ----------------------------------------------------------------
+
+local function endRaid(raid, text: string?, kind: string?)
+	if raid.over then
+		return
+	end
+	raid.over = true
+	raids[raid.colony] = nil
+	for _, r in raid.raiders do
+		if not r.dead and r.model.Parent then
+			r.model:Destroy()
+		end
+	end
+	raid.colony.nextRaidDay = raid.colony.day + rng:NextInteger(VR.EveryDays[1], VR.EveryDays[2])
+	if text then
+		notify(raid.colony, text, kind)
+	end
+end
+
+function VillageDefenseService:CheckBeaten(raid)
+	if raid.over then
+		return
+	end
+	local fought = 0
+	for _, r in raid.raiders do
+		if not r.dead and not r.fled then
+			return
+		end
+		if r.dead then
+			fought += 1
+		end
+	end
+	local colony = raid.colony
+	if fought > 0 and raid.stolen == 0 then
+		for res, n in VR.Reward do
+			services.ColonyService:Add(colony, res, n)
+		end
+		colony.happiness = math.min(100, colony.happiness + 8)
+		services.QuestService:Count(colony, "defend")
+		endRaid(raid, "The " .. raid.hold .. " warband is beaten! Your people cheer. +" .. Grid.costText(VR.Reward), "raid")
+	elseif raid.stolen > 0 then
+		endRaid(raid, "The raiders are gone, but they carried off some of your stores. Build Watchtowers and Palisades!", "bad")
+	else
+		endRaid(raid)
+	end
+end
+
+local function steal(raid, r)
+	local colony = raid.colony
+	local taken = {}
+	for _, res in Config.ResourceOrder do
+		if res ~= "Lore" then
+			local n = math.floor(math.min((colony.resources[res] or 0) * VR.StealShare, VR.StealCap))
+			if n > 0 then
+				colony.resources[res] -= n
+				taken[res] = n
+			end
+		end
+	end
+	raid.stolen += 1
+	r.fled = true
+	notify(colony, "A raider reached your stores and ran off with " .. (next(taken) and Grid.costText(taken) or "nothing") .. "!", "bad")
+	TweenService:Create(r.root, TweenInfo.new(0.6), { Transparency = 1 }):Play()
+	task.delay(0.6, function()
+		if r.model.Parent then
+			r.model:Destroy()
+		end
+	end)
+	services.ColonyService:Sync(colony)
+	VillageDefenseService:CheckBeaten(raid)
+end
+
+-- A palisade in the way gets hacked down for a while (never destroyed).
+local function breach(colony, near: Vector3): boolean
+	for _, b in colony.buildings do
+		if b.type == "Palisade" and not b.breached and flat(b.center - near).Magnitude < 9 then
+			b.breached = true
+			for _, p in b.model:GetDescendants() do
+				if p:IsA("BasePart") then
+					p:SetAttribute("PreBreach", p.Transparency)
+					p.Transparency = 0.75
+					p.CanCollide = false
+				end
+			end
+			notify(colony, "Raiders are hacking through your palisade!", "bad")
+			task.delay(30, function()
+				b.breached = false
+				if b.model.Parent then
+					for _, p in b.model:GetDescendants() do
+						if p:IsA("BasePart") then
+							p.Transparency = p:GetAttribute("PreBreach") or 0
+							p.CanCollide = true
+						end
+					end
+				end
+			end)
+			return true
+		end
+	end
+	return false
+end
+
+local function startRaid(colony)
+	local hold = Config.Rivals[rng:NextInteger(1, #Config.Rivals)]
+	local count = math.min(VR.BaseRaiders + math.floor(colony.day / 4), VR.MaxRaiders)
+	local raid = { colony = colony, raiders = {}, stolen = 0, hold = hold.Name, startedAt = os.clock() }
+	raids[colony] = raid
+	-- they come from the side of the plot nearest their hold
+	local o = colony.origin
+	local fromWest = hold.Center.X < o.X
+	local x = fromWest and (o.X - 14) or (o.X + Grid.PLOT_SIZE + 14)
+	for i = 1, count do
+		local z = o.Z + Grid.PLOT_SIZE * 0.3 + i * 6
+		local y = services.WorldService:GroundHeight(x, z)
+		spawnRaider(raid, Vector3.new(x + rng:NextNumber(-3, 3), y, z), hold.Name)
+	end
+	Sounds.play("WarHorn", Vector3.new(x, o.Y, o.Z + Grid.PLOT_SIZE / 2))
+	notify(colony, "RAID! " .. count .. " " .. hold.Name .. " raiders storm your village!", "raid")
+end
+
+local function warnOf(colony)
+	local hold = Config.Rivals[rng:NextInteger(1, #Config.Rivals)]
+	colony.raidWarned = true
+	notify(colony, "Scouts report a " .. hold.Name .. " warband marching on your village! They arrive in " .. VR.WarningSeconds .. " seconds.", "raid")
+	task.delay(VR.WarningSeconds, function()
+		colony.raidWarned = false
+		if colony.player.Parent and services.ColonyService:Get(colony.player) == colony then
+			startRaid(colony)
+		end
+	end)
+end
+
+-- Tick ------------------------------------------------------------------------
+
+local function towerArrow(from: Vector3, to: Vector3)
+	local arrow = ModelFactory.arrow()
+	arrow.CFrame = CFrame.lookAt(from, to)
+	arrow.Parent = workspace
+	local flight = (to - from).Magnitude / 150
+	TweenService:Create(arrow, TweenInfo.new(flight, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + (to - from).Unit) }):Play()
+	task.delay(flight + 2, function()
+		arrow:Destroy()
+	end)
+	Sounds.play("Bow", from)
+	return flight
+end
+
+local function tickRaid(raid, now: number, step: number)
+	local colony = raid.colony
+	if now - raid.startedAt > VR.LeaveAfter then
+		for _, r in raid.raiders do
+			r.fled = true
+		end
+		endRaid(raid, "The raiders lost heart and went home.", "info")
+		return
+	end
+	local stores = storesOf(colony)
+	local character = colony.player.Character
+	local proot = character and character:FindFirstChild("HumanoidRootPart")
+	local phum = character and character:FindFirstChildOfClass("Humanoid")
+
+	for _, r in raid.raiders do
+		if not r.dead and not r.fled and r.root then
+			local pos = r.root.Position
+			local goal = stores and stores.center or (colony.origin + Vector3.new(Grid.PLOT_SIZE / 2, 0, Grid.PLOT_SIZE / 2))
+			local nearPlayer = proot and phum and phum.Health > 0 and (proot.Position - pos).Magnitude < 22
+			if nearPlayer then
+				r.humanoid:MoveTo(proot.Position)
+				if (proot.Position - pos).Magnitude < 6 and now - r.lastHit > 1.2 then
+					r.lastHit = now
+					local dmg = VR.RaiderDamage * (services.ColonyService:Has(colony, "PathStorm") and 0.7 or 1)
+					phum:TakeDamage(dmg)
+				end
+			else
+				r.humanoid:MoveTo(goal)
+				if flat(goal - pos).Magnitude < 11 then
+					steal(raid, r)
+					continue
+				end
+			end
+			-- stuck against a wall? hack through it
+			if (pos - r.lastPos).Magnitude < 0.6 * step * 4 then
+				r.stuckFor += step
+				if r.stuckFor > 2 and breach(colony, pos) then
+					r.stuckFor = 0
+				end
+			else
+				r.stuckFor = 0
+			end
+			r.lastPos = pos
+		end
+	end
+
+	-- watchtowers with an archer at work shoot the nearest raider
+	local manned = {}
+	for _, v in colony.villagers do
+		if v.job then
+			manned[v.job] = true
+		end
+	end
+	for id, b in colony.buildings do
+		if b.type == "Watchtower" and manned[id] and now - (b.lastShot or 0) > VR.TowerCooldown then
+			local top = b.center + Vector3.new(0, 15.5, 0)
+			local target, best = nil, VR.TowerRange
+			for _, r in raid.raiders do
+				if not r.dead and not r.fled and r.root then
+					local d = (r.root.Position - top).Magnitude
+					if d < best then
+						target, best = r, d
+					end
+				end
+			end
+			if target then
+				b.lastShot = now
+				local flight = towerArrow(top, target.root.Position)
+				task.delay(flight, function()
+					if not target.dead then
+						target.humanoid:TakeDamage(VR.TowerDamage)
+					end
+				end)
+			end
+		end
+	end
+end
+
+-- Combat hooks for ToolService -----------------------------------------------------
+
+function VillageDefenseService:FindRaider(inst: Instance?): Model?
+	while inst and inst ~= workspace do
+		if inst:IsA("Model") and inst:GetAttribute("Raider") then
+			return inst
+		end
+		inst = inst.Parent
+	end
+	return nil
+end
+
+function VillageDefenseService:RaidersNear(position: Vector3, look: Vector3, range: number)
+	local found = {}
+	for _, raid in raids do
+		for _, r in raid.raiders do
+			if not r.dead and not r.fled and r.root then
+				local offset = flat(r.root.Position - position)
+				if offset.Magnitude <= range and (offset.Magnitude < 2 or offset.Unit:Dot(flat(look).Unit) > 0.2) then
+					table.insert(found, r.model)
+				end
+			end
+		end
+	end
+	return found
+end
+
+function VillageDefenseService:DamageRaider(model: Model, amount: number)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.Health > 0 then
+		humanoid:TakeDamage(amount)
+	end
+end
+
+function VillageDefenseService:Start()
+	if not VR.Enabled then
+		return
+	end
+	local last = os.clock()
+	while true do
+		task.wait(0.25)
+		local now = os.clock()
+		local step = now - last
+		last = now
+		for _, colony in services.ColonyService:All() do
+			colony.nextRaidDay = colony.nextRaidDay or math.max(VR.FirstDay, colony.day + 2)
+			local raid = raids[colony]
+			if raid then
+				tickRaid(raid, now, step)
+			elseif not colony.raidWarned and colony.day >= colony.nextRaidDay then
+				warnOf(colony)
+			end
+		end
+	end
+end
+
+return VillageDefenseService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="28">
+          <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
 	VillagerService
@@ -6690,7 +7197,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -6856,7 +7363,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -7564,15 +8071,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="30">
+  <Item class="StarterPlayer" referent="31">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="31">
+    <Item class="StarterPlayerScripts" referent="32">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="32">
+      <Item class="LocalScript" referent="33">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -7605,11 +8112,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="33">
+        <Item class="Folder" referent="34">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="34">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -7719,7 +8226,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="35">
+          <Item class="ModuleScript" referent="36">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -7781,7 +8288,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -7852,7 +8359,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -8130,7 +8637,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="38">
+          <Item class="ModuleScript" referent="39">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -8220,7 +8727,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="39">
+          <Item class="ModuleScript" referent="40">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -8886,7 +9393,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="40">
+          <Item class="ModuleScript" referent="41">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -8967,7 +9474,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="41">
+          <Item class="ModuleScript" referent="42">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -9178,7 +9685,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="42">
+          <Item class="ModuleScript" referent="43">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -9269,7 +9776,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="43">
+          <Item class="ModuleScript" referent="44">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -9321,7 +9828,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="44">
+          <Item class="ModuleScript" referent="45">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -9643,7 +10150,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="45">
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -9730,7 +10237,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="46">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -9928,7 +10435,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="47">
+          <Item class="ModuleScript" referent="48">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -9981,7 +10488,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -10076,12 +10583,12 @@ return VillagerAnimController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="49">
+  <Item class="Workspace" referent="50">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="50">
+    <Item class="Part" referent="51">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -10102,13 +10609,13 @@ return VillagerAnimController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="51">
+    <Item class="BoolValue" referent="52">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="52">
+    <Item class="SpawnLocation" referent="53">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -10128,7 +10635,7 @@ return VillagerAnimController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="53">
+    <Item class="Part" referent="54">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -10145,13 +10652,13 @@ return VillagerAnimController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="54">
+      <Item class="SurfaceGui" referent="55">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="55">
+        <Item class="TextLabel" referent="56">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -10183,13 +10690,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="56">
+      <Item class="SurfaceGui" referent="57">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="57">
+        <Item class="TextLabel" referent="58">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
