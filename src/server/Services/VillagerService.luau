@@ -204,7 +204,17 @@ local function produce(colony, dt: number)
 			for resource, rate in produces do
 				-- crops only grow outside winter
 				local seasonal = b.type == "Farm" and season.FarmRate or 1
-				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal)
+				local bonus = 1
+				if b.type == "Farm" and ColonyService:Has(colony, "CropRotation") then
+					bonus *= 1.25
+				elseif b.type == "Quarry" and ColonyService:Has(colony, "Masonry") then
+					bonus *= 1.3
+				elseif b.type == "Woodcutter" and ColonyService:Has(colony, "Woodcraft") then
+					bonus *= 1.3
+				elseif b.type == "LoreHall" and ColonyService:Has(colony, "SagaTellers") then
+					bonus *= 1.5
+				end
+				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal * bonus)
 			end
 		end
 	end
@@ -212,7 +222,11 @@ end
 
 local function eat(colony, dt: number)
 	local adults, children = counts(colony)
-	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * services.SeasonService:Current().FoodUse
+	local foodUse = services.SeasonService:Current().FoodUse
+	if services.ColonyService:Has(colony, "MidwinterRite") then
+		foodUse = 1
+	end
+	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * foodUse
 	local food = colony.resources.Food or 0
 	local wasStarving = colony.starving
 	if food >= need then
@@ -241,6 +255,22 @@ local function updateHappiness(colony, dt: number)
 	end
 	local homeless = math.max(0, pop - housing)
 	target -= homeless * 8
+	-- buildings and traits that cheer people up (each building type counts once)
+	local cheered = {}
+	for _, b in colony.buildings do
+		local bonus = Config.Buildings[b.type].Happiness
+		if bonus and not cheered[b.type] then
+			cheered[b.type] = true
+			target += bonus
+		end
+	end
+	local ColonyService = services.ColonyService
+	if ColonyService:Has(colony, "Feasting") then
+		target += 10
+	end
+	if ColonyService:Has(colony, "PathHearth") then
+		target += 10
+	end
 	target = math.clamp(target, 0, 100)
 
 	colony.happiness += (target - colony.happiness) * math.min(1, 0.05 * dt)
@@ -278,7 +308,7 @@ local function newDay(self, colony)
 	end
 
 	-- Births.
-	if adults >= 2 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay then
+	if adults >= 2 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay * (ColonyService:Has(colony, "PathHearth") and 2 or 1) then
 		local v = self:Add(colony, true)
 		free -= 1
 		ColonyService:Notify(colony, "A child named " .. v.name .. " was born!", "good")
@@ -286,7 +316,8 @@ local function newDay(self, colony)
 
 	-- Immigration from neighbouring tribes.
 	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay then
-		local n = rng:NextInteger(1, math.min(V.ImmigrationMaxGroup, free))
+		local maxGroup = V.ImmigrationMaxGroup * (ColonyService:Has(colony, "OpenArms") and 2 or 1)
+		local n = rng:NextInteger(1, math.min(maxGroup, free))
 		local tribe = Config.Tribes[rng:NextInteger(1, #Config.Tribes)]
 		local arrival = colony.origin + Vector3.new(rng:NextNumber(10, Grid.PLOT_SIZE - 10), 0, -4)
 		for _ = 1, n do

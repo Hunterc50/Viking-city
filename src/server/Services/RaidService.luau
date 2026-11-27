@@ -217,7 +217,15 @@ local function makeChest(cf: CFrame)
 		-- swing the lid open
 		lid.CFrame = chest.hinge * CFrame.Angles(math.rad(-100), 0, 0) * chest.hinge:Inverse() * chest.lidClosed
 		local parts = {}
-		for resource, amount in R.ChestLoot do
+		local mult = 1
+		if ColonyService:Has(colony, "SeaRaiders") then
+			mult *= 1.5
+		end
+		if ColonyService:Has(colony, "PathStorm") then
+			mult *= 1.5
+		end
+		for resource, base in R.ChestLoot do
+			local amount = math.floor(base * mult)
 			ColonyService:Add(colony, resource, amount)
 			table.insert(parts, "+" .. amount .. " " .. resource)
 		end
@@ -438,7 +446,13 @@ local function guardLoop()
 						swingAxe(g)
 						local hum = target:FindFirstChildOfClass("Humanoid")
 						if hum then
-							hum:TakeDamage(R.DefenderDamage)
+							local victim = Players:GetPlayerFromCharacter(target)
+							local colony = victim and services.ColonyService:Get(victim)
+							local damage = R.DefenderDamage
+							if services.ColonyService:Has(colony, "PathStorm") then
+								damage *= 0.7
+							end
+							hum:TakeDamage(damage)
 						end
 					end
 				elseif flat(g.root.Position - g.post).Magnitude > 3 then

@@ -12,11 +12,13 @@ local EVENTS = {
 	"Notify", -- server -> client: short message for the toast feed
 	"ShootArrow", -- client -> server: (aimPosition) when the Bow is used
 	"Strike", -- client -> server: an Axe swing (server finds who it hits)
+	"BoatInput", -- client -> server: (throttle, steer) while sailing
 }
 
 local FUNCTIONS = {
 	"PlaceBuilding", -- client -> server: (type, cx, cz, rot) -> ok, message
 	"DemolishBuilding", -- client -> server: (buildingId) -> ok, message
+	"Research", -- client -> server: (techId) -> ok, message
 }
 
 local Remotes = {}

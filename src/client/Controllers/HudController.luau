@@ -35,6 +35,7 @@ local RESOURCE_COLORS = {
 	Food = Color3.fromRGB(220, 190, 90),
 	Hides = Color3.fromRGB(176, 120, 84),
 	Silver = Color3.fromRGB(210, 214, 224),
+	Lore = Color3.fromRGB(120, 160, 230),
 }
 
 local function new(className: string, props, children)
@@ -108,7 +109,7 @@ function HudController:Start()
 	local resBar = new("Frame", {
 		Name = "Resources",
 		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(700, 44),
+		Size = UDim2.fromOffset(830, 44),
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
@@ -162,20 +163,26 @@ function HudController:Start()
 		Name = "BuildBar",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(0, 70),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
 	}, {
 		corner(10),
 		padding(8),
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		-- two rows of buttons
+		new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(112, 54),
+			CellPadding = UDim2.fromOffset(8, 8),
+			FillDirectionMaxCells = 7,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
 	})
 
 	local hint = label({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -90),
+		Position = UDim2.new(0.5, 0, 1, -152),
 		Size = UDim2.fromOffset(640, 22),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextSize = 15,
@@ -216,7 +223,7 @@ function HudController:Start()
 			TextSize = 12,
 			TextColor3 = THEME.Muted,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			TextScaled = false,
+			TextScaled = true,
 			Text = sub,
 			Parent = b,
 		})
@@ -363,9 +370,23 @@ function HudController:Start()
 			warnLabel.TextColor3 = THEME.Bad
 		end
 
+		local known = {}
+		for _, id in state.tech or {} do
+			known[id] = true
+		end
 		for _, buildingType in Config.BuildOrder do
-			local affordable = Grid.canAfford(state.resources, Config.Buildings[buildingType].Cost)
-			buttons[buildingType].cost.TextColor3 = affordable and THEME.Muted or THEME.Bad
+			local def = Config.Buildings[buildingType]
+			local entry = buttons[buildingType]
+			if def.Requires and not known[def.Requires] then
+				entry.cost.Text = "Research " .. Config.Tech[def.Requires].Name
+				entry.cost.TextColor3 = THEME.Muted
+				entry.button.BackgroundTransparency = 0.5
+			else
+				entry.cost.Text = Grid.costText(def.Cost)
+				entry.button.BackgroundTransparency = 0
+				local affordable = Grid.canAfford(state.resources, def.Cost)
+				entry.cost.TextColor3 = affordable and THEME.Muted or THEME.Bad
+			end
 		end
 	end)
 end

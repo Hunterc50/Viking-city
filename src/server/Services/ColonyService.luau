@@ -40,6 +40,20 @@ function ColonyService:All()
 	return colonies
 end
 
+-- Has this colony researched `techId`?
+function ColonyService:Has(colony, techId: string): boolean
+	return colony ~= nil and colony.tech[techId] == true
+end
+
+function ColonyService:HasBuilding(colony, buildingType: string): boolean
+	for _, b in colony.buildings do
+		if b.type == buildingType then
+			return true
+		end
+	end
+	return false
+end
+
 function ColonyService:NewId(colony): number
 	colony.nextId += 1
 	return colony.nextId
@@ -133,6 +147,20 @@ function ColonyService:Sync(colony)
 		starving = colony.starving,
 		day = colony.day,
 		season = workspace:GetAttribute("Season") or "Summer",
+		tech = (function()
+			local list = {}
+			for id in colony.tech do
+				table.insert(list, id)
+			end
+			return list
+		end)(),
+		buildingTypes = (function()
+			local set = {}
+			for _, b in colony.buildings do
+				set[b.type] = true
+			end
+			return set
+		end)(),
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 	}
 
@@ -166,6 +194,7 @@ function ColonyService:Create(player: Player)
 		buildings = {},
 		villagers = {},
 		nodes = {},
+		tech = {},
 		happiness = 60,
 		day = 1,
 		dayTimer = 0,

@@ -68,6 +68,8 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Burn buildings | Hold the Torch (4) and press **F** at a rival building. Fire spreads and chars it |
 | Plunder | Hold **E** at the chests by their storehouses for food, silver and wood |
 | New villagers | When every guard has fallen, hold **E** on the hold's villagers to offer them a home (needs a free bed) |
+| Research | Press **T** (or the Research button). Build a **Lore Hall** to earn Lore, then unlock techs in Buildings, Gear, Boats, Culture and Religion. A Smithy, Shipyard or Shrine opens their branch |
+| Sail | Build a **Shipyard**, research **Karve**, then hold **E** at the end of your jetty. W/S row, A/D steer, Space jumps off. Beach it near Greywater Hold for a sea raid |
 | Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
 
 The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
@@ -84,7 +86,7 @@ The game is built from simple blocks so it works out of the box, but you can swa
 2. In the Explorer, open **ReplicatedStorage > Assets**.
 3. Drag your model into the **Assets** folder.
 4. Rename it to exactly one of these slot names:
-   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `Tree_Pine`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Axe`, `Pickaxe`, `Bow`
+   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `LoreHall`, `Smithy`, `Shrine`, `Shipyard`, `HuntingLodge`, `GreatHall`, `Tree_Pine`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Axe`, `Pickaxe`, `Bow`
 5. Press Play. Buildings are resized to fit their spot on the grid automatically.
 
 Notes:

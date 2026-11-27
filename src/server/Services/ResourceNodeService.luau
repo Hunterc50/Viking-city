@@ -75,8 +75,16 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 		colony.nodes[key] = nil
 		model:Destroy()
 		ColonyService:Unblock(colony, x, z)
-		ColonyService:Add(colony, def.Gives, def.Amount)
-		ColonyService:Notify(colony, "+" .. def.Amount .. " " .. def.Gives, "gain")
+		local amount = def.Amount
+		if kind == "Tree" and ColonyService:Has(colony, "IronAxes") then
+			amount *= 1.5
+		end
+		if ColonyService:Has(colony, "PathWoods") then
+			amount *= 2
+		end
+		amount = math.floor(amount)
+		ColonyService:Add(colony, def.Gives, amount)
+		ColonyService:Notify(colony, "+" .. amount .. " " .. def.Gives, "gain")
 		ColonyService:Sync(colony)
 	end)
 end

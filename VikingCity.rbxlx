@@ -47,8 +47,8 @@ Config.TICK = 1 -- seconds between simulation steps
 Config.DAY_LENGTH = 60 -- real seconds per in-game day
 
 -- Resources ---------------------------------------------------------------
-Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides", "Silver" }
-Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0, Silver = 0 }
+Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides", "Silver", "Lore" }
+Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0, Silver = 0, Lore = 0 }
 Config.BaseStorage = 200 -- max of each resource before any storehouse
 
 -- Villagers ---------------------------------------------------------------
@@ -143,6 +143,53 @@ Config.Buildings = {
 		Cost = { Wood = 40, Stone = 20 },
 		Storage = 200,
 	},
+	LoreHall = {
+		Display = "Lore Hall",
+		Description = "2 skalds gather Lore, which pays for research (press T).",
+		Size = { 3, 2 },
+		Cost = { Wood = 50, Stone = 20 },
+		Workers = 2,
+		Produces = { Lore = 0.12 },
+	},
+	Smithy = {
+		Display = "Smithy",
+		Description = "A forge. Needed to research gear. 1 smith makes silver goods.",
+		Size = { 2, 2 },
+		Cost = { Wood = 30, Stone = 30 },
+		Workers = 1,
+		Produces = { Silver = 0.05 },
+	},
+	Shrine = {
+		Display = "Shrine",
+		Description = "Standing stones and a carved idol. +5 happiness; unlocks the patron paths.",
+		Size = { 2, 2 },
+		Cost = { Stone = 40, Silver = 10 },
+		Happiness = 5,
+	},
+	Shipyard = {
+		Display = "Shipyard",
+		Description = "Builds ships. Needed to research boats; launch them from your dock.",
+		Size = { 3, 4 },
+		Cost = { Wood = 90, Stone = 20 },
+	},
+	HuntingLodge = {
+		Display = "Hunting Lodge",
+		Description = "2 hunters bring back meat and hides.",
+		Size = { 2, 2 },
+		Cost = { Wood = 30, Hides = 4 },
+		Workers = 2,
+		Produces = { Food = 0.25, Hides = 0.04 },
+		Requires = "Trapping",
+	},
+	GreatHall = {
+		Display = "Great Hall",
+		Description = "A chieftain's hall for 10 people. +5 happiness.",
+		Size = { 5, 3 },
+		Cost = { Wood = 140, Stone = 60, Silver = 20 },
+		Housing = 10,
+		Happiness = 5,
+		Requires = "Chieftainship",
+	},
 	Palisade = {
 		Display = "Palisade",
 		Description = "A section of sharpened-log wall. Place many in a row.",
@@ -152,7 +199,10 @@ Config.Buildings = {
 }
 
 -- Order of buttons in the build bar.
-Config.BuildOrder = { "Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade" }
+Config.BuildOrder = {
+	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
+}
 
 -- Tools every player carries (built in ModelFactory.tool).
 Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch" }
@@ -197,6 +247,41 @@ Config.Bow = {
 }
 
 Config.DemolishRefund = 0.5 -- fraction of the cost returned
+
+-- Research ------------------------------------------------------------------
+--[[
+	Each tech: Branch, Name, Description, Cost, Requires (other tech ids),
+	Building (a building you must own first), Group (only one tech per group,
+	used for the patron paths). Effects are read by the services via
+	ColonyService:Has(colony, id).
+]]
+Config.TechBranches = { "Buildings", "Gear", "Boats", "Culture", "Religion" }
+Config.Tech = {
+	-- Buildings
+	CropRotation = { Branch = "Buildings", Name = "Crop Rotation", Description = "Farms grow 25% more.", Cost = { Lore = 15 } },
+	Masonry = { Branch = "Buildings", Name = "Masonry", Description = "Quarries cut 30% more stone.", Cost = { Lore = 20 } },
+	Trapping = { Branch = "Buildings", Name = "Trapping", Description = "Unlocks the Hunting Lodge.", Cost = { Lore = 20 } },
+	Chieftainship = { Branch = "Buildings", Name = "Chieftainship", Description = "Unlocks the Great Hall.", Cost = { Lore = 60, Silver = 20 }, Requires = { "Masonry" } },
+	-- Gear (needs a Smithy)
+	IronAxes = { Branch = "Gear", Name = "Iron Axes", Description = "Chop 50% more wood and hit 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
+	Longbows = { Branch = "Gear", Name = "Yew Longbows", Description = "Arrows hit 50% harder and fly further.", Cost = { Lore = 25, Wood = 40 }, Building = "Smithy" },
+	ChainMail = { Branch = "Gear", Name = "Ring Mail", Description = "You have 150 health instead of 100.", Cost = { Lore = 40, Silver = 25 }, Building = "Smithy", Requires = { "IronAxes" } },
+	SteelEdges = { Branch = "Gear", Name = "Steel Edges", Description = "Axe blows hit twice as hard.", Cost = { Lore = 60, Silver = 30 }, Building = "Smithy", Requires = { "IronAxes" } },
+	-- Boats (needs a Shipyard)
+	Karve = { Branch = "Boats", Name = "Karve", Description = "Launch a small boat from your dock and sail the fjord.", Cost = { Lore = 30, Wood = 80 }, Building = "Shipyard" },
+	Longship = { Branch = "Boats", Name = "Longship", Description = "Launch a fast war longship instead.", Cost = { Lore = 70, Wood = 150, Silver = 20 }, Building = "Shipyard", Requires = { "Karve" } },
+	SeaRaiders = { Branch = "Boats", Name = "Sea Raiders", Description = "Plunder 50% more from chests.", Cost = { Lore = 50 }, Requires = { "Karve" } },
+	-- Culture
+	SagaTellers = { Branch = "Culture", Name = "Saga Tellers", Description = "Lore Halls gather 50% more lore.", Cost = { Lore = 20 } },
+	Feasting = { Branch = "Culture", Name = "Feasting", Description = "+10 happiness.", Cost = { Lore = 30, Food = 60 } },
+	Woodcraft = { Branch = "Culture", Name = "Woodcraft", Description = "Woodcutters work 30% faster.", Cost = { Lore = 25 } },
+	OpenArms = { Branch = "Culture", Name = "Open Arms", Description = "Twice as many immigrants arrive.", Cost = { Lore = 45 }, Requires = { "Feasting" } },
+	-- Religion (needs a Shrine; pick ONE patron path)
+	PathStorm = { Branch = "Religion", Name = "Path of the Storm", Description = "Patron of the sea: raids plunder 50% more, guards hit you 30% softer.", Cost = { Lore = 40 }, Building = "Shrine", Group = "Patron" },
+	PathHearth = { Branch = "Religion", Name = "Path of the Hearth", Description = "Patron of home: twice the births, +10 happiness.", Cost = { Lore = 40 }, Building = "Shrine", Group = "Patron" },
+	PathWoods = { Branch = "Religion", Name = "Path of the Deep Woods", Description = "Patron of the wild: double hand gathering and hunting.", Cost = { Lore = 40 }, Building = "Shrine", Group = "Patron" },
+	MidwinterRite = { Branch = "Religion", Name = "Midwinter Rite", Description = "Winter no longer makes your people eat more.", Cost = { Lore = 50, Food = 40 }, Building = "Shrine" },
+}
 
 -- Seasons -------------------------------------------------------------------
 -- The year turns for everyone on the server. Each season lasts SeasonSeconds.
@@ -827,6 +912,167 @@ function Builders.Palisade(model, w, d)
 	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 6, 0.9), Color = Colors.DarkWood })
 end
 
+local function runestone(model, pos: Vector3, h: number, turn: number)
+	local stone = addPart(model, {
+		Name = "Runestone",
+		Size = V3(2.4, h, 0.9),
+		CFrame = CFrame.new(pos + V3(0, h / 2, 0)) * CFrame.Angles(0, turn, 0.04),
+		Color = Color3.fromRGB(120, 120, 116),
+		Material = Enum.Material.Slate,
+	})
+	-- carved band of runes, faintly glowing
+	addPart(model, {
+		Name = "Runes",
+		Size = V3(0.25, h * 0.8, 0.95),
+		CFrame = stone.CFrame * CFrame.new(-0.6, 0, 0),
+		Color = Color3.fromRGB(110, 170, 230),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}).Transparency = 0.55
+	return stone
+end
+
+function Builders.LoreHall(model, w, d)
+	hall(model, CFrame.new(0, 0, 2), { w = w - 4, d = d - 7, wallH = 6, roof = "turf", smoke = true })
+	runestone(model, V3(-6, 0, -d / 2 + 2), 5, 0.2)
+	runestone(model, V3(6, 0, -d / 2 + 2), 4.2, -0.25)
+	-- carved story pole by the door
+	post(model, V3(0, 0, -d / 2 + 1.4), 7, 0.6, Colors.Weathered)
+	addPart(model, { Name = "Carving", Size = V3(0.9, 1.2, 0.9), Position = V3(0, 7.2, -d / 2 + 1.4), Color = Color3.fromRGB(150, 40, 36), Material = Enum.Material.Wood })
+end
+
+function Builders.Smithy(model, w, d)
+	-- an open-sided forge shed: four posts and a shingle roof
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			post(model, V3(x * (w / 2 - 1.5), 0, z * (d / 2 - 1.5)), 7, 0.8)
+		end
+	end
+	addPart(model, { Name = "Floor", Size = V3(w - 1, 0.4, d - 1), Position = V3(0, 0.2, 0), Color = Color3.fromRGB(80, 74, 66), Material = Enum.Material.Cobblestone })
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "Roof",
+			Size = V3(w + 1, 0.8, d / 2 + 2),
+			CFrame = CFrame.new(0, 8.6, side * (d / 4)) * CFrame.Angles(side * math.rad(24), 0, 0),
+			Color = Colors.Shingle,
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+	-- stone forge with glowing coals
+	addPart(model, { Name = "Forge", Size = V3(4, 3, 3.5), Position = V3(-3, 1.5, 2.5), Color = Colors.Stone, Material = Enum.Material.Cobblestone })
+	local coals = addPart(model, { Name = "Coals", Size = V3(3, 0.4, 2.4), Position = V3(-3, 3.1, 2.5), Color = Color3.fromRGB(255, 100, 30), Material = Enum.Material.Neon })
+	local fire = Instance.new("Fire")
+	fire.Size = 3
+	fire.Heat = 8
+	fire.Parent = coals
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 120, 50)
+	light.Range = 20
+	light.Brightness = 2.5
+	light.Shadows = true
+	light.Parent = coals
+	smoke(model, CFrame.new(-3, 9.6, 2.5))
+	-- anvil on a stump
+	addPart(model, { Shape = Enum.PartType.Cylinder, Size = V3(1.8, 1.8, 1.8), CFrame = CFrame.new(3, 0.9, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = Colors.Wood })
+	addPart(model, { Name = "Anvil", Size = V3(2.2, 0.9, 1), Position = V3(3, 2.25, 0), Color = Colors.Iron, Material = Enum.Material.Metal })
+	addPart(model, { Size = V3(0.8, 0.5, 0.6), Position = V3(4.3, 2.45, 0), Color = Colors.Iron, Material = Enum.Material.Metal })
+	-- quenching barrel
+	addPart(model, { Shape = Enum.PartType.Cylinder, Size = V3(2.4, 2, 2), CFrame = CFrame.new(4, 1.2, 4.5) * CFrame.Angles(0, 0, math.pi / 2), Color = Colors.Wood })
+end
+
+function Builders.Shrine(model, w, d)
+	-- a ring of standing stones around a carved idol, with two fire bowls
+	addPart(model, { Name = "Floor", Size = V3(w - 2, 0.3, d - 2), Position = V3(0, 0.15, 0), Color = Color3.fromRGB(110, 100, 86), Material = Enum.Material.Pebble })
+	for i = 1, 7 do
+		local a = i / 7 * math.pi * 2
+		local h = 4 + (i % 3) * 0.8
+		addPart(model, {
+			Name = "StandingStone",
+			Size = V3(1.3, h, 0.8),
+			CFrame = CFrame.new(math.cos(a) * 5.6, h / 2, math.sin(a) * 5.6) * CFrame.Angles(0, -a, 0.05),
+			Color = Color3.fromRGB(116, 118, 114),
+			Material = Enum.Material.Slate,
+		})
+	end
+	post(model, V3(0, 0, 0), 8, 1, Colors.Weathered)
+	addPart(model, { Name = "IdolFace", Size = V3(1.3, 1.6, 1.3), Position = V3(0, 6.6, 0), Color = Color3.fromRGB(96, 70, 48), Material = Enum.Material.Wood })
+	for _, x in { -1, 1 } do
+		addPart(model, { Size = V3(0.5, 3, 0.5), Position = V3(x * 1.1, 8.6, 0), CFrame = CFrame.new(x * 1.1, 8.4, 0) * CFrame.Angles(0, 0, -x * 0.5), Color = Color3.fromRGB(220, 205, 180) })
+		local bowl = addPart(model, { Name = "FireBowl", Size = V3(1.4, 0.6, 1.4), Position = V3(x * 2.6, 2.3, -2.6), Color = Colors.Iron, Material = Enum.Material.Metal })
+		post(model, V3(x * 2.6, 0, -2.6), 2, 0.3, Colors.Iron)
+		local fire = Instance.new("Fire")
+		fire.Size = 2
+		fire.Heat = 6
+		fire.Parent = bowl
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 140, 60)
+		light.Range = 14
+		light.Brightness = 1.6
+		light.Parent = bowl
+	end
+end
+
+function Builders.Shipyard(model, w, d)
+	-- a slipway with a longship hull taking shape on it, plus timber stacks
+	addPart(model, { Name = "Slipway", Size = V3(10, 0.6, d - 2), Position = V3(-3, 0.3, 0), Color = Colors.Weathered, Material = Enum.Material.WoodPlanks })
+	addPart(model, { Name = "Keel", Size = V3(1, 0.8, d - 6), Position = V3(-3, 1, 0), Color = Colors.Wood })
+	for i = 1, 7 do
+		local z = -d / 2 + 4 + (i - 1) * ((d - 8) / 6)
+		local width = 3.5 + math.sin(i / 8 * math.pi) * 3
+		for _, side in { 1, -1 } do
+			addPart(model, {
+				Name = "Rib",
+				Size = V3(0.4, 4.5, 0.4),
+				CFrame = CFrame.new(-3 + side * width / 2, 3, z) * CFrame.Angles(0, 0, side * 0.45),
+				Color = Colors.Wood,
+			})
+		end
+	end
+	for _, side in { 1, -1 } do
+		addPart(model, { Name = "Strake", Size = V3(0.35, 0.9, d - 10), CFrame = CFrame.new(-3 + side * 4.3, 1.6, 0) * CFrame.Angles(0, 0, side * 0.45), Color = Color3.fromRGB(96, 68, 46), Material = Enum.Material.WoodPlanks })
+	end
+	-- prow post rising at one end
+	for k = 0, 4 do
+		addPart(model, { Name = "Prow", Size = V3(0.5, 1.4, 0.8), CFrame = CFrame.new(-3, 2 + k * 1.2, -d / 2 + 2.5 - math.sin(k * 0.4) * 1.2) * CFrame.Angles(-k * 0.2, 0, 0), Color = Colors.DarkWood })
+	end
+	logPile(model, CFrame.new(w / 2 - 4, 0, 6) * CFrame.Angles(0, math.pi / 2, 0))
+	logPile(model, CFrame.new(w / 2 - 4, 0, -6) * CFrame.Angles(0, math.pi / 2, 0))
+	-- lifting frame
+	post(model, V3(w / 2 - 3, 0, -d / 2 + 2), 10, 0.7)
+	post(model, V3(-w / 2 + 1, 0, -d / 2 + 2), 10, 0.7)
+	addPart(model, { Name = "Beam", Size = V3(w - 2, 0.6, 0.6), Position = V3(1, 10, -d / 2 + 2), Color = Colors.DarkWood })
+end
+
+function Builders.HuntingLodge(model, w, d)
+	hall(model, CFrame.new(-1.5, 0, 2.5), { w = 9, d = 7, wallH = 5, roof = "thatch", smoke = true })
+	-- hide drying rack
+	post(model, V3(2, 0, -5), 5, 0.4)
+	post(model, V3(6.5, 0, -5), 5, 0.4)
+	addPart(model, { Size = V3(5, 0.3, 0.3), Position = V3(4.25, 4.8, -5), Color = Colors.DarkWood })
+	for i = 1, 2 do
+		addPart(model, { Name = "Hide", Size = V3(1.8, 3, 0.15), Position = V3(2.9 + (i - 1) * 2.4, 3.2, -5), Color = Color3.fromRGB(160, 116, 80), Material = Enum.Material.Fabric, CanCollide = false })
+	end
+	-- antlers over the door
+	for _, x in { -1, 1 } do
+		addPart(model, { Size = V3(0.2, 1.8, 0.2), CFrame = CFrame.new(-1.5 + x * 0.8, 6.8, -1.2) * CFrame.Angles(0, 0, -x * 0.6), Color = Color3.fromRGB(220, 205, 180) })
+	end
+end
+
+function Builders.GreatHall(model, w, d)
+	hall(model, CFrame.new(), { w = w - 4, d = d - 6, wallH = 9, roof = "shingle", pitch = 42, smoke = true })
+	-- tall carved pillars at the entrance and a pair of braziers
+	for _, x in { -5, 5 } do
+		post(model, V3(x, 0, -d / 2 + 2), 12, 1.1, Colors.DarkWood)
+		addPart(model, { Name = "Carving", Size = V3(1.4, 1.4, 1.4), Position = V3(x, 12.4, -d / 2 + 2), Color = Color3.fromRGB(170, 130, 50), Material = Enum.Material.Wood })
+	end
+	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 2))
+	campfire(model, V3(w / 2 - 4, 0, -d / 2 + 2))
+	-- red and gold banners along the long wall
+	for i = -2, 2 do
+		addPart(model, { Name = "Banner", Size = V3(1.8, 3.4, 0.12), Position = V3(i * 6, 6.5, -(d - 6) / 2 - 0.5), Color = i % 2 == 0 and Color3.fromRGB(150, 40, 36) or Color3.fromRGB(190, 150, 60), Material = Enum.Material.Fabric, CanCollide = false })
+	end
+end
+
 -- Builds a building model for `buildingType` in its unrotated orientation.
 function ModelFactory.building(buildingType: string): Model
 	local def = Config.Buildings[buildingType]
@@ -1434,6 +1680,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
 	"Tree_Pine", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Longship",
 }
@@ -1626,11 +1873,13 @@ local EVENTS = {
 	"Notify", -- server -> client: short message for the toast feed
 	"ShootArrow", -- client -> server: (aimPosition) when the Bow is used
 	"Strike", -- client -> server: an Axe swing (server finds who it hits)
+	"BoatInput", -- client -> server: (throttle, steer) while sailing
 }
 
 local FUNCTIONS = {
 	"PlaceBuilding", -- client -> server: (type, cx, cz, rot) -> ok, message
 	"DemolishBuilding", -- client -> server: (buildingId) -> ok, message
+	"Research", -- client -> server: (techId) -> ok, message
 }
 
 local Remotes = {}
@@ -1712,6 +1961,186 @@ end
           <string name="Name">Services</string>
         </Properties>
         <Item class="ModuleScript" referent="12">
+          <Properties>
+            <string name="Name">BoatService</string>
+            <string name="Source"><![CDATA[--[[
+	BoatService
+	Sailing. Research Karve (needs a Shipyard) and walk to the end of the
+	jetty in front of your plot: hold E to launch a boat and take the helm.
+	W/S row forward and back, A/D steer, Space to jump off. Research
+	Longship for a bigger, faster war ship. Boats stay on the water: land,
+	sand and ice stop them, so you can beach one near Greywater Hold.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+local ModelFactory = require(Shared.ModelFactory)
+
+local BoatService = {}
+
+local services
+local boats = {} -- [player] = boat
+local inputs = {} -- [player] = { throttle, steer }
+
+local KINDS = {
+	Karve = { length = 26, speed = 24, turn = 0.9, sail = Color3.fromRGB(200, 190, 170) },
+	Longship = { length = 44, speed = 38, turn = 0.6, sail = Color3.fromRGB(160, 40, 36) },
+}
+
+function BoatService:Init(allServices)
+	services = allServices
+end
+
+local function isWater(pos: Vector3): boolean
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { workspace.Terrain }
+	params.IgnoreWater = false
+	local hit = workspace:Raycast(pos + Vector3.new(0, 30, 0), Vector3.new(0, -60, 0), params)
+	return hit ~= nil and hit.Material == Enum.Material.Water
+end
+
+local function removeBoat(player: Player)
+	local boat = boats[player]
+	if boat then
+		boat.model:Destroy()
+		boats[player] = nil
+	end
+end
+
+local function launch(player: Player, dockIndex: number)
+	local ColonyService = services.ColonyService
+	local colony = ColonyService:Get(player)
+	if not colony then
+		return
+	end
+	if colony.plotIndex ~= dockIndex then
+		ColonyService:Notify(colony, "This is someone else's jetty. Use the one in front of your plot.", "bad")
+		return
+	end
+	local kindName = ColonyService:Has(colony, "Longship") and "Longship" or (ColonyService:Has(colony, "Karve") and "Karve")
+	if not kindName then
+		ColonyService:Notify(colony, "Build a Shipyard and research Karve first (press T).", "bad")
+		return
+	end
+	local kind = KINDS[kindName]
+	removeBoat(player)
+
+	local model = ModelFactory.longship(kind.length, kind.sail)
+	model.Name = player.Name .. "_" .. kindName
+	local seat = Instance.new("Seat")
+	seat.Name = "Helm"
+	seat.Anchored = true
+	seat.Size = Vector3.new(2, 0.6, 2)
+	seat.Color = Color3.fromRGB(90, 64, 44)
+	seat.Material = Enum.Material.Wood
+	seat.CFrame = CFrame.new(0, 0.2, kind.length * 0.32)
+	seat:SetAttribute("Boat", true)
+	seat.Parent = model
+
+	local o = Grid.plotOrigin(dockIndex)
+	local start = CFrame.new(o.X + Grid.PLOT_SIZE * 0.25 - 16, 0, -100)
+	model:PivotTo(start)
+	model.Parent = workspace
+
+	boats[player] = { model = model, seat = seat, cf = start, speed = 0, maxSpeed = kind.speed, turn = kind.turn, idle = 0 }
+
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		character:PivotTo(seat.CFrame * CFrame.new(0, 3, 0))
+		task.wait(0.1)
+		seat:Sit(humanoid)
+	end
+	ColonyService:Notify(colony, "Your " .. kindName .. " is in the water! W/S to row, A/D to steer, Space to jump off.", "good")
+end
+
+function BoatService:Start()
+	-- a launch prompt at the end of every plot's jetty
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		local anchor = Instance.new("Part")
+		anchor.Name = "LaunchPoint"
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.Transparency = 1
+		anchor.Size = Vector3.new(1, 1, 1)
+		anchor.Position = Vector3.new(o.X + Grid.PLOT_SIZE * 0.25, 3, -76)
+		anchor.Parent = workspace
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Launch boat"
+		prompt.ObjectText = "Jetty"
+		prompt.HoldDuration = 1
+		prompt.MaxActivationDistance = 12
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = anchor
+		prompt.Triggered:Connect(function(player)
+			launch(player, i)
+		end)
+	end
+
+	Remotes.BoatInput.OnServerEvent:Connect(function(player, throttle, steer)
+		if typeof(throttle) ~= "number" or typeof(steer) ~= "number" or throttle ~= throttle or steer ~= steer then
+			return
+		end
+		inputs[player] = { math.clamp(throttle, -1, 1), math.clamp(steer, -1, 1) }
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		removeBoat(player)
+		inputs[player] = nil
+	end)
+
+	local accumulator = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accumulator += dt
+		if accumulator < 1 / 30 then
+			return
+		end
+		local step = accumulator
+		accumulator = 0
+		local now = os.clock()
+		for player, boat in boats do
+			local occupied = boat.seat.Occupant ~= nil
+			local input = occupied and inputs[player] or { 0, 0 }
+			if occupied then
+				boat.idle = 0
+			else
+				boat.idle += step
+				if boat.idle > 90 then
+					removeBoat(player)
+					continue
+				end
+			end
+			local target = input[1] * boat.maxSpeed * (input[1] < 0 and 0.4 or 1)
+			boat.speed += (target - boat.speed) * math.min(1, step * 0.8)
+			local turnRate = input[2] * boat.turn * math.clamp(math.abs(boat.speed) / 10, 0.25, 1)
+			local heading = boat.cf * CFrame.Angles(0, -turnRate * step, 0)
+			local nextPos = heading.Position + heading.LookVector * boat.speed * step
+			if isWater(nextPos + heading.LookVector * 8 * math.sign(boat.speed)) then
+				boat.cf = CFrame.new(nextPos) * heading.Rotation
+			else
+				boat.speed = 0 -- ran aground
+				boat.cf = heading
+			end
+			local bob = math.sin(now * 1.3) * 0.25
+			local roll = math.sin(now * 0.9) * math.rad(2) - turnRate * 0.08
+			local pitch = math.sin(now * 1.1) * math.rad(1)
+			boat.model:PivotTo(boat.cf * CFrame.new(0, bob, 0) * CFrame.Angles(pitch, 0, roll))
+		end
+	end)
+end
+
+return BoatService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="13">
           <Properties>
             <string name="Name">BuildingService</string>
             <string name="Source"><![CDATA[--[[
@@ -1835,6 +2264,9 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 	end
 
 	local def = Config.Buildings[buildingType]
+	if def.Requires and not ColonyService:Has(colony, def.Requires) then
+		return false, "Research " .. Config.Tech[def.Requires].Name .. " first (press T)"
+	end
 	local sx, sz = Grid.footprint(buildingType, rot)
 	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz)
 	if not ok then
@@ -1898,7 +2330,7 @@ return BuildingService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="13">
+        <Item class="ModuleScript" referent="14">
           <Properties>
             <string name="Name">ColonyService</string>
             <string name="Source"><![CDATA[--[[
@@ -1941,6 +2373,20 @@ end
 
 function ColonyService:All()
 	return colonies
+end
+
+-- Has this colony researched `techId`?
+function ColonyService:Has(colony, techId: string): boolean
+	return colony ~= nil and colony.tech[techId] == true
+end
+
+function ColonyService:HasBuilding(colony, buildingType: string): boolean
+	for _, b in colony.buildings do
+		if b.type == buildingType then
+			return true
+		end
+	end
+	return false
 end
 
 function ColonyService:NewId(colony): number
@@ -2036,6 +2482,20 @@ function ColonyService:Sync(colony)
 		starving = colony.starving,
 		day = colony.day,
 		season = workspace:GetAttribute("Season") or "Summer",
+		tech = (function()
+			local list = {}
+			for id in colony.tech do
+				table.insert(list, id)
+			end
+			return list
+		end)(),
+		buildingTypes = (function()
+			local set = {}
+			for _, b in colony.buildings do
+				set[b.type] = true
+			end
+			return set
+		end)(),
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 	}
 
@@ -2069,6 +2529,7 @@ function ColonyService:Create(player: Player)
 		buildings = {},
 		villagers = {},
 		nodes = {},
+		tech = {},
 		happiness = 60,
 		day = 1,
 		dayTimer = 0,
@@ -2123,7 +2584,7 @@ return ColonyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="14">
+        <Item class="ModuleScript" referent="15">
           <Properties>
             <string name="Name">PlotService</string>
             <string name="Source"><![CDATA[--[[
@@ -2268,7 +2729,7 @@ return PlotService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="15">
+        <Item class="ModuleScript" referent="16">
           <Properties>
             <string name="Name">RaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -2490,7 +2951,15 @@ local function makeChest(cf: CFrame)
 		-- swing the lid open
 		lid.CFrame = chest.hinge * CFrame.Angles(math.rad(-100), 0, 0) * chest.hinge:Inverse() * chest.lidClosed
 		local parts = {}
-		for resource, amount in R.ChestLoot do
+		local mult = 1
+		if ColonyService:Has(colony, "SeaRaiders") then
+			mult *= 1.5
+		end
+		if ColonyService:Has(colony, "PathStorm") then
+			mult *= 1.5
+		end
+		for resource, base in R.ChestLoot do
+			local amount = math.floor(base * mult)
 			ColonyService:Add(colony, resource, amount)
 			table.insert(parts, "+" .. amount .. " " .. resource)
 		end
@@ -2711,7 +3180,13 @@ local function guardLoop()
 						swingAxe(g)
 						local hum = target:FindFirstChildOfClass("Humanoid")
 						if hum then
-							hum:TakeDamage(R.DefenderDamage)
+							local victim = Players:GetPlayerFromCharacter(target)
+							local colony = victim and services.ColonyService:Get(victim)
+							local damage = R.DefenderDamage
+							if services.ColonyService:Has(colony, "PathStorm") then
+								damage *= 0.7
+							end
+							hum:TakeDamage(damage)
 						end
 					end
 				elseif flat(g.root.Position - g.post).Magnitude > 3 then
@@ -2980,7 +3455,7 @@ return RaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="16">
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
@@ -3060,8 +3535,16 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 		colony.nodes[key] = nil
 		model:Destroy()
 		ColonyService:Unblock(colony, x, z)
-		ColonyService:Add(colony, def.Gives, def.Amount)
-		ColonyService:Notify(colony, "+" .. def.Amount .. " " .. def.Gives, "gain")
+		local amount = def.Amount
+		if kind == "Tree" and ColonyService:Has(colony, "IronAxes") then
+			amount *= 1.5
+		end
+		if ColonyService:Has(colony, "PathWoods") then
+			amount *= 2
+		end
+		amount = math.floor(amount)
+		ColonyService:Add(colony, def.Gives, amount)
+		ColonyService:Notify(colony, "+" .. amount .. " " .. def.Gives, "gain")
 		ColonyService:Sync(colony)
 	end)
 end
@@ -3097,7 +3580,7 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="17">
+        <Item class="ModuleScript" referent="18">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
@@ -3288,7 +3771,94 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="18">
+        <Item class="ModuleScript" referent="19">
+          <Properties>
+            <string name="Name">TechService</string>
+            <string name="Source"><![CDATA[--[[
+	TechService
+	Research. Players spend Lore (made in a Lore Hall) and sometimes other
+	resources to unlock techs from Config.Tech. Some techs need a building
+	(Smithy, Shipyard, Shrine) or other techs first, and patron paths are
+	exclusive: a settlement follows only one.
+
+	Effects are read where they matter through ColonyService:Has(colony, id).
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+
+local TechService = {}
+
+local services
+
+function TechService:Init(allServices)
+	services = allServices
+end
+
+-- Returns ok, reason for whether `colony` can research `id` right now.
+function TechService:CanResearch(colony, id: string): (boolean, string?)
+	local tech = Config.Tech[id]
+	if not tech then
+		return false, "Unknown research"
+	end
+	local ColonyService = services.ColonyService
+	if colony.tech[id] then
+		return false, "Already known"
+	end
+	for _, req in tech.Requires or {} do
+		if not colony.tech[req] then
+			return false, "Needs " .. Config.Tech[req].Name
+		end
+	end
+	if tech.Building and not ColonyService:HasBuilding(colony, tech.Building) then
+		return false, "Build a " .. Config.Buildings[tech.Building].Display .. " first"
+	end
+	if tech.Group then
+		for known in colony.tech do
+			if Config.Tech[known].Group == tech.Group then
+				return false, "You already follow " .. Config.Tech[known].Name
+			end
+		end
+	end
+	if not Grid.canAfford(colony.resources, tech.Cost) then
+		return false, "Needs " .. Grid.costText(tech.Cost)
+	end
+	return true, nil
+end
+
+function TechService:Research(player: Player, id)
+	local ColonyService = services.ColonyService
+	local colony = ColonyService:Get(player)
+	if not colony or typeof(id) ~= "string" then
+		return false, "Not ready"
+	end
+	local ok, reason = self:CanResearch(colony, id)
+	if not ok then
+		return false, reason
+	end
+	ColonyService:Spend(colony, Config.Tech[id].Cost)
+	colony.tech[id] = true
+	if id == "ChainMail" then
+		services.ToolService:ApplyArmor(player)
+	end
+	ColonyService:Notify(colony, "Researched " .. Config.Tech[id].Name .. "! " .. Config.Tech[id].Description, "good")
+	ColonyService:Sync(colony)
+	return true, Config.Tech[id].Name .. " researched"
+end
+
+function TechService:Start()
+	Remotes.Research.OnServerInvoke = function(player, id)
+		return self:Research(player, id)
+	end
+end
+
+return TechService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="20">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -3315,6 +3885,16 @@ local lastShot = {} -- [player] = os.clock()
 
 function ToolService:Init(allServices)
 	services = allServices
+end
+
+-- Ring Mail research gives 150 health.
+function ToolService:ApplyArmor(player: Player)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	local colony = services.ColonyService:Get(player)
+	if humanoid and services.ColonyService:Has(colony, "ChainMail") then
+		humanoid.MaxHealth = 150
+		humanoid.Health = math.max(humanoid.Health, 150)
+	end
 end
 
 -- True if the player is currently holding the named tool.
@@ -3366,7 +3946,9 @@ local function shoot(player: Player, aim)
 	if delta.Magnitude < 1 then
 		return
 	end
-	local dir = delta.Unit * Config.Bow.Range
+	local colony = services.ColonyService:Get(player)
+	local longbows = services.ColonyService:Has(colony, "Longbows")
+	local dir = delta.Unit * (Config.Bow.Range + (longbows and 60 or 0))
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { character }
@@ -3390,7 +3972,7 @@ local function shoot(player: Player, aim)
 	local guard = hit and services.RaidService:FindDefender(hit.Instance)
 	if guard then
 		task.delay(flight, function()
-			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage, player)
+			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
 		end)
 	end
 end
@@ -3409,8 +3991,15 @@ local function strike(player: Player)
 		return
 	end
 	lastStrike[player] = now
+	local colony = services.ColonyService:Get(player)
+	local damage = Config.Combat.AxeDamage
+	if services.ColonyService:Has(colony, "SteelEdges") then
+		damage *= 2
+	elseif services.ColonyService:Has(colony, "IronAxes") then
+		damage *= 1.5
+	end
 	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
-		services.RaidService:DamageDefender(guard, Config.Combat.AxeDamage, player)
+		services.RaidService:DamageDefender(guard, damage, player)
 	end
 end
 
@@ -3418,6 +4007,7 @@ function ToolService:Start()
 	local function onPlayer(player: Player)
 		player.CharacterAdded:Connect(function()
 			giveTools(player)
+			ToolService:ApplyArmor(player)
 		end)
 		if player.Character then
 			giveTools(player)
@@ -3440,7 +4030,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="19">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -3649,7 +4239,17 @@ local function produce(colony, dt: number)
 			for resource, rate in produces do
 				-- crops only grow outside winter
 				local seasonal = b.type == "Farm" and season.FarmRate or 1
-				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal)
+				local bonus = 1
+				if b.type == "Farm" and ColonyService:Has(colony, "CropRotation") then
+					bonus *= 1.25
+				elseif b.type == "Quarry" and ColonyService:Has(colony, "Masonry") then
+					bonus *= 1.3
+				elseif b.type == "Woodcutter" and ColonyService:Has(colony, "Woodcraft") then
+					bonus *= 1.3
+				elseif b.type == "LoreHall" and ColonyService:Has(colony, "SagaTellers") then
+					bonus *= 1.5
+				end
+				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal * bonus)
 			end
 		end
 	end
@@ -3657,7 +4257,11 @@ end
 
 local function eat(colony, dt: number)
 	local adults, children = counts(colony)
-	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * services.SeasonService:Current().FoodUse
+	local foodUse = services.SeasonService:Current().FoodUse
+	if services.ColonyService:Has(colony, "MidwinterRite") then
+		foodUse = 1
+	end
+	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * foodUse
 	local food = colony.resources.Food or 0
 	local wasStarving = colony.starving
 	if food >= need then
@@ -3686,6 +4290,22 @@ local function updateHappiness(colony, dt: number)
 	end
 	local homeless = math.max(0, pop - housing)
 	target -= homeless * 8
+	-- buildings and traits that cheer people up (each building type counts once)
+	local cheered = {}
+	for _, b in colony.buildings do
+		local bonus = Config.Buildings[b.type].Happiness
+		if bonus and not cheered[b.type] then
+			cheered[b.type] = true
+			target += bonus
+		end
+	end
+	local ColonyService = services.ColonyService
+	if ColonyService:Has(colony, "Feasting") then
+		target += 10
+	end
+	if ColonyService:Has(colony, "PathHearth") then
+		target += 10
+	end
 	target = math.clamp(target, 0, 100)
 
 	colony.happiness += (target - colony.happiness) * math.min(1, 0.05 * dt)
@@ -3723,7 +4343,7 @@ local function newDay(self, colony)
 	end
 
 	-- Births.
-	if adults >= 2 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay then
+	if adults >= 2 and free > 0 and not colony.starving and h >= V.BirthMinHappiness and rng:NextNumber() < V.BirthChancePerDay * (ColonyService:Has(colony, "PathHearth") and 2 or 1) then
 		local v = self:Add(colony, true)
 		free -= 1
 		ColonyService:Notify(colony, "A child named " .. v.name .. " was born!", "good")
@@ -3731,7 +4351,8 @@ local function newDay(self, colony)
 
 	-- Immigration from neighbouring tribes.
 	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay then
-		local n = rng:NextInteger(1, math.min(V.ImmigrationMaxGroup, free))
+		local maxGroup = V.ImmigrationMaxGroup * (ColonyService:Has(colony, "OpenArms") and 2 or 1)
+		local n = rng:NextInteger(1, math.min(maxGroup, free))
 		local tribe = Config.Tribes[rng:NextInteger(1, #Config.Tribes)]
 		local arrival = colony.origin + Vector3.new(rng:NextNumber(10, Grid.PLOT_SIZE - 10), 0, -4)
 		for _ = 1, n do
@@ -3798,7 +4419,7 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -3897,9 +4518,10 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 	local ColonyService = services.ColonyService
 	local colony = ColonyService:Get(hunter)
 	if colony then
-		ColonyService:Add(colony, "Food", W.Meat)
-		ColonyService:Add(colony, "Hides", W.Hides)
-		ColonyService:Notify(colony, "Deer hunted! +" .. W.Meat .. " Food, +" .. W.Hides .. " Hides", "gain")
+		local mult = ColonyService:Has(colony, "PathWoods") and 2 or 1
+		ColonyService:Add(colony, "Food", W.Meat * mult)
+		ColonyService:Add(colony, "Hides", W.Hides * mult)
+		ColonyService:Notify(colony, "Deer hunted! +" .. W.Meat * mult .. " Food, +" .. W.Hides * mult .. " Hides", "gain")
 		ColonyService:Sync(colony)
 	end
 
@@ -3962,7 +4584,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -4627,15 +5249,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="22">
+  <Item class="StarterPlayer" referent="24">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="23">
+    <Item class="StarterPlayerScripts" referent="25">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="24">
+      <Item class="LocalScript" referent="26">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -4668,11 +5290,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="25">
+        <Item class="Folder" referent="27">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="26">
+          <Item class="ModuleScript" referent="28">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -4782,7 +5404,65 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="27">
+          <Item class="ModuleScript" referent="29">
+            <Properties>
+              <string name="Name">BoatController</string>
+              <string name="Source"><![CDATA[--[[
+	BoatController
+	While you sit at a boat's helm, sends your W/A/S/D (or arrow keys) to the
+	server, which moves the boat.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Remotes = require(Shared.Remotes)
+
+local BoatController = {}
+
+local player = Players.LocalPlayer
+
+local function down(...)
+	for _, key in { ... } do
+		if UserInputService:IsKeyDown(key) then
+			return true
+		end
+	end
+	return false
+end
+
+function BoatController:Start()
+	local last = { 0, 0 }
+	local timer = 0
+	RunService.Heartbeat:Connect(function(dt)
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local seat = humanoid and humanoid.SeatPart
+		if not seat or not seat:GetAttribute("Boat") then
+			return
+		end
+		if UserInputService:GetFocusedTextBox() then
+			return
+		end
+		local K = Enum.KeyCode
+		local throttle = (down(K.W, K.Up) and 1 or 0) - (down(K.S, K.Down) and 1 or 0)
+		local steer = (down(K.D, K.Right) and 1 or 0) - (down(K.A, K.Left) and 1 or 0)
+		timer += dt
+		if throttle ~= last[1] or steer ~= last[2] or timer > 0.5 then
+			timer = 0
+			last = { throttle, steer }
+			Remotes.BoatInput:FireServer(throttle, steer)
+		end
+	end)
+end
+
+return BoatController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="30">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -5060,7 +5740,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="28">
+          <Item class="ModuleScript" referent="31">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -5150,7 +5830,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="29">
+          <Item class="ModuleScript" referent="32">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -5190,6 +5870,7 @@ local RESOURCE_COLORS = {
 	Food = Color3.fromRGB(220, 190, 90),
 	Hides = Color3.fromRGB(176, 120, 84),
 	Silver = Color3.fromRGB(210, 214, 224),
+	Lore = Color3.fromRGB(120, 160, 230),
 }
 
 local function new(className: string, props, children)
@@ -5263,7 +5944,7 @@ function HudController:Start()
 	local resBar = new("Frame", {
 		Name = "Resources",
 		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(700, 44),
+		Size = UDim2.fromOffset(830, 44),
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
@@ -5317,20 +5998,26 @@ function HudController:Start()
 		Name = "BuildBar",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(0, 70),
-		AutomaticSize = Enum.AutomaticSize.X,
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
 	}, {
 		corner(10),
 		padding(8),
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		-- two rows of buttons
+		new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(112, 54),
+			CellPadding = UDim2.fromOffset(8, 8),
+			FillDirectionMaxCells = 7,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
 	})
 
 	local hint = label({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -90),
+		Position = UDim2.new(0.5, 0, 1, -152),
 		Size = UDim2.fromOffset(640, 22),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextSize = 15,
@@ -5371,7 +6058,7 @@ function HudController:Start()
 			TextSize = 12,
 			TextColor3 = THEME.Muted,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			TextScaled = false,
+			TextScaled = true,
 			Text = sub,
 			Parent = b,
 		})
@@ -5518,9 +6205,23 @@ function HudController:Start()
 			warnLabel.TextColor3 = THEME.Bad
 		end
 
+		local known = {}
+		for _, id in state.tech or {} do
+			known[id] = true
+		end
 		for _, buildingType in Config.BuildOrder do
-			local affordable = Grid.canAfford(state.resources, Config.Buildings[buildingType].Cost)
-			buttons[buildingType].cost.TextColor3 = affordable and THEME.Muted or THEME.Bad
+			local def = Config.Buildings[buildingType]
+			local entry = buttons[buildingType]
+			if def.Requires and not known[def.Requires] then
+				entry.cost.Text = "Research " .. Config.Tech[def.Requires].Name
+				entry.cost.TextColor3 = THEME.Muted
+				entry.button.BackgroundTransparency = 0.5
+			else
+				entry.cost.Text = Grid.costText(def.Cost)
+				entry.button.BackgroundTransparency = 0
+				local affordable = Grid.canAfford(state.resources, def.Cost)
+				entry.cost.TextColor3 = affordable and THEME.Muted or THEME.Bad
+			end
 		end
 	end)
 end
@@ -5529,7 +6230,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="30">
+          <Item class="ModuleScript" referent="33">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -5610,7 +6311,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="31">
+          <Item class="ModuleScript" referent="34">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -5701,7 +6402,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="32">
+          <Item class="ModuleScript" referent="35">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -5753,7 +6454,329 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="33">
+          <Item class="ModuleScript" referent="36">
+            <Properties>
+              <string name="Name">TechController</string>
+              <string name="Source"><![CDATA[--[[
+	TechController
+	The research screen. Press T (or the Research button) to open it.
+	Five columns: Buildings, Gear, Boats, Culture, Religion. Each card shows
+	what a tech does, what it costs and what it still needs. Click a card
+	you can afford to research it.
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+
+local TechController = {}
+
+local controllers
+local player = Players.LocalPlayer
+
+local THEME = {
+	Panel = Color3.fromRGB(28, 23, 18),
+	Card = Color3.fromRGB(52, 42, 32),
+	Done = Color3.fromRGB(46, 72, 44),
+	Ready = Color3.fromRGB(86, 66, 34),
+	Locked = Color3.fromRGB(40, 36, 32),
+	Accent = Color3.fromRGB(214, 170, 92),
+	Text = Color3.fromRGB(245, 235, 215),
+	Muted = Color3.fromRGB(170, 156, 134),
+	Bad = Color3.fromRGB(230, 110, 96),
+}
+
+local BRANCH_ICON = { Buildings = "Hall", Gear = "Forge", Boats = "Keel", Culture = "Saga", Religion = "Faith" }
+
+local function new(className, props)
+	local inst = Instance.new(className)
+	for k, v in props do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+local function corner(parent, r)
+	new("UICorner", { CornerRadius = UDim.new(0, r or 8), Parent = parent })
+end
+
+-- Mirrors TechService:CanResearch on the client for display.
+local function status(state, id: string): (string, string?)
+	local tech = Config.Tech[id]
+	local known = {}
+	for _, t in state.tech or {} do
+		known[t] = true
+	end
+	if known[id] then
+		return "done", nil
+	end
+	for _, req in tech.Requires or {} do
+		if not known[req] then
+			return "locked", "Needs " .. Config.Tech[req].Name
+		end
+	end
+	if tech.Building and not (state.buildingTypes and state.buildingTypes[tech.Building]) then
+		return "locked", "Needs a " .. Config.Buildings[tech.Building].Display
+	end
+	if tech.Group then
+		for t in known do
+			if Config.Tech[t] and Config.Tech[t].Group == tech.Group then
+				return "locked", "You follow " .. Config.Tech[t].Name
+			end
+		end
+	end
+	if not Grid.canAfford(state.resources, tech.Cost) then
+		return "poor", nil
+	end
+	return "ready", nil
+end
+
+function TechController:Init(allControllers)
+	controllers = allControllers
+end
+
+function TechController:Start()
+	local gui = new("ScreenGui", { Name = "Research", ResetOnSpawn = false, DisplayOrder = 10, Parent = player:WaitForChild("PlayerGui") })
+
+	local openButton = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 170),
+		Size = UDim2.fromOffset(230, 36),
+		BackgroundColor3 = Color3.fromRGB(70, 54, 34),
+		Font = Enum.Font.GothamBold,
+		TextSize = 16,
+		TextColor3 = THEME.Accent,
+		Text = "Research  (T)",
+		Parent = gui,
+	})
+	corner(openButton)
+
+	local panel = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(1060, 560),
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.04,
+		Visible = false,
+		Parent = gui,
+	})
+	corner(panel, 12)
+	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.4, Parent = panel })
+
+	new("TextLabel", {
+		Position = UDim2.fromOffset(20, 12),
+		Size = UDim2.new(1, -40, 0, 34),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.Fantasy,
+		TextSize = 30,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = THEME.Accent,
+		Text = "Research",
+		Parent = panel,
+	})
+	local loreLabel = new("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -60, 0, 18),
+		Size = UDim2.fromOffset(420, 26),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextColor3 = Color3.fromRGB(150, 185, 240),
+		Text = "",
+		Parent = panel,
+	})
+	local close = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 14),
+		Size = UDim2.fromOffset(32, 32),
+		BackgroundColor3 = THEME.Card,
+		Font = Enum.Font.GothamBold,
+		TextSize = 18,
+		TextColor3 = THEME.Text,
+		Text = "X",
+		Parent = panel,
+	})
+	corner(close, 6)
+
+	local columns = new("Frame", {
+		Position = UDim2.fromOffset(16, 58),
+		Size = UDim2.new(1, -32, 1, -74),
+		BackgroundTransparency = 1,
+		Parent = panel,
+	})
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = columns })
+
+	local cards = {}
+	for i, branch in Config.TechBranches do
+		local col = new("Frame", {
+			Size = UDim2.new(0.2, -8, 1, 0),
+			BackgroundTransparency = 1,
+			LayoutOrder = i,
+			Parent = columns,
+		})
+		new("TextLabel", {
+			Size = UDim2.new(1, 0, 0, 26),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBold,
+			TextSize = 17,
+			TextColor3 = THEME.Accent,
+			Text = string.upper(branch) .. "  ·  " .. BRANCH_ICON[branch],
+			Parent = col,
+		})
+		local list = new("ScrollingFrame", {
+			Position = UDim2.fromOffset(0, 30),
+			Size = UDim2.new(1, 0, 1, -30),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 4,
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			CanvasSize = UDim2.new(),
+			Parent = col,
+		})
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = list })
+
+		-- order the techs so prerequisites come first
+		local ids = {}
+		for id, tech in Config.Tech do
+			if tech.Branch == branch then
+				table.insert(ids, id)
+			end
+		end
+		table.sort(ids, function(a, b)
+			local ra, rb = #(Config.Tech[a].Requires or {}), #(Config.Tech[b].Requires or {})
+			if ra ~= rb then
+				return ra < rb
+			end
+			return Config.Tech[a].Name < Config.Tech[b].Name
+		end)
+
+		for order, id in ids do
+			local tech = Config.Tech[id]
+			local card = new("TextButton", {
+				Size = UDim2.new(1, -6, 0, 112),
+				BackgroundColor3 = THEME.Card,
+				AutoButtonColor = true,
+				Text = "",
+				LayoutOrder = order,
+				Parent = list,
+			})
+			corner(card)
+			local stroke = new("UIStroke", { ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = THEME.Accent, Thickness = 1.5, Transparency = 0.7, Parent = card })
+			new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 6), Parent = card })
+			new("TextLabel", {
+				Size = UDim2.new(1, 0, 0, 20),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.GothamBold,
+				TextSize = 15,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = THEME.Text,
+				Text = tech.Name,
+				Parent = card,
+			})
+			new("TextLabel", {
+				Position = UDim2.fromOffset(0, 22),
+				Size = UDim2.new(1, 0, 0, 46),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.Gotham,
+				TextSize = 13,
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
+				TextColor3 = THEME.Muted,
+				Text = tech.Description,
+				Parent = card,
+			})
+			local foot = new("TextLabel", {
+				Position = UDim2.fromOffset(0, 72),
+				Size = UDim2.new(1, 0, 0, 30),
+				BackgroundTransparency = 1,
+				Font = Enum.Font.GothamMedium,
+				TextSize = 12,
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = THEME.Accent,
+				Text = Grid.costText(tech.Cost),
+				Parent = card,
+			})
+			card.Activated:Connect(function()
+				local ok, msg = Remotes.Research:InvokeServer(id)
+				controllers.StateController:LocalNotify(msg, ok and "good" or "bad")
+				if ok then
+					-- a little flash of gold
+					card.BackgroundColor3 = THEME.Accent
+					TweenService:Create(card, TweenInfo.new(0.6), { BackgroundColor3 = THEME.Done }):Play()
+				end
+			end)
+			cards[id] = { card = card, foot = foot, stroke = stroke }
+		end
+	end
+
+	local function refresh(state)
+		if not state then
+			return
+		end
+		loreLabel.Text = string.format("Lore %d   ·   build a Lore Hall to gather more", state.resources.Lore or 0)
+		for id, c in cards do
+			local st, why = status(state, id)
+			local tech = Config.Tech[id]
+			if st == "done" then
+				c.card.BackgroundColor3 = THEME.Done
+				c.foot.Text = "Known"
+				c.foot.TextColor3 = Color3.fromRGB(150, 220, 140)
+				c.stroke.Transparency = 0.9
+			elseif st == "locked" then
+				c.card.BackgroundColor3 = THEME.Locked
+				c.foot.Text = why .. "   ·   " .. Grid.costText(tech.Cost)
+				c.foot.TextColor3 = THEME.Muted
+				c.stroke.Transparency = 0.9
+			elseif st == "poor" then
+				c.card.BackgroundColor3 = THEME.Card
+				c.foot.Text = Grid.costText(tech.Cost)
+				c.foot.TextColor3 = THEME.Bad
+				c.stroke.Transparency = 0.7
+			else
+				c.card.BackgroundColor3 = THEME.Ready
+				c.foot.Text = Grid.costText(tech.Cost) .. "   ·   click to research"
+				c.foot.TextColor3 = THEME.Accent
+				c.stroke.Transparency = 0.1
+			end
+		end
+	end
+
+	local function toggle()
+		panel.Visible = not panel.Visible
+		if panel.Visible then
+			refresh(controllers.StateController.State)
+		end
+	end
+	openButton.Activated:Connect(toggle)
+	close.Activated:Connect(toggle)
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.T then
+			toggle()
+		end
+	end)
+	controllers.StateController.Changed:Connect(function(state)
+		if panel.Visible then
+			refresh(state)
+		end
+	end)
+end
+
+return TechController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -5844,12 +6867,12 @@ return ToolController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="34">
+  <Item class="Workspace" referent="38">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="35">
+    <Item class="Part" referent="39">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -5870,7 +6893,7 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="36">
+    <Item class="SpawnLocation" referent="40">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -5890,7 +6913,7 @@ return ToolController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="37">
+    <Item class="Part" referent="41">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -5907,13 +6930,13 @@ return ToolController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="38">
+      <Item class="SurfaceGui" referent="42">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="39">
+        <Item class="TextLabel" referent="43">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -5945,13 +6968,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="40">
+      <Item class="SurfaceGui" referent="44">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="41">
+        <Item class="TextLabel" referent="45">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

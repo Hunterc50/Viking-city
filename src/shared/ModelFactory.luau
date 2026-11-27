@@ -501,6 +501,167 @@ function Builders.Palisade(model, w, d)
 	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 6, 0.9), Color = Colors.DarkWood })
 end
 
+local function runestone(model, pos: Vector3, h: number, turn: number)
+	local stone = addPart(model, {
+		Name = "Runestone",
+		Size = V3(2.4, h, 0.9),
+		CFrame = CFrame.new(pos + V3(0, h / 2, 0)) * CFrame.Angles(0, turn, 0.04),
+		Color = Color3.fromRGB(120, 120, 116),
+		Material = Enum.Material.Slate,
+	})
+	-- carved band of runes, faintly glowing
+	addPart(model, {
+		Name = "Runes",
+		Size = V3(0.25, h * 0.8, 0.95),
+		CFrame = stone.CFrame * CFrame.new(-0.6, 0, 0),
+		Color = Color3.fromRGB(110, 170, 230),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}).Transparency = 0.55
+	return stone
+end
+
+function Builders.LoreHall(model, w, d)
+	hall(model, CFrame.new(0, 0, 2), { w = w - 4, d = d - 7, wallH = 6, roof = "turf", smoke = true })
+	runestone(model, V3(-6, 0, -d / 2 + 2), 5, 0.2)
+	runestone(model, V3(6, 0, -d / 2 + 2), 4.2, -0.25)
+	-- carved story pole by the door
+	post(model, V3(0, 0, -d / 2 + 1.4), 7, 0.6, Colors.Weathered)
+	addPart(model, { Name = "Carving", Size = V3(0.9, 1.2, 0.9), Position = V3(0, 7.2, -d / 2 + 1.4), Color = Color3.fromRGB(150, 40, 36), Material = Enum.Material.Wood })
+end
+
+function Builders.Smithy(model, w, d)
+	-- an open-sided forge shed: four posts and a shingle roof
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 1 } do
+			post(model, V3(x * (w / 2 - 1.5), 0, z * (d / 2 - 1.5)), 7, 0.8)
+		end
+	end
+	addPart(model, { Name = "Floor", Size = V3(w - 1, 0.4, d - 1), Position = V3(0, 0.2, 0), Color = Color3.fromRGB(80, 74, 66), Material = Enum.Material.Cobblestone })
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "Roof",
+			Size = V3(w + 1, 0.8, d / 2 + 2),
+			CFrame = CFrame.new(0, 8.6, side * (d / 4)) * CFrame.Angles(side * math.rad(24), 0, 0),
+			Color = Colors.Shingle,
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+	-- stone forge with glowing coals
+	addPart(model, { Name = "Forge", Size = V3(4, 3, 3.5), Position = V3(-3, 1.5, 2.5), Color = Colors.Stone, Material = Enum.Material.Cobblestone })
+	local coals = addPart(model, { Name = "Coals", Size = V3(3, 0.4, 2.4), Position = V3(-3, 3.1, 2.5), Color = Color3.fromRGB(255, 100, 30), Material = Enum.Material.Neon })
+	local fire = Instance.new("Fire")
+	fire.Size = 3
+	fire.Heat = 8
+	fire.Parent = coals
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 120, 50)
+	light.Range = 20
+	light.Brightness = 2.5
+	light.Shadows = true
+	light.Parent = coals
+	smoke(model, CFrame.new(-3, 9.6, 2.5))
+	-- anvil on a stump
+	addPart(model, { Shape = Enum.PartType.Cylinder, Size = V3(1.8, 1.8, 1.8), CFrame = CFrame.new(3, 0.9, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = Colors.Wood })
+	addPart(model, { Name = "Anvil", Size = V3(2.2, 0.9, 1), Position = V3(3, 2.25, 0), Color = Colors.Iron, Material = Enum.Material.Metal })
+	addPart(model, { Size = V3(0.8, 0.5, 0.6), Position = V3(4.3, 2.45, 0), Color = Colors.Iron, Material = Enum.Material.Metal })
+	-- quenching barrel
+	addPart(model, { Shape = Enum.PartType.Cylinder, Size = V3(2.4, 2, 2), CFrame = CFrame.new(4, 1.2, 4.5) * CFrame.Angles(0, 0, math.pi / 2), Color = Colors.Wood })
+end
+
+function Builders.Shrine(model, w, d)
+	-- a ring of standing stones around a carved idol, with two fire bowls
+	addPart(model, { Name = "Floor", Size = V3(w - 2, 0.3, d - 2), Position = V3(0, 0.15, 0), Color = Color3.fromRGB(110, 100, 86), Material = Enum.Material.Pebble })
+	for i = 1, 7 do
+		local a = i / 7 * math.pi * 2
+		local h = 4 + (i % 3) * 0.8
+		addPart(model, {
+			Name = "StandingStone",
+			Size = V3(1.3, h, 0.8),
+			CFrame = CFrame.new(math.cos(a) * 5.6, h / 2, math.sin(a) * 5.6) * CFrame.Angles(0, -a, 0.05),
+			Color = Color3.fromRGB(116, 118, 114),
+			Material = Enum.Material.Slate,
+		})
+	end
+	post(model, V3(0, 0, 0), 8, 1, Colors.Weathered)
+	addPart(model, { Name = "IdolFace", Size = V3(1.3, 1.6, 1.3), Position = V3(0, 6.6, 0), Color = Color3.fromRGB(96, 70, 48), Material = Enum.Material.Wood })
+	for _, x in { -1, 1 } do
+		addPart(model, { Size = V3(0.5, 3, 0.5), Position = V3(x * 1.1, 8.6, 0), CFrame = CFrame.new(x * 1.1, 8.4, 0) * CFrame.Angles(0, 0, -x * 0.5), Color = Color3.fromRGB(220, 205, 180) })
+		local bowl = addPart(model, { Name = "FireBowl", Size = V3(1.4, 0.6, 1.4), Position = V3(x * 2.6, 2.3, -2.6), Color = Colors.Iron, Material = Enum.Material.Metal })
+		post(model, V3(x * 2.6, 0, -2.6), 2, 0.3, Colors.Iron)
+		local fire = Instance.new("Fire")
+		fire.Size = 2
+		fire.Heat = 6
+		fire.Parent = bowl
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 140, 60)
+		light.Range = 14
+		light.Brightness = 1.6
+		light.Parent = bowl
+	end
+end
+
+function Builders.Shipyard(model, w, d)
+	-- a slipway with a longship hull taking shape on it, plus timber stacks
+	addPart(model, { Name = "Slipway", Size = V3(10, 0.6, d - 2), Position = V3(-3, 0.3, 0), Color = Colors.Weathered, Material = Enum.Material.WoodPlanks })
+	addPart(model, { Name = "Keel", Size = V3(1, 0.8, d - 6), Position = V3(-3, 1, 0), Color = Colors.Wood })
+	for i = 1, 7 do
+		local z = -d / 2 + 4 + (i - 1) * ((d - 8) / 6)
+		local width = 3.5 + math.sin(i / 8 * math.pi) * 3
+		for _, side in { 1, -1 } do
+			addPart(model, {
+				Name = "Rib",
+				Size = V3(0.4, 4.5, 0.4),
+				CFrame = CFrame.new(-3 + side * width / 2, 3, z) * CFrame.Angles(0, 0, side * 0.45),
+				Color = Colors.Wood,
+			})
+		end
+	end
+	for _, side in { 1, -1 } do
+		addPart(model, { Name = "Strake", Size = V3(0.35, 0.9, d - 10), CFrame = CFrame.new(-3 + side * 4.3, 1.6, 0) * CFrame.Angles(0, 0, side * 0.45), Color = Color3.fromRGB(96, 68, 46), Material = Enum.Material.WoodPlanks })
+	end
+	-- prow post rising at one end
+	for k = 0, 4 do
+		addPart(model, { Name = "Prow", Size = V3(0.5, 1.4, 0.8), CFrame = CFrame.new(-3, 2 + k * 1.2, -d / 2 + 2.5 - math.sin(k * 0.4) * 1.2) * CFrame.Angles(-k * 0.2, 0, 0), Color = Colors.DarkWood })
+	end
+	logPile(model, CFrame.new(w / 2 - 4, 0, 6) * CFrame.Angles(0, math.pi / 2, 0))
+	logPile(model, CFrame.new(w / 2 - 4, 0, -6) * CFrame.Angles(0, math.pi / 2, 0))
+	-- lifting frame
+	post(model, V3(w / 2 - 3, 0, -d / 2 + 2), 10, 0.7)
+	post(model, V3(-w / 2 + 1, 0, -d / 2 + 2), 10, 0.7)
+	addPart(model, { Name = "Beam", Size = V3(w - 2, 0.6, 0.6), Position = V3(1, 10, -d / 2 + 2), Color = Colors.DarkWood })
+end
+
+function Builders.HuntingLodge(model, w, d)
+	hall(model, CFrame.new(-1.5, 0, 2.5), { w = 9, d = 7, wallH = 5, roof = "thatch", smoke = true })
+	-- hide drying rack
+	post(model, V3(2, 0, -5), 5, 0.4)
+	post(model, V3(6.5, 0, -5), 5, 0.4)
+	addPart(model, { Size = V3(5, 0.3, 0.3), Position = V3(4.25, 4.8, -5), Color = Colors.DarkWood })
+	for i = 1, 2 do
+		addPart(model, { Name = "Hide", Size = V3(1.8, 3, 0.15), Position = V3(2.9 + (i - 1) * 2.4, 3.2, -5), Color = Color3.fromRGB(160, 116, 80), Material = Enum.Material.Fabric, CanCollide = false })
+	end
+	-- antlers over the door
+	for _, x in { -1, 1 } do
+		addPart(model, { Size = V3(0.2, 1.8, 0.2), CFrame = CFrame.new(-1.5 + x * 0.8, 6.8, -1.2) * CFrame.Angles(0, 0, -x * 0.6), Color = Color3.fromRGB(220, 205, 180) })
+	end
+end
+
+function Builders.GreatHall(model, w, d)
+	hall(model, CFrame.new(), { w = w - 4, d = d - 6, wallH = 9, roof = "shingle", pitch = 42, smoke = true })
+	-- tall carved pillars at the entrance and a pair of braziers
+	for _, x in { -5, 5 } do
+		post(model, V3(x, 0, -d / 2 + 2), 12, 1.1, Colors.DarkWood)
+		addPart(model, { Name = "Carving", Size = V3(1.4, 1.4, 1.4), Position = V3(x, 12.4, -d / 2 + 2), Color = Color3.fromRGB(170, 130, 50), Material = Enum.Material.Wood })
+	end
+	campfire(model, V3(-w / 2 + 4, 0, -d / 2 + 2))
+	campfire(model, V3(w / 2 - 4, 0, -d / 2 + 2))
+	-- red and gold banners along the long wall
+	for i = -2, 2 do
+		addPart(model, { Name = "Banner", Size = V3(1.8, 3.4, 0.12), Position = V3(i * 6, 6.5, -(d - 6) / 2 - 0.5), Color = i % 2 == 0 and Color3.fromRGB(150, 40, 36) or Color3.fromRGB(190, 150, 60), Material = Enum.Material.Fabric, CanCollide = false })
+	end
+end
+
 -- Builds a building model for `buildingType` in its unrotated orientation.
 function ModelFactory.building(buildingType: string): Model
 	local def = Config.Buildings[buildingType]
@@ -1108,6 +1269,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
 	"Tree_Pine", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Longship",
 }

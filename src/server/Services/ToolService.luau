@@ -24,6 +24,16 @@ function ToolService:Init(allServices)
 	services = allServices
 end
 
+-- Ring Mail research gives 150 health.
+function ToolService:ApplyArmor(player: Player)
+	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	local colony = services.ColonyService:Get(player)
+	if humanoid and services.ColonyService:Has(colony, "ChainMail") then
+		humanoid.MaxHealth = 150
+		humanoid.Health = math.max(humanoid.Health, 150)
+	end
+end
+
 -- True if the player is currently holding the named tool.
 function ToolService:IsHolding(player: Player, toolName: string): boolean
 	local character = player.Character
@@ -73,7 +83,9 @@ local function shoot(player: Player, aim)
 	if delta.Magnitude < 1 then
 		return
 	end
-	local dir = delta.Unit * Config.Bow.Range
+	local colony = services.ColonyService:Get(player)
+	local longbows = services.ColonyService:Has(colony, "Longbows")
+	local dir = delta.Unit * (Config.Bow.Range + (longbows and 60 or 0))
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { character }
@@ -97,7 +109,7 @@ local function shoot(player: Player, aim)
 	local guard = hit and services.RaidService:FindDefender(hit.Instance)
 	if guard then
 		task.delay(flight, function()
-			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage, player)
+			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
 		end)
 	end
 end
@@ -116,8 +128,15 @@ local function strike(player: Player)
 		return
 	end
 	lastStrike[player] = now
+	local colony = services.ColonyService:Get(player)
+	local damage = Config.Combat.AxeDamage
+	if services.ColonyService:Has(colony, "SteelEdges") then
+		damage *= 2
+	elseif services.ColonyService:Has(colony, "IronAxes") then
+		damage *= 1.5
+	end
 	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
-		services.RaidService:DamageDefender(guard, Config.Combat.AxeDamage, player)
+		services.RaidService:DamageDefender(guard, damage, player)
 	end
 end
 
@@ -125,6 +144,7 @@ function ToolService:Start()
 	local function onPlayer(player: Player)
 		player.CharacterAdded:Connect(function()
 			giveTools(player)
+			ToolService:ApplyArmor(player)
 		end)
 		if player.Character then
 			giveTools(player)
