@@ -94,6 +94,31 @@ local function shoot(player: Player, aim)
 			services.WildlifeService:Kill(deer, player)
 		end)
 	end
+	local guard = hit and services.RaidService:FindDefender(hit.Instance)
+	if guard then
+		task.delay(flight, function()
+			services.RaidService:DamageDefender(guard, Config.Combat.ArrowDamage, player)
+		end)
+	end
+end
+
+local lastStrike = {}
+local function strike(player: Player)
+	local now = os.clock()
+	if lastStrike[player] and now - lastStrike[player] < Config.Combat.StrikeCooldown then
+		return
+	end
+	if not ToolService:IsHolding(player, "Axe") then
+		return
+	end
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	lastStrike[player] = now
+	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
+		services.RaidService:DamageDefender(guard, Config.Combat.AxeDamage, player)
+	end
 end
 
 function ToolService:Start()
@@ -111,9 +136,11 @@ function ToolService:Start()
 	end
 	Players.PlayerRemoving:Connect(function(player)
 		lastShot[player] = nil
+		lastStrike[player] = nil
 	end)
 
 	Remotes.ShootArrow.OnServerEvent:Connect(shoot)
+	Remotes.Strike.OnServerEvent:Connect(strike)
 end
 
 return ToolService

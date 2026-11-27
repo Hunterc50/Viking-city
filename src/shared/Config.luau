@@ -18,8 +18,8 @@ Config.TICK = 1 -- seconds between simulation steps
 Config.DAY_LENGTH = 60 -- real seconds per in-game day
 
 -- Resources ---------------------------------------------------------------
-Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides" }
-Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0 }
+Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides", "Silver" }
+Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0, Silver = 0 }
 Config.BaseStorage = 200 -- max of each resource before any storehouse
 
 -- Villagers ---------------------------------------------------------------
@@ -126,7 +126,7 @@ Config.Buildings = {
 Config.BuildOrder = { "Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade" }
 
 -- Tools every player carries (built in ModelFactory.tool).
-Config.Tools = { "Axe", "Pickaxe", "Bow" }
+Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch" }
 
 -- Wildlife ------------------------------------------------------------------
 Config.Wildlife = {
@@ -137,6 +137,28 @@ Config.Wildlife = {
 	FleeDistance = 22, -- deer bolt when a player gets this close
 	Meat = 15, -- Food from one deer
 	Hides = 2,
+}
+
+-- The rival village you can raid ---------------------------------------------
+Config.Rival = {
+	Name = "Greywater Hold",
+	Center = Vector3.new(-170, 1, 100), -- west end of the valley, past plot 1
+	Radius = 92, -- palisade ring
+	Defenders = 6,
+	DefenderHealth = 100,
+	DefenderDamage = 10,
+	DefenderAggro = 70, -- studs from the village centre they will chase you
+	Villagers = 4, -- folk you can offer a new home once the guards fall
+	ChestLoot = { Food = 50, Silver = 20, Wood = 20 },
+	BurnSeconds = 25,
+	RegenSeconds = 300, -- after a raid the hold rebuilds itself in 5 minutes
+}
+
+Config.Combat = {
+	AxeDamage = 34,
+	ArrowDamage = 50,
+	StrikeRange = 8,
+	StrikeCooldown = 0.6,
 }
 
 Config.Bow = {

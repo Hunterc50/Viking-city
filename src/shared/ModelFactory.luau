@@ -1007,13 +1007,13 @@ end
 
 -- Tools -----------------------------------------------------------------------
 
--- Builds a hand tool ("Axe", "Pickaxe" or "Bow") that players hold.
+-- Builds a hand tool ("Axe", "Pickaxe", "Bow" or "Torch") that players hold.
 function ModelFactory.tool(kind: string): Tool
 	local tool = Instance.new("Tool")
 	tool.Name = kind
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
-	tool.ToolTip = ({ Axe = "Chop trees", Pickaxe = "Mine rocks", Bow = "Click to shoot deer for meat and hides" })[kind] or kind
+	tool.ToolTip = ({ Axe = "Chop trees, fight", Pickaxe = "Mine rocks", Bow = "Shoot deer and enemies", Torch = "Set enemy buildings alight (F)" })[kind] or kind
 
 	local handle = Instance.new("Part")
 	handle.Name = "Handle"
@@ -1039,7 +1039,33 @@ function ModelFactory.tool(kind: string): Tool
 		weld.Part1 = p
 		weld.Parent = p
 	end
-	if kind == "Bow" then
+	if kind == "Torch" then
+		handle.Size = V3(0.35, 3, 0.35)
+		local flame = Instance.new("Part")
+		flame.Name = "Flame"
+		flame.Size = V3(0.6, 0.7, 0.6)
+		flame.Color = Color3.fromRGB(255, 150, 60)
+		flame.Material = Enum.Material.Neon
+		flame.CanCollide = false
+		flame.Massless = true
+		flame.CFrame = handle.CFrame * CFrame.new(0, 1.7, 0)
+		flame.Parent = tool
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = handle
+		weld.Part1 = flame
+		weld.Parent = flame
+		local fire = Instance.new("Fire")
+		fire.Size = 2
+		fire.Heat = 7
+		fire.Parent = flame
+		local light = Instance.new("PointLight")
+		light.Color = Colors.Lantern
+		light.Range = 18
+		light.Brightness = 2
+		light.Parent = flame
+		tool.Grip = CFrame.new(0, -0.8, 0)
+		return tool
+	elseif kind == "Bow" then
 		-- the handle is the grip; two angled limbs and a string make the bow
 		handle.Size = V3(0.3, 1, 0.3)
 		local function limb(size, offset: CFrame, color, material)

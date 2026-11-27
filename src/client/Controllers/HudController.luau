@@ -34,6 +34,7 @@ local RESOURCE_COLORS = {
 	Stone = Color3.fromRGB(150, 150, 158),
 	Food = Color3.fromRGB(220, 190, 90),
 	Hides = Color3.fromRGB(176, 120, 84),
+	Silver = Color3.fromRGB(210, 214, 224),
 }
 
 local function new(className: string, props, children)
@@ -107,7 +108,7 @@ function HudController:Start()
 	local resBar = new("Frame", {
 		Name = "Resources",
 		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(560, 44),
+		Size = UDim2.fromOffset(700, 44),
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
@@ -186,12 +187,12 @@ function HudController:Start()
 	label({
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 12, 1, -12),
-		Size = UDim2.fromOffset(250, 110),
+		Size = UDim2.fromOffset(330, 120),
 		TextSize = 13,
 		TextColor3 = THEME.Muted,
 		TextStrokeTransparency = 0.5,
 		TextYAlignment = Enum.TextYAlignment.Bottom,
-		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to hunt deer\nMouse wheel: zoom\nRight-drag: turn camera\nV: switch camera",
+		Text = "1 Axe: chop trees, click to fight\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F to set enemy buildings alight\nRaid Greywater Hold: walk west past your plot\nMouse wheel: zoom   Right-drag: turn   V: camera",
 		Parent = gui,
 	})
 
@@ -267,7 +268,40 @@ function HudController:Start()
 	local feedOrder = 0
 	local kindColor = { good = THEME.Good, bad = THEME.Bad, gain = THEME.Accent, info = THEME.Text }
 
+	-- a big cinematic title for raid moments
+	local raidTitle = label({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.3),
+		Size = UDim2.fromOffset(900, 60),
+		Font = Enum.Font.Fantasy,
+		TextSize = 42,
+		TextColor3 = Color3.fromRGB(240, 210, 150),
+		TextStrokeTransparency = 0.2,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextTransparency = 1,
+		TextStrokeColor3 = Color3.fromRGB(40, 10, 6),
+		Parent = gui,
+	})
+	local raidToken = 0
+	local function showRaidTitle(text: string)
+		raidToken += 1
+		local token = raidToken
+		raidTitle.Text = text
+		raidTitle.TextTransparency = 1
+		raidTitle.TextStrokeTransparency = 1
+		TweenService:Create(raidTitle, TweenInfo.new(0.6), { TextTransparency = 0, TextStrokeTransparency = 0.2 }):Play()
+		task.delay(4, function()
+			if token == raidToken then
+				TweenService:Create(raidTitle, TweenInfo.new(1.2), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+			end
+		end)
+	end
+
 	controllers.StateController.Notified:Connect(function(text, kind)
+		if kind == "raid" then
+			showRaidTitle(text)
+			return
+		end
 		feedOrder += 1
 		local item = new("TextLabel", {
 			Size = UDim2.fromOffset(0, 28),

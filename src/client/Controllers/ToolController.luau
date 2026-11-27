@@ -53,6 +53,9 @@ local function hookTool(tool: Instance)
 			lastShot = now
 			Remotes.ShootArrow:FireServer(aimPoint())
 		else
+			if tool.Name == "Axe" then
+				Remotes.Strike:FireServer()
+			end
 			swing(tool)
 		end
 	end)

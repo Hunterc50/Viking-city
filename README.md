@@ -63,7 +63,14 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Rotate building | **R** while placing |
 | Cancel | **Q**, or click the same button again |
 | Demolish | Click **Demolish**, then click one of your buildings (50% refund) |
+| Raid Greywater Hold | Walk west past your plot to the walled village. Sound the war horn at the gate (E) if you want a proper fight |
+| Fight | Hold the Axe (1) and click near a guard, or shoot with the Bow (3) |
+| Burn buildings | Hold the Torch (4) and press **F** at a rival building. Fire spreads and chars it |
+| Plunder | Hold **E** at the chests by their storehouses for food, silver and wood |
+| New villagers | When every guard has fallen, hold **E** on the hold's villagers to offer them a home (needs a free bed) |
 | Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
+
+The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
 
 Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Each Longhouse holds 5 people and each Cottage 3. Immigrants only come when you have free housing and your people are happy.
 

@@ -41,7 +41,8 @@ local MAX_X = math.ceil((PLOTS_END_X + 760) / VOXEL) * VOXEL
 local MIN_Z, MAX_Z = -800, 840
 
 -- The flat, buildable part of the valley
-local FLAT_MIN_X, FLAT_MAX_X = -40, PLOTS_END_X + 40
+-- (extends west to hold the rival village, Config.Rival)
+local FLAT_MIN_X, FLAT_MAX_X = -290, PLOTS_END_X + 40
 local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 115
 local SHORE_Z = -40 -- where the beach starts to slope into the fjord
 local SEED = 7.31
@@ -130,6 +131,12 @@ local function inPlotArea(x: number, z: number): boolean
 	return false
 end
 
+local RIVAL = Config.Rival
+local function inRivalArea(x: number, z: number): boolean
+	local dx, dz = x - RIVAL.Center.X, z - RIVAL.Center.Z
+	return dx * dx + dz * dz < (RIVAL.Radius + 22) ^ 2
+end
+
 local function inApron(x: number, z: number): boolean
 	if z < -16 or z > 0 then
 		return false
@@ -157,6 +164,10 @@ local function surfaceMaterial(x: number, z: number, h: number, slope: number)
 	end
 	if inPlotArea(x, z) then
 		return M.Grass
+	end
+	if inRivalArea(x, z) then
+		local dx, dz = x - RIVAL.Center.X, z - RIVAL.Center.Z
+		return (dx * dx + dz * dz < 36 * 36 or fbm(x, z, 1 / 25, 2, 41) > 0.2) and M.Ground or M.Grass
 	end
 	if h < -6 then
 		return M.Mud
@@ -315,7 +326,7 @@ local function scatterScenery()
 	local treeMaterials = { [M.Grass] = true, [M.LeafyGrass] = true, [M.Ground] = true }
 
 	local function plant(x: number, z: number): boolean
-		if inPlotArea(x, z) or (x > FLAT_MIN_X and x < FLAT_MAX_X and z > -60 and z < 0) then
+		if inPlotArea(x, z) or inRivalArea(x, z) or (x > FLAT_MIN_X and x < FLAT_MAX_X and z > -60 and z < 0) then
 			return false
 		end
 		local hit = groundAt(x, z)
@@ -366,7 +377,7 @@ local function scatterScenery()
 	while under < 450 and tries < 4000 do
 		tries += 1
 		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(-30, 560)
-		if fbm(x, z, 1 / 220, 3, 29) + 0.15 > 0.05 and not inPlotArea(x, z) then
+		if fbm(x, z, 1 / 220, 3, 29) + 0.15 > 0.05 and not inPlotArea(x, z) and not inRivalArea(x, z) then
 			local hit = groundAt(x, z)
 			if hit and treeMaterials[hit.Material] and hit.Normal.Y > 0.8 and hit.Position.Y < 110 and hit.Position.Y > 1.5 then
 				local model = rng:NextNumber() < 0.6 and ModelFactory.fern(rng) or ModelFactory.juniper(rng)
@@ -384,7 +395,7 @@ local function scatterScenery()
 	-- loose boulders
 	for _ = 1, 70 do
 		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(-60, 500)
-		if not inPlotArea(x, z) then
+		if not inPlotArea(x, z) and not inRivalArea(x, z) then
 			local hit = groundAt(x, z)
 			if hit and hit.Position.Y < 80 and hit.Material ~= M.Water then
 				local model = ModelFactory.boulder(rng, rng:NextNumber(1, 2.6))
