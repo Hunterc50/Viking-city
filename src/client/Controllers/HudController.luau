@@ -3,7 +3,9 @@
 	Draws the on-screen interface entirely from code:
 	  - resource bar (top left)
 	  - colony panel: population, jobs, happiness, day (top right)
-	  - build bar with a button per building, plus Demolish (bottom)
+	  - build menu with tabs (Housing, Production, ...) and building cards,
+	    tooltips and Demolish (bottom centre)
+	  - controls help (bottom left, H hides it)
 	  - message feed (top centre)
 ]]
 
@@ -81,6 +83,13 @@ local function label(props)
 	return new("TextLabel", defaults)
 end
 
+-- thin gold border used on every panel
+local function frameStroke()
+	return new("UIStroke", { Color = THEME.Accent, Thickness = 1, Transparency = 0.55, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+end
+
+local DEFAULT_HINT = "Pick a tab and a building. Walk up to trees, rocks and bushes and hold E to gather."
+
 local function moodWord(h: number): string
 	if h >= 75 then
 		return "Joyful"
@@ -109,13 +118,15 @@ function HudController:Start()
 	local resBar = new("Frame", {
 		Name = "Resources",
 		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(830, 44),
+		Size = UDim2.fromOffset(0, 44),
+		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = THEME.Panel,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.08,
 		Parent = gui,
 	}, {
 		corner(10),
 		padding(8),
+		frameStroke(),
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 14), VerticalAlignment = Enum.VerticalAlignment.Center }),
 	})
 
@@ -143,11 +154,12 @@ function HudController:Start()
 		Position = UDim2.new(1, -12, 0, 12),
 		Size = UDim2.fromOffset(230, 150),
 		BackgroundColor3 = THEME.Panel,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.08,
 		Parent = gui,
 	}, {
 		corner(10),
 		padding(10),
+		frameStroke(),
 		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	local dayLabel = label({ Size = UDim2.new(1, 0, 0, 20), Font = Enum.Font.GothamBold, TextColor3 = THEME.Accent, LayoutOrder = 1, Parent = panel })
@@ -158,106 +170,293 @@ function HudController:Start()
 	local moodLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 5, Parent = panel })
 	local warnLabel = label({ Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 6, TextColor3 = THEME.Bad, TextSize = 14, Parent = panel })
 
-	---------------------------------------------------------------- build bar
-	local buildBar = new("Frame", {
-		Name = "BuildBar",
+	---------------------------------------------------------------- build menu
+	--[[
+		A row of tabs (Housing, Production, ...) above a row of building
+		cards. Click a tab to open it, click it again to fold the menu away.
+		Hovering a card shows a tooltip with everything about the building.
+	]]
+	local CARD_W, CARD_H = 124, 96
+	local buildMenu = new("Frame", {
+		Name = "BuildMenu",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = THEME.Panel,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.08,
 		Parent = gui,
 	}, {
-		corner(10),
+		corner(12),
 		padding(8),
-		-- two rows of buttons
-		new("UIGridLayout", {
-			CellSize = UDim2.fromOffset(112, 54),
-			CellPadding = UDim2.fromOffset(8, 8),
-			FillDirectionMaxCells = 7,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
+		frameStroke(),
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }),
 	})
 
+	local tabRow = new("Frame", {
+		Name = "Tabs",
+		Size = UDim2.fromOffset(0, 34),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		LayoutOrder = 1,
+		Parent = buildMenu,
+	}, {
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+
+	local cardRow = new("Frame", {
+		Name = "Cards",
+		Size = UDim2.fromOffset(0, CARD_H),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+		Parent = buildMenu,
+	}, {
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+
+	-- hint line just above the menu
 	local hint = label({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -152),
-		Size = UDim2.fromOffset(640, 22),
+		Position = UDim2.new(0.5, 0, 0, -6),
+		Size = UDim2.fromOffset(700, 22),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextSize = 15,
 		TextStrokeTransparency = 0.4,
-		Text = "Pick a building below. Walk up to trees, rocks and bushes and hold E to gather.",
+		Text = DEFAULT_HINT,
 		Parent = gui,
 	})
+	local function placeHint()
+		hint.Position = UDim2.new(0.5, 0, 1, -12 - buildMenu.AbsoluteSize.Y - 6)
+	end
+	buildMenu:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeHint)
+	placeHint()
 
-	label({
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 12, 1, -12),
-		Size = UDim2.fromOffset(330, 120),
-		TextSize = 13,
-		TextColor3 = THEME.Muted,
-		TextStrokeTransparency = 0.5,
-		TextYAlignment = Enum.TextYAlignment.Bottom,
-		Text = "1 Axe: chop trees, click to fight\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F to set enemy buildings alight\nRaid Greywater Hold: walk west past your plot\nMouse wheel: zoom   Right-drag: turn   V: camera",
+	-- tooltip that follows the hovered card
+	local tooltip = new("Frame", {
+		Name = "Tooltip",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.fromOffset(260, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Panel,
+		Visible = false,
+		ZIndex = 20,
 		Parent = gui,
+	}, {
+		corner(8),
+		padding(10),
+		frameStroke(),
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
+	local tipTitle = label({ Size = UDim2.new(1, 0, 0, 22), Font = Enum.Font.GothamBold, TextSize = 17, TextColor3 = THEME.Accent, LayoutOrder = 1, ZIndex = 21, Parent = tooltip })
+	local tipBody = label({ Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 14, LayoutOrder = 2, ZIndex = 21, Parent = tooltip })
+	local tipStats = label({ Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 3, ZIndex = 21, Parent = tooltip })
+	local tipCost = label({ Size = UDim2.new(1, 0, 0, 18), TextSize = 14, Font = Enum.Font.GothamBold, LayoutOrder = 4, ZIndex = 21, Parent = tooltip })
+
+	local lastState = nil
+	local known = {}
+
+	local function statsText(def): string
+		local bits = {}
+		if def.Housing then
+			table.insert(bits, "Homes for " .. def.Housing)
+		end
+		if def.Workers then
+			table.insert(bits, def.Workers .. (def.Workers == 1 and " job" or " jobs"))
+		end
+		for res, rate in def.Produces or {} do
+			table.insert(bits, string.format("+%.2g %s/s per worker", rate, res))
+		end
+		if def.Storage then
+			table.insert(bits, "+" .. def.Storage .. " storage")
+		end
+		if def.Happiness then
+			table.insert(bits, "+" .. def.Happiness .. " happiness")
+		end
+		table.insert(bits, def.Size[1] .. "x" .. def.Size[2] .. " tiles")
+		return table.concat(bits, "  ·  ")
+	end
+
+	local function shortStat(def): string
+		if def.Housing then
+			return def.Housing .. " homes"
+		elseif def.Produces then
+			local res = next(def.Produces)
+			return res .. ", " .. def.Workers .. (def.Workers == 1 and " job" or " jobs")
+		elseif def.Storage then
+			return "+" .. def.Storage .. " storage"
+		elseif def.Happiness then
+			return "+" .. def.Happiness .. " happiness"
+		end
+		return def.Size[1] .. "x" .. def.Size[2]
+	end
+
+	local function showTooltip(buildingType: string, card: GuiObject)
+		local def = Config.Buildings[buildingType]
+		tipTitle.Text = (Config.BuildingIcons[buildingType] or "") .. "  " .. def.Display
+		tipBody.Text = def.Description
+		tipStats.Text = statsText(def)
+		if def.Requires and not known[def.Requires] then
+			tipCost.Text = "🔒 Research " .. Config.Tech[def.Requires].Name .. " first (T)"
+			tipCost.TextColor3 = THEME.Bad
+		else
+			local affordable = lastState and Grid.canAfford(lastState.resources, def.Cost)
+			tipCost.Text = "Cost: " .. Grid.costText(def.Cost)
+			tipCost.TextColor3 = affordable and THEME.Good or THEME.Bad
+		end
+		local pos = card.AbsolutePosition
+		tooltip.Position = UDim2.fromOffset(pos.X + card.AbsoluteSize.X / 2, pos.Y - 34)
+		tooltip.Visible = true
+	end
 
 	local buttons = {}
-	local function makeButton(key: string, title: string, sub: string, order: number)
+	local function makeCard(key: string, icon: string, title: string, sub: string, order: number)
 		local b = new("TextButton", {
 			Name = key,
-			Size = UDim2.fromOffset(112, 54),
+			Size = UDim2.fromOffset(CARD_W, CARD_H),
 			BackgroundColor3 = THEME.PanelLight,
 			AutoButtonColor = true,
 			Text = "",
 			LayoutOrder = order,
-			Parent = buildBar,
-		}, { corner(8) })
-		new("UIStroke", { Name = "Stroke", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = THEME.Accent, Thickness = 2, Enabled = false, Parent = b })
-		label({ Size = UDim2.new(1, 0, 0, 22), Position = UDim2.fromOffset(0, 6), Font = Enum.Font.GothamBold, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Center, Text = title, Parent = b })
-		local costLabel = label({
-			Name = "Cost",
-			Size = UDim2.new(1, -6, 0, 18),
-			Position = UDim2.fromOffset(3, 30),
-			TextSize = 12,
-			TextColor3 = THEME.Muted,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			TextScaled = true,
-			Text = sub,
-			Parent = b,
+			Visible = false,
+			Parent = cardRow,
+		}, {
+			corner(8),
+			new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(190, 180, 170)) }),
 		})
-		buttons[key] = { button = b, cost = costLabel }
+		new("UIStroke", { Name = "Stroke", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = THEME.Accent, Thickness = 2, Enabled = false, Parent = b })
+		label({ Name = "Icon", Size = UDim2.new(1, 0, 0, 30), Position = UDim2.fromOffset(0, 4), TextSize = 26, TextXAlignment = Enum.TextXAlignment.Center, Text = icon, Parent = b })
+		label({ Size = UDim2.new(1, -6, 0, 18), Position = UDim2.fromOffset(3, 36), Font = Enum.Font.GothamBold, TextSize = 14, TextScaled = true, TextXAlignment = Enum.TextXAlignment.Center, Text = title, Parent = b })
+		local statLabel = label({ Name = "Stat", Size = UDim2.new(1, -6, 0, 15), Position = UDim2.fromOffset(3, 56), TextSize = 12, TextColor3 = THEME.Muted, TextXAlignment = Enum.TextXAlignment.Center, Text = "", Parent = b })
+		local costLabel = label({ Name = "Cost", Size = UDim2.new(1, -8, 0, 16), Position = UDim2.fromOffset(4, 74), TextSize = 12, TextScaled = true, Font = Enum.Font.GothamBold, TextColor3 = THEME.Muted, TextXAlignment = Enum.TextXAlignment.Center, Text = sub, Parent = b })
+		buttons[key] = { button = b, cost = costLabel, stat = statLabel }
 		return b
 	end
 
 	local BuildController = controllers.BuildController
-	for i, buildingType in Config.BuildOrder do
-		local def = Config.Buildings[buildingType]
-		local b = makeButton(buildingType, def.Display, Grid.costText(def.Cost), i)
-		b.Activated:Connect(function()
-			BuildController:SelectBuild(buildingType)
-		end)
-		b.MouseEnter:Connect(function()
-			hint.Text = def.Display .. ": " .. def.Description
-		end)
+	local tabs = {}
+	local openTab = nil
+
+	local function setTab(index)
+		openTab = index
+		for i, tab in tabs do
+			local active = i == index
+			tab.button.BackgroundColor3 = active and THEME.Accent or THEME.PanelLight
+			tab.button.TextColor3 = active and THEME.Panel or THEME.Text
+			for _, buildingType in tab.buildings do
+				buttons[buildingType].button.Visible = active
+			end
+		end
+		cardRow.Visible = index ~= nil
+		buttons.Demolish.button.Visible = index ~= nil
+		tooltip.Visible = false
 	end
-	local demolish = makeButton("Demolish", "Demolish", "refund 50%", #Config.BuildOrder + 1)
-	demolish.BackgroundColor3 = Color3.fromRGB(90, 40, 34)
+
+	for i, category in Config.BuildCategories do
+		local tabButton = new("TextButton", {
+			Name = category.Name,
+			Size = UDim2.fromOffset(0, 34),
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundColor3 = THEME.PanelLight,
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextColor3 = THEME.Text,
+			Text = category.Icon .. "  " .. category.Name,
+			LayoutOrder = i,
+			Parent = tabRow,
+		}, { corner(8), new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }) })
+		tabs[i] = { button = tabButton, buildings = category.Buildings }
+		tabButton.Activated:Connect(function()
+			setTab(openTab ~= i and i or nil)
+		end)
+
+		for j, buildingType in category.Buildings do
+			local def = Config.Buildings[buildingType]
+			local card = makeCard(buildingType, Config.BuildingIcons[buildingType] or "", def.Display, Grid.costText(def.Cost), i * 100 + j)
+			buttons[buildingType].stat.Text = shortStat(def)
+			card.Activated:Connect(function()
+				BuildController:SelectBuild(buildingType)
+			end)
+			card.MouseEnter:Connect(function()
+				showTooltip(buildingType, card)
+			end)
+			card.MouseLeave:Connect(function()
+				tooltip.Visible = false
+			end)
+		end
+	end
+
+	-- Demolish lives at the right end of the tab row, always reachable.
+	local demolish = new("TextButton", {
+		Name = "Demolish",
+		Size = UDim2.fromOffset(0, 34),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = Color3.fromRGB(96, 40, 34),
+		Font = Enum.Font.GothamBold,
+		TextSize = 15,
+		TextColor3 = THEME.Text,
+		Text = "🔨  Demolish",
+		LayoutOrder = 999,
+		Parent = tabRow,
+	}, { corner(8), new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14) }) })
+	new("UIStroke", { Name = "Stroke", ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Color = THEME.Accent, Thickness = 2, Enabled = false, Parent = demolish })
+	buttons.Demolish = { button = { Visible = true }, stroke = demolish.Stroke }
 	demolish.Activated:Connect(function()
 		BuildController:SelectDemolish()
 	end)
+	demolish.MouseEnter:Connect(function()
+		hint.Text = "Demolish: tear down one of your buildings and get half its cost back."
+	end)
+
+	setTab(1)
 
 	BuildController.ModeChanged:Connect(function(mode)
 		for key, entry in buttons do
-			entry.button.Stroke.Enabled = mode ~= nil and (mode.type == key or (mode.kind == "demolish" and key == "Demolish"))
+			local stroke = entry.stroke or entry.button.Stroke
+			stroke.Enabled = mode ~= nil and (mode.type == key or (mode.kind == "demolish" and key == "Demolish"))
 		end
 		if mode == nil then
-			hint.Text = "Pick a building below. Walk up to trees, rocks and bushes and hold E to gather."
+			hint.Text = DEFAULT_HINT
 		elseif mode.kind == "place" then
 			hint.Text = "Click to place " .. Config.Buildings[mode.type].Display .. ".  R = rotate,  Q = cancel"
 		else
 			hint.Text = "Click one of your buildings to tear it down.  Q = cancel"
+		end
+	end)
+
+	---------------------------------------------------------------- controls help
+	local helpOpen = true
+	local help = new("Frame", {
+		Name = "Controls",
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12, 1, -12),
+		Size = UDim2.fromOffset(250, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.25,
+		Parent = gui,
+	}, {
+		corner(10),
+		padding(10),
+		frameStroke(),
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	label({ Size = UDim2.new(1, 0, 0, 18), Font = Enum.Font.GothamBold, TextColor3 = THEME.Accent, TextSize = 14, Text = "Controls  (H to hide)", LayoutOrder = 1, Parent = help })
+	local helpBody = label({
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextSize = 13,
+		TextColor3 = THEME.Muted,
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		LayoutOrder = 2,
+		Text = "1 Axe: chop trees, click to fight\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\nE: gather, loot, talk\nT: research\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Parent = help,
+	})
+	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.H then
+			helpOpen = not helpOpen
+			helpBody.Visible = helpOpen
 		end
 	end)
 
@@ -370,7 +569,8 @@ function HudController:Start()
 			warnLabel.TextColor3 = THEME.Bad
 		end
 
-		local known = {}
+		lastState = state
+		table.clear(known)
 		for _, id in state.tech or {} do
 			known[id] = true
 		end
@@ -378,14 +578,14 @@ function HudController:Start()
 			local def = Config.Buildings[buildingType]
 			local entry = buttons[buildingType]
 			if def.Requires and not known[def.Requires] then
-				entry.cost.Text = "Research " .. Config.Tech[def.Requires].Name
+				entry.cost.Text = "🔒 " .. Config.Tech[def.Requires].Name
 				entry.cost.TextColor3 = THEME.Muted
-				entry.button.BackgroundTransparency = 0.5
+				entry.button.BackgroundTransparency = 0.55
 			else
 				entry.cost.Text = Grid.costText(def.Cost)
 				entry.button.BackgroundTransparency = 0
 				local affordable = Grid.canAfford(state.resources, def.Cost)
-				entry.cost.TextColor3 = affordable and THEME.Muted or THEME.Bad
+				entry.cost.TextColor3 = affordable and THEME.Good or THEME.Bad
 			end
 		end
 	end)

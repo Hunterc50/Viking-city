@@ -59,10 +59,10 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Mine rocks | Press **2** to hold the Pickaxe, walk to a rock, hold **E** |
 | Hunt deer | Press **3** to hold the Bow, aim at a deer in the meadow and click (they run if you get too close) |
 | Forage berries | Walk to a berry bush and hold **E** |
-| Build | Click a building in the bottom bar, move the mouse over your land, click to place |
+| Build | Pick a tab in the bottom menu (Housing, Production, Lore & Craft, Faith, War & Sea), hover a card to see what it does, click it, then click your land to place. Click the open tab again to fold the menu away |
 | Rotate building | **R** while placing |
 | Cancel | **Q**, or click the same button again |
-| Demolish | Click **Demolish**, then click one of your buildings (50% refund) |
+| Demolish | Click **Demolish** (right end of the tabs), then click one of your buildings (50% refund) |
 | Raid Greywater Hold | Walk west past your plot to the walled village. Sound the war horn at the gate (E) if you want a proper fight |
 | Fight | Hold the Axe (1) and click near a guard, or shoot with the Bow (3) |
 | Burn buildings | Hold the Torch (4) and press **F** at a rival building. Fire spreads and chars it |

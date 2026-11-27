@@ -169,11 +169,29 @@ Config.Buildings = {
 	},
 }
 
--- Order of buttons in the build bar.
-Config.BuildOrder = {
-	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
-	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall",
+-- Tabs of the build menu, in order, and the buildings on each tab.
+-- Icon is an emoji shown on the tab and on each building card.
+Config.BuildCategories = {
+	{ Name = "Housing", Icon = "🏠", Buildings = { "Longhouse", "Cottage", "GreatHall" } },
+	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
+	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy" } },
+	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Shipyard" } },
 }
+
+Config.BuildingIcons = {
+	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
+	Farm = "🌾", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
+	LoreHall = "📜", Smithy = "⚒️", Shrine = "🗿", Palisade = "🛡️", Shipyard = "⛵",
+}
+
+-- Every building in menu order (built from the tabs above).
+Config.BuildOrder = {}
+for _, category in Config.BuildCategories do
+	for _, b in category.Buildings do
+		table.insert(Config.BuildOrder, b)
+	end
+end
 
 -- Tools every player carries (built in ModelFactory.tool).
 Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch" }
