@@ -25,6 +25,8 @@ Sounds.Slots = {
 	Birds = { Id = "", Volume = 0.25 }, -- daytime birdsong (quiet at night)
 	Waves = { Id = "", Volume = 0.45 }, -- sea on the shore (louder near the fjord)
 	Fire = { Id = "", Volume = 0.6 }, -- crackling flames on burning buildings
+	Rain = { Id = "", Volume = 0.5 }, -- steady rain, plays during sea storms
+	Thunder = { Id = "", Volume = 0.8 }, -- one thunder clap after each lightning flash
 
 	-- one-off effects
 	Chop = { Id = "rbxasset://sounds/swordslash.wav", Volume = 0.5, Pitch = 0.6 },
@@ -38,7 +40,7 @@ Sounds.Slots = {
 }
 
 -- Plays slot `name` once, at a part or a position (or everywhere if nil).
-function Sounds.play(name: string, where: (BasePart | Vector3)?)
+function Sounds.play(name: string, where: (Instance | Vector3)?)
 	local slot = Sounds.Slots[name]
 	if not slot or slot.Id == "" then
 		return

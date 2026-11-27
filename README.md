@@ -75,6 +75,7 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Sail | Build a **Shipyard**, research **Karve**, then hold **E** at the end of your jetty. W/S row, A/D steer, Space jumps off. Beach it near Greywater Hold for a sea raid |
 | Trade | Walk to **Ottar's stall** (striped awning) on the beach in front of your plot and hold **E**. Swap wood, stone, food and hides for silver, or silver for goods. Food is dear in winter and cheap at harvest |
 | Sea battle | At the helm press **F** to loose a volley of arrows at the nearest enemy ship, or ram it at full speed. Every ship has a hull bar; at zero it sinks. A Greywater raider ship patrols the fjord: sink it for silver, food and wood. Moor by your own jetty to repair |
+| Weather | Every few minutes the weather changes (shown next to the day at the top). **Fog** rolls in thick and low, and the raider ship can barely see you, so it is the best time to sneak a longship over to Skerholm. A **sea storm** brings rain, lightning and big waves; every ship sails at 60% speed and rocks hard. In winter a storm is a blizzard |
 | Raid another player | Walk to the **war horn post** on the west edge of their plot and hold **E**. Beat their militia in time, then plunder the chest by their longhouse for 20% of their stores. Villages are never destroyed; a raided village gets a 10-minute shield, and new villages are safe until day 3 |
 | Defend your village | From day 4, rival warbands raid you every few days (you get a warning first). They head for your Storehouse; any raider who reaches it steals a share. **Palisades** slow them (they must hack through), **Watchtowers** with an archer at work shoot them, and you fight with the Sword and Bow. Nothing is ever destroyed |
 | Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
@@ -97,7 +98,7 @@ Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Ea
 
 Every sound lives in one place: **Explorer > ReplicatedStorage > Shared > Sounds**. Double-click it to open it. Each line is a slot, like `Wind = { Id = "", Volume = 0.3 }`.
 
-Music, wind, birds, waves, fire and the war horn start out empty (silent), so you can choose the ones you like. Chopping, mining, the bow, building and splashes already use Roblox's built-in sounds.
+Music, wind, birds, waves, fire, rain, thunder and the war horn start out empty (silent), so you can choose the ones you like. Chopping, mining, the bow, building and splashes already use Roblox's built-in sounds.
 
 To fill or change a slot:
 1. Open the **Toolbox** (View or Window menu), click the **Audio** tab, and search, for example "nordic music", "wind", "forest birds", "ocean waves", "fire crackle" or "war horn".

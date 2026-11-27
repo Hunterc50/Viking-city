@@ -604,7 +604,9 @@ function HudController:Start()
 			lastValues[name] = value
 		end
 		local rank = state.rank
-		dayLabel.Text = (rank and (rank.name .. "  ·  ") or "") .. "Day " .. state.day .. "  ·  " .. (state.season or "")
+		local weather = workspace:GetAttribute("Weather")
+		local weatherText = weather == "Storm" and "  ·  ⛈ Storm" or (weather == "Fog" and "  ·  🌫 Fog" or "")
+		dayLabel.Text = (rank and (rank.name .. "  ·  ") or "") .. "Day " .. state.day .. "  ·  " .. (state.season or "") .. weatherText
 		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
 		popLabel.Text = string.format("Population %d / %d homes", state.population, math.min(state.housing, rank and rank.cap or state.housing))
 		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)

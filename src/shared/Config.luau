@@ -303,6 +303,19 @@ Config.Rival3 = {
 -- Every rival hold: two in the valley, one across the water.
 Config.Rivals = { Config.Rival, Config.Rival2, Config.Rival3 }
 
+-- Weather ------------------------------------------------------------------
+-- Every few minutes the sky changes. Fog banks hide you from the Greywater
+-- raider ship; sea storms slow every ship and rock it about.
+Config.Weather = {
+	FirstChangeSeconds = 240, -- calm for the first few minutes
+	MinSeconds = 150, -- each spell of weather lasts between these
+	MaxSeconds = 300,
+	RampSeconds = 25, -- how long fog or a storm takes to roll in or clear
+	Chances = { Clear = 0.5, Fog = 0.28, Storm = 0.22 },
+	StormShipSpeed = 0.6, -- ships sail at 60% speed in a storm
+	FogRaiderSight = 0.4, -- the raider ship only spots you at 40% of its usual range
+}
+
 Config.Combat = {
 	-- melee damage per blow by what you're holding: tools barely scratch,
 	-- the Sword is the real weapon

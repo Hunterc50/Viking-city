@@ -332,6 +332,19 @@ Config.Rival3 = {
 -- Every rival hold: two in the valley, one across the water.
 Config.Rivals = { Config.Rival, Config.Rival2, Config.Rival3 }
 
+-- Weather ------------------------------------------------------------------
+-- Every few minutes the sky changes. Fog banks hide you from the Greywater
+-- raider ship; sea storms slow every ship and rock it about.
+Config.Weather = {
+	FirstChangeSeconds = 240, -- calm for the first few minutes
+	MinSeconds = 150, -- each spell of weather lasts between these
+	MaxSeconds = 300,
+	RampSeconds = 25, -- how long fog or a storm takes to roll in or clear
+	Chances = { Clear = 0.5, Fog = 0.28, Storm = 0.22 },
+	StormShipSpeed = 0.6, -- ships sail at 60% speed in a storm
+	FogRaiderSight = 0.4, -- the raider ship only spots you at 40% of its usual range
+}
+
 Config.Combat = {
 	-- melee damage per blow by what you're holding: tools barely scratch,
 	-- the Sword is the real weapon
@@ -2444,6 +2457,8 @@ Sounds.Slots = {
 	Birds = { Id = "", Volume = 0.25 }, -- daytime birdsong (quiet at night)
 	Waves = { Id = "", Volume = 0.45 }, -- sea on the shore (louder near the fjord)
 	Fire = { Id = "", Volume = 0.6 }, -- crackling flames on burning buildings
+	Rain = { Id = "", Volume = 0.5 }, -- steady rain, plays during sea storms
+	Thunder = { Id = "", Volume = 0.8 }, -- one thunder clap after each lightning flash
 
 	-- one-off effects
 	Chop = { Id = "rbxasset://sounds/swordslash.wav", Volume = 0.5, Pitch = 0.6 },
@@ -2457,7 +2472,7 @@ Sounds.Slots = {
 }
 
 -- Plays slot `name` once, at a part or a position (or everywhere if nil).
-function Sounds.play(name: string, where: (BasePart | Vector3)?)
+function Sounds.play(name: string, where: (Instance | Vector3)?)
 	local slot = Sounds.Slots[name]
 	if not slot or slot.Id == "" then
 		return
@@ -3010,7 +3025,8 @@ end
 
 -- Movement shared by every ship. Returns the turn rate used (for the roll).
 local function steerShip(ship, throttle: number, steerInput: number, step: number): number
-	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1)
+	local weather = services.WeatherService
+	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1) * (weather and weather:ShipSpeed() or 1)
 	ship.speed += (target - ship.speed) * math.min(1, step * 0.8)
 	local turnRate = steerInput * ship.turn * math.clamp(math.abs(ship.speed) / 10, 0.25, 1)
 	local heading = ship.cf * CFrame.Angles(0, -turnRate * step, 0)
@@ -3026,7 +3042,7 @@ end
 
 -- The raider's brain: patrol, then close in, keep broadside on, and loose volleys.
 local function raiderThink(ship): (number, number)
-	local target = nearestEnemy(ship, N.RaiderAggro)
+	local target = nearestEnemy(ship, N.RaiderAggro * (services.WeatherService and services.WeatherService:Sight() or 1))
 	local goal
 	if target then
 		local d = (target.cf.Position - ship.cf.Position).Magnitude
@@ -3208,9 +3224,11 @@ function BoatService:Start()
 			local turnRate = steerShip(ship, throttle, steer, step)
 			checkRam(ship, now)
 			if ships[ship] then
-				local bob = math.sin(now * 1.3 + ship.length) * 0.25
-				local roll = math.sin(now * 0.9) * math.rad(2) - turnRate * 0.08
-				local pitch = math.sin(now * 1.1) * math.rad(1)
+				-- storms toss the ships about
+				local storm = 1 + (workspace:GetAttribute("StormLevel") or 0) * 3
+				local bob = math.sin(now * 1.3 + ship.length) * 0.25 * storm
+				local roll = math.sin(now * 0.9) * math.rad(2) * storm - turnRate * 0.08
+				local pitch = math.sin(now * 1.1 + ship.length) * math.rad(1) * storm
 				ship.model:PivotTo(ship.cf * CFrame.new(0, bob, 0) * CFrame.Angles(pitch, 0, roll))
 			end
 		end
@@ -7556,6 +7574,125 @@ return VillagerService
         </Item>
         <Item class="ModuleScript" referent="30">
           <Properties>
+            <string name="Name">WeatherService</string>
+            <string name="Source"><![CDATA[--[[
+	WeatherService
+	Picks the weather every few minutes (Config.Weather): Clear, Fog or Storm.
+	It sets workspace attributes that everything else reads:
+	  Weather     "Clear" | "Fog" | "Storm"  (what it is turning into)
+	  FogLevel    0..1, eases in and out over RampSeconds
+	  StormLevel  0..1, eases in and out over RampSeconds
+	WorldService thickens the haze and darkens the clouds from these,
+	BoatService slows ships in storms and blinds the raider in fog, and the
+	client (WeatherFxController) draws rain, lightning and thunder.
+]]
+
+local Lighting = game:GetService("Lighting")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local WeatherService = {}
+
+local W = Config.Weather
+local services
+local rng = Random.new()
+
+local MESSAGES = {
+	Clear = { "The skies clear over the fjord.", "info" },
+	Fog = { "A fog bank rolls in off the sea. Ships can slip past the raiders unseen.", "info" },
+	Storm = { "A sea storm is coming! Ships will be slowed and tossed about.", "bad" },
+}
+
+function WeatherService:Init(all)
+	services = all
+	workspace:SetAttribute("Weather", "Clear")
+	workspace:SetAttribute("FogLevel", 0)
+	workspace:SetAttribute("StormLevel", 0)
+end
+
+local function pick(current: string): string
+	-- never the same twice in a row, so there is always something to notice
+	local total = 0
+	for name, chance in W.Chances do
+		if name ~= current then
+			total += chance
+		end
+	end
+	local roll = rng:NextNumber() * total
+	for name, chance in W.Chances do
+		if name ~= current then
+			roll -= chance
+			if roll <= 0 then
+				return name
+			end
+		end
+	end
+	return "Clear"
+end
+
+function WeatherService:Set(name: string)
+	workspace:SetAttribute("Weather", name)
+	local msg = MESSAGES[name]
+	if msg and services.ColonyService then
+		for _, colony in services.ColonyService:All() do
+			services.ColonyService:Notify(colony, msg[1], msg[2])
+		end
+	end
+end
+
+-- How much the weather slows ships (1 = not at all).
+function WeatherService:ShipSpeed(): number
+	return 1 - (1 - W.StormShipSpeed) * (workspace:GetAttribute("StormLevel") or 0)
+end
+
+-- How far the raider ship can see, as a share of its normal range.
+function WeatherService:Sight(): number
+	return 1 - (1 - W.FogRaiderSight) * (workspace:GetAttribute("FogLevel") or 0)
+end
+
+function WeatherService:Start()
+	local nextChange = os.clock() + W.FirstChangeSeconds
+	local fog, storm = 0, 0
+	local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+	while true do
+		local dt = task.wait(0.25)
+		if os.clock() >= nextChange then
+			self:Set(pick(workspace:GetAttribute("Weather") or "Clear"))
+			nextChange = os.clock() + rng:NextNumber(W.MinSeconds, W.MaxSeconds)
+		end
+		local now = workspace:GetAttribute("Weather")
+		local step = dt / W.RampSeconds
+		local function toward(v: number, goal: number): number
+			if v < goal then
+				return math.min(goal, v + step)
+			end
+			return math.max(goal, v - step)
+		end
+		fog = toward(fog, now == "Fog" and 1 or 0)
+		storm = toward(storm, now == "Storm" and 1 or 0)
+		workspace:SetAttribute("FogLevel", math.floor(fog * 100 + 0.5) / 100)
+		workspace:SetAttribute("StormLevel", math.floor(storm * 100 + 0.5) / 100)
+
+		-- the sea and sky (haze and light are handled in WorldService's day cycle)
+		workspace.Terrain.WaterWaveSize = 0.16 + storm * 0.5
+		workspace.Terrain.WaterWaveSpeed = 9 + storm * 14
+		clouds = clouds or workspace.Terrain:FindFirstChildOfClass("Clouds")
+		if clouds then
+			clouds.Cover = 0.55 + storm * 0.4 + fog * 0.2
+			clouds.Density = 0.55 + storm * 0.4
+			clouds.Color = Color3.fromRGB(245, 240, 232):Lerp(Color3.fromRGB(90, 96, 108), storm)
+		end
+		Lighting.EnvironmentDiffuseScale = 1 - storm * 0.4
+	end
+end
+
+return WeatherService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="31">
+          <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
 	WildlifeService
@@ -7720,7 +7857,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -8321,15 +8458,23 @@ local function dayNightCycle()
 		elseif season == "Spring" then
 			seasonTint = Color3.fromRGB(246, 255, 236)
 		end
+		-- weather (WeatherService): fog thickens the air, storms darken it
+		local fog = workspace:GetAttribute("FogLevel") or 0
+		local storm = workspace:GetAttribute("StormLevel") or 0
+		golden *= 1 - math.max(fog, storm) * 0.8
 		if grade then
-			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night)
-			grade.Brightness = 0.02 + night * 0.05
+			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night):Lerp(Color3.fromRGB(196, 206, 214), storm * 0.5)
+			grade.Brightness = 0.02 + night * 0.05 - storm * 0.06
+			grade.Saturation = 0.08 - storm * 0.2 - fog * 0.12
 		end
 		if atmosphere then
-			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night)
-			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6
+			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
+			atmosphere.Decay = Color3.fromRGB(96, 106, 122):Lerp(Color3.fromRGB(150, 156, 160), fog)
+			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6 + fog * 2.4 + storm * 1.2
+			atmosphere.Density = 0.38 + fog * 0.4 + storm * 0.16
 		end
-		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night)
+		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
+		Lighting.Brightness = 3 * (1 - storm * 0.45 - fog * 0.2)
 	end
 end
 
@@ -8503,15 +8648,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="32">
+  <Item class="StarterPlayer" referent="33">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="33">
+    <Item class="StarterPlayerScripts" referent="34">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="34">
+      <Item class="LocalScript" referent="35">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -8544,11 +8689,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="35">
+        <Item class="Folder" referent="36">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="36">
+          <Item class="ModuleScript" referent="37">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -8658,7 +8803,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="38">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -8720,7 +8865,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="38">
+          <Item class="ModuleScript" referent="39">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -8791,7 +8936,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="39">
+          <Item class="ModuleScript" referent="40">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -9069,7 +9214,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="40">
+          <Item class="ModuleScript" referent="41">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -9159,7 +9304,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="41">
+          <Item class="ModuleScript" referent="42">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -9768,7 +9913,9 @@ function HudController:Start()
 			lastValues[name] = value
 		end
 		local rank = state.rank
-		dayLabel.Text = (rank and (rank.name .. "  ·  ") or "") .. "Day " .. state.day .. "  ·  " .. (state.season or "")
+		local weather = workspace:GetAttribute("Weather")
+		local weatherText = weather == "Storm" and "  ·  ⛈ Storm" or (weather == "Fog" and "  ·  🌫 Fog" or "")
+		dayLabel.Text = (rank and (rank.name .. "  ·  ") or "") .. "Day " .. state.day .. "  ·  " .. (state.season or "") .. weatherText
 		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
 		popLabel.Text = string.format("Population %d / %d homes", state.population, math.min(state.housing, rank and rank.cap or state.housing))
 		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)
@@ -9838,7 +9985,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="42">
+          <Item class="ModuleScript" referent="43">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -9919,7 +10066,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="43">
+          <Item class="ModuleScript" referent="44">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -10130,7 +10277,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="44">
+          <Item class="ModuleScript" referent="45">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -10203,11 +10350,13 @@ function SeasonFxController:Start()
 
 	local function update()
 		local season = workspace:GetAttribute("Season")
-		snow.Rate = season == "Winter" and 450 or 0
+		-- a winter storm is a blizzard
+		snow.Rate = season == "Winter" and (450 + (workspace:GetAttribute("StormLevel") or 0) * 1100) or 0
 		leaves.Rate = season == "Autumn" and 25 or 0
 		pollen.Rate = season == "Spring" and 18 or 0
 	end
 	workspace:GetAttributeChangedSignal("Season"):Connect(update)
+	workspace:GetAttributeChangedSignal("StormLevel"):Connect(update)
 	update()
 
 	RunService.RenderStepped:Connect(function()
@@ -10221,7 +10370,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="45">
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -10273,7 +10422,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="46">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -10595,7 +10744,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="47">
+          <Item class="ModuleScript" referent="48">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -10683,7 +10832,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -10881,7 +11030,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -10934,7 +11083,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="50">
+          <Item class="ModuleScript" referent="51">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -11025,16 +11174,158 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
+          <Item class="ModuleScript" referent="52">
+            <Properties>
+              <string name="Name">WeatherFxController</string>
+              <string name="Source"><![CDATA[--[[
+	WeatherFxController
+	Draws the weather that WeatherService picks (workspace attributes
+	Weather, FogLevel, StormLevel):
+	  Storm  slanting rain around the camera, lightning flashes, thunder,
+	         and a rain sound (Sounds slots Rain / Thunder)
+	  Fog    low drifting mist close to the ground and water
+	The haze itself is thickened on the server, so everyone sees the same sky.
+]]
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Sounds = require(Shared.Sounds)
+
+local WeatherFxController = {}
+
+local SPARKLE = "rbxasset://textures/particles/sparkles_main.dds"
+local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+
+function WeatherFxController:Start()
+	local box = Instance.new("Part")
+	box.Name = "StormBox"
+	box.Anchored = true
+	box.CanCollide = false
+	box.CanQuery = false
+	box.CanTouch = false
+	box.Transparency = 1
+	box.Size = Vector3.new(140, 1, 140)
+	box.Parent = workspace
+
+	-- rain: long thin streaks, falling fast and a little sideways in the wind
+	local rain = Instance.new("ParticleEmitter")
+	rain.Texture = SPARKLE
+	rain.Color = ColorSequence.new(Color3.fromRGB(190, 205, 220))
+	rain.Transparency = NumberSequence.new(0.35)
+	rain.LightInfluence = 1
+	rain.Size = NumberSequence.new(0.12)
+	rain.Squash = NumberSequence.new(-3.5) -- stretched into streaks
+	rain.Orientation = Enum.ParticleOrientation.VelocityParallel
+	rain.Lifetime = NumberRange.new(0.9, 1.2)
+	rain.Speed = NumberRange.new(70, 85)
+	rain.SpreadAngle = Vector2.new(4, 4)
+	rain.EmissionDirection = Enum.NormalId.Bottom
+	rain.Acceleration = Vector3.new(14, 0, 6)
+	rain.Rate = 0
+	rain.Parent = box
+
+	-- fog: big soft puffs drifting low
+	local mistBox = Instance.new("Part")
+	mistBox.Name = "MistBox"
+	mistBox.Anchored = true
+	mistBox.CanCollide = false
+	mistBox.CanQuery = false
+	mistBox.CanTouch = false
+	mistBox.Transparency = 1
+	mistBox.Size = Vector3.new(220, 6, 220)
+	mistBox.Parent = workspace
+	local mist = Instance.new("ParticleEmitter")
+	mist.Texture = SMOKE
+	mist.Color = ColorSequence.new(Color3.fromRGB(220, 224, 226))
+	mist.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.3, 0.82),
+		NumberSequenceKeypoint.new(0.7, 0.85),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	mist.LightInfluence = 1
+	mist.Size = NumberSequence.new(28, 40)
+	mist.Lifetime = NumberRange.new(10, 16)
+	mist.Speed = NumberRange.new(1, 2.5)
+	mist.SpreadAngle = Vector2.new(180, 10)
+	mist.RotSpeed = NumberRange.new(-6, 6)
+	mist.Rotation = NumberRange.new(0, 360)
+	mist.Rate = 0
+	mist.Parent = mistBox
+
+	-- the flash is a brief bright grade on this screen only
+	local flash = Instance.new("ColorCorrectionEffect")
+	flash.Name = "LightningFlash"
+	flash.Brightness = 0
+	flash.Parent = Lighting
+
+	local rainSound = Sounds.loop("Rain", SoundService)
+	if rainSound then
+		rainSound.Volume = 0
+	end
+	local rainVolume = Sounds.Slots.Rain and Sounds.Slots.Rain.Volume or 0.5
+
+	local function lightning()
+		local seq = { 0.55, 0, 0.35, 0 }
+		task.spawn(function()
+			for i, b in seq do
+				flash.Brightness = b
+				task.wait(i % 2 == 1 and 0.06 or 0.09)
+			end
+			flash.Brightness = 0
+			task.wait(Random.new():NextNumber(0.6, 2.4)) -- sound is slower than light
+			Sounds.play("Thunder", SoundService)
+		end)
+	end
+
+	local nextBolt = os.clock() + 8
+	local rng = Random.new()
+	RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera.CFrame.Position
+		local storm = workspace:GetAttribute("StormLevel") or 0
+		local fog = workspace:GetAttribute("FogLevel") or 0
+		local season = workspace:GetAttribute("Season")
+
+		box.CFrame = CFrame.new(cam.X - 20, cam.Y + 40, cam.Z - 8)
+		-- in winter the storm falls as heavy snow (SeasonFxController), not rain
+		rain.Rate = season == "Winter" and 0 or storm * 900
+		if rainSound then
+			rainSound.Volume = rainVolume * storm
+		end
+
+		mistBox.CFrame = CFrame.new(cam.X, math.max(2, cam.Y - 30), cam.Z)
+		mist.Rate = fog * 14
+
+		if storm > 0.6 and os.clock() > nextBolt then
+			lightning()
+			nextBolt = os.clock() + rng:NextNumber(6, 16)
+		end
+	end)
+
+	-- fade the flash back if anything left it on
+	workspace:GetAttributeChangedSignal("Weather"):Connect(function()
+		TweenService:Create(flash, TweenInfo.new(0.3), { Brightness = 0 }):Play()
+	end)
+end
+
+return WeatherFxController
+]]></string>
+            </Properties>
+          </Item>
         </Item>
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="51">
+  <Item class="Workspace" referent="53">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="52">
+    <Item class="Part" referent="54">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -11055,13 +11346,13 @@ return VillagerAnimController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="53">
+    <Item class="BoolValue" referent="55">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="54">
+    <Item class="SpawnLocation" referent="56">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -11081,7 +11372,7 @@ return VillagerAnimController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="55">
+    <Item class="Part" referent="57">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -11098,13 +11389,13 @@ return VillagerAnimController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="56">
+      <Item class="SurfaceGui" referent="58">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="57">
+        <Item class="TextLabel" referent="59">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -11136,13 +11427,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="58">
+      <Item class="SurfaceGui" referent="60">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="59">
+        <Item class="TextLabel" referent="61">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

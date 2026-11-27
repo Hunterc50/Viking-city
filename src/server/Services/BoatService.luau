@@ -357,7 +357,8 @@ end
 
 -- Movement shared by every ship. Returns the turn rate used (for the roll).
 local function steerShip(ship, throttle: number, steerInput: number, step: number): number
-	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1)
+	local weather = services.WeatherService
+	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1) * (weather and weather:ShipSpeed() or 1)
 	ship.speed += (target - ship.speed) * math.min(1, step * 0.8)
 	local turnRate = steerInput * ship.turn * math.clamp(math.abs(ship.speed) / 10, 0.25, 1)
 	local heading = ship.cf * CFrame.Angles(0, -turnRate * step, 0)
@@ -373,7 +374,7 @@ end
 
 -- The raider's brain: patrol, then close in, keep broadside on, and loose volleys.
 local function raiderThink(ship): (number, number)
-	local target = nearestEnemy(ship, N.RaiderAggro)
+	local target = nearestEnemy(ship, N.RaiderAggro * (services.WeatherService and services.WeatherService:Sight() or 1))
 	local goal
 	if target then
 		local d = (target.cf.Position - ship.cf.Position).Magnitude
@@ -555,9 +556,11 @@ function BoatService:Start()
 			local turnRate = steerShip(ship, throttle, steer, step)
 			checkRam(ship, now)
 			if ships[ship] then
-				local bob = math.sin(now * 1.3 + ship.length) * 0.25
-				local roll = math.sin(now * 0.9) * math.rad(2) - turnRate * 0.08
-				local pitch = math.sin(now * 1.1) * math.rad(1)
+				-- storms toss the ships about
+				local storm = 1 + (workspace:GetAttribute("StormLevel") or 0) * 3
+				local bob = math.sin(now * 1.3 + ship.length) * 0.25 * storm
+				local roll = math.sin(now * 0.9) * math.rad(2) * storm - turnRate * 0.08
+				local pitch = math.sin(now * 1.1 + ship.length) * math.rad(1) * storm
 				ship.model:PivotTo(ship.cf * CFrame.new(0, bob, 0) * CFrame.Angles(pitch, 0, roll))
 			end
 		end

@@ -596,15 +596,23 @@ local function dayNightCycle()
 		elseif season == "Spring" then
 			seasonTint = Color3.fromRGB(246, 255, 236)
 		end
+		-- weather (WeatherService): fog thickens the air, storms darken it
+		local fog = workspace:GetAttribute("FogLevel") or 0
+		local storm = workspace:GetAttribute("StormLevel") or 0
+		golden *= 1 - math.max(fog, storm) * 0.8
 		if grade then
-			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night)
-			grade.Brightness = 0.02 + night * 0.05
+			grade.TintColor = seasonTint:Lerp(Color3.fromRGB(255, 205, 160), golden * 0.6):Lerp(Color3.fromRGB(170, 190, 255), night):Lerp(Color3.fromRGB(196, 206, 214), storm * 0.5)
+			grade.Brightness = 0.02 + night * 0.05 - storm * 0.06
+			grade.Saturation = 0.08 - storm * 0.2 - fog * 0.12
 		end
 		if atmosphere then
-			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night)
-			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6
+			atmosphere.Color = Color3.fromRGB(200, 190, 170):Lerp(Color3.fromRGB(230, 170, 120), golden * 0.5):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
+			atmosphere.Decay = Color3.fromRGB(96, 106, 122):Lerp(Color3.fromRGB(150, 156, 160), fog)
+			atmosphere.Haze = 1.7 + golden * 0.8 - night * 0.6 + fog * 2.4 + storm * 1.2
+			atmosphere.Density = 0.38 + fog * 0.4 + storm * 0.16
 		end
-		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night)
+		Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
+		Lighting.Brightness = 3 * (1 - storm * 0.45 - fog * 0.2)
 	end
 end
 

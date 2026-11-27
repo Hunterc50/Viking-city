@@ -68,11 +68,13 @@ function SeasonFxController:Start()
 
 	local function update()
 		local season = workspace:GetAttribute("Season")
-		snow.Rate = season == "Winter" and 450 or 0
+		-- a winter storm is a blizzard
+		snow.Rate = season == "Winter" and (450 + (workspace:GetAttribute("StormLevel") or 0) * 1100) or 0
 		leaves.Rate = season == "Autumn" and 25 or 0
 		pollen.Rate = season == "Spring" and 18 or 0
 	end
 	workspace:GetAttributeChangedSignal("Season"):Connect(update)
+	workspace:GetAttributeChangedSignal("StormLevel"):Connect(update)
 	update()
 
 	RunService.RenderStepped:Connect(function()
