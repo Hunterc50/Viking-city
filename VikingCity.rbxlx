@@ -806,6 +806,24 @@ local function addPart(model: Instance, props)
 end
 ModelFactory.addPart = addPart
 
+-- A steady random source for small details (log shades, stones, shingles),
+-- so the same building looks the same every time it is built.
+local detail = Random.new(1066)
+
+-- `color` a little lighter or darker, for weathered, hand-made variety.
+local function vary(color: Color3, amount: number?): Color3
+	local a = amount or 0.08
+	local k = 1 + detail:NextNumber(-a, a)
+	return Color3.new(math.clamp(color.R * k, 0, 1), math.clamp(color.G * k, 0, 1), math.clamp(color.B * k, 0, 1))
+end
+ModelFactory.vary = vary
+
+-- Small details don't need to cast shadows: much cheaper to draw.
+local function noShadow(p: BasePart)
+	p.CastShadow = false
+	return p
+end
+
 -- A vertical log (cylinder) standing at `pos` (its bottom on pos.Y).
 local function post(model, pos: Vector3, height: number, diameter: number, color: Color3?)
 	return addPart(model, {
@@ -864,35 +882,61 @@ local function hall(model, cf: CFrame, o)
 		Color = Colors.Stone,
 		Material = Enum.Material.Cobblestone,
 	})
+	-- a solid core (what you bump into), dark where it shows between logs
 	addPart(model, {
 		Name = "Walls",
-		Size = V3(w, wallH, d),
+		Size = V3(w - 0.3, wallH, d - 0.3),
 		CFrame = cf * CFrame.new(0, base + wallH / 2, 0),
-		Color = Colors.Wood,
+		Color = Color3.fromRGB(58, 42, 30),
 		Material = Enum.Material.WoodPlanks,
 	})
-	-- horizontal log banding on the long sides
-	local bands = math.floor(wallH / 1.5)
-	for i = 1, bands do
+	-- log walls: courses of round logs, notched at the corners so the log
+	-- ends stick out, each log a slightly different shade of weathered wood
+	local courses = math.max(4, math.floor(wallH / 0.85))
+	local dia = wallH / courses * 1.12
+	for i = 1, courses do
+		local y = base + (i - 0.5) * (wallH / courses)
+		local longOut = (i % 2 == 1) and 1.5 or 0.5
+		local shortOut = (i % 2 == 1) and 0.5 or 1.5
 		for _, side in { 1, -1 } do
 			addPart(model, {
 				Name = "Log",
-				Size = V3(w + 0.8, 0.4, 0.4),
-				CFrame = cf * CFrame.new(0, base + i * 1.5 - 0.3, side * (d / 2 + 0.15)),
-				Color = Colors.DarkWood,
+				Shape = Enum.PartType.Cylinder,
+				Size = V3(w + longOut, dia, dia),
+				CFrame = cf * CFrame.new(detail:NextNumber(-0.15, 0.15), y, side * d / 2),
+				Color = vary(Colors.Wood, 0.14),
+				Material = Enum.Material.Wood,
 			})
-		end
-	end
-	-- corner posts
-	for _, sx in { 1, -1 } do
-		for _, sz in { 1, -1 } do
 			addPart(model, {
-				Size = V3(0.9, wallH, 0.9),
-				CFrame = cf * CFrame.new(sx * w / 2, base + wallH / 2, sz * d / 2),
-				Color = Colors.DarkWood,
+				Name = "Log",
+				Shape = Enum.PartType.Cylinder,
+				Size = V3(d + shortOut, dia, dia),
+				CFrame = cf * CFrame.new(side * w / 2, y, detail:NextNumber(-0.15, 0.15)) * CFrame.Angles(0, math.pi / 2, 0),
+				Color = vary(Colors.Weathered, 0.14),
+				Material = Enum.Material.Wood,
 			})
 		end
 	end
+	-- a footing of rough fieldstones along the base of the walls
+	local function stoneRow(from: Vector3, to: Vector3)
+		local len = (to - from).Magnitude
+		local n = math.max(2, math.floor(len / 2.3))
+		for k = 0, n do
+			local p = from:Lerp(to, k / n)
+			noShadow(addPart(model, {
+				Name = "FootingStone",
+				Size = V3(detail:NextNumber(1.4, 2.1), detail:NextNumber(0.7, 1.1), detail:NextNumber(1, 1.5)),
+				CFrame = cf * CFrame.new(p) * CFrame.Angles(detail:NextNumber(-0.15, 0.15), detail:NextNumber(0, math.pi), detail:NextNumber(-0.15, 0.15)),
+				Color = vary(Colors.Stone, 0.16),
+				Material = (k % 3 == 0) and Enum.Material.Rock or Enum.Material.Slate,
+			}))
+		end
+	end
+	local fx, fz = w / 2 + 0.55, d / 2 + 0.55
+	stoneRow(V3(-fx, 0.45, -fz), V3(fx, 0.45, -fz))
+	stoneRow(V3(-fx, 0.45, fz), V3(fx, 0.45, fz))
+	stoneRow(V3(-fx, 0.45, -fz), V3(-fx, 0.45, fz))
+	stoneRow(V3(fx, 0.45, -fz), V3(fx, 0.45, fz))
 
 	-- roof
 	local roofColor = Colors.Thatch
@@ -909,13 +953,42 @@ local function hall(model, cf: CFrame, o)
 	local slope = halfD / math.cos(angle) + 0.6
 	local ridgeY = wallTop + rise
 	for _, side in { 1, -1 } do
-		addPart(model, {
+		local slab = addPart(model, {
 			Name = "Roof",
 			Size = V3(w + 2.6, 1, slope),
 			CFrame = cf * CFrame.new(0, wallTop + rise / 2, side * halfD / 2) * CFrame.Angles(side * angle, 0, 0),
-			Color = roofColor,
+			Color = roofColor:Lerp(Color3.new(0, 0, 0), 0.25),
 			Material = roofMaterial,
 		})
+		-- overlapping courses laid on top, each a touch different, the lower
+		-- edge lifted like real shingles or bundles of thatch
+		local rows = math.max(3, math.floor(slope / 1.7))
+		local rowLen = slope / rows
+		local thick = o.roof == "shingle" and 0.3 or 0.55
+		for r = 1, rows do
+			local z = -side * (slope / 2 - (r - 0.5) * rowLen)
+			noShadow(addPart(model, {
+				Name = "RoofCourse",
+				Size = V3(w + 2.7 + detail:NextNumber(-0.1, 0.1), thick, rowLen + 0.5),
+				CFrame = slab.CFrame * CFrame.new(0, 0.5 + thick / 2 + 0.02 * r, z) * CFrame.Angles(side * math.rad(4), 0, 0),
+				Color = vary(roofColor, 0.1),
+				Material = roofMaterial,
+				CanCollide = false,
+			}))
+		end
+		-- patches of moss and grass on thatch and turf
+		if o.roof ~= "shingle" then
+			for _ = 1, math.max(2, math.floor(w / 7)) do
+				noShadow(addPart(model, {
+					Name = "Moss",
+					Size = V3(detail:NextNumber(1.5, 3.5), 0.2, detail:NextNumber(1, 2.4)),
+					CFrame = slab.CFrame * CFrame.new(detail:NextNumber(-w / 2, w / 2), 0.5 + thick + 0.12, detail:NextNumber(-slope / 2.5, slope / 2.5)),
+					Color = vary(Color3.fromRGB(86, 108, 52), 0.12),
+					Material = Enum.Material.LeafyGrass,
+					CanCollide = false,
+				}))
+			end
+		end
 	end
 	addPart(model, {
 		Name = "Ridge",
@@ -957,17 +1030,33 @@ local function hall(model, cf: CFrame, o)
 	-- door with frame
 	addPart(model, {
 		Name = "DoorFrame",
-		Size = V3(4, 5.8, 0.3),
-		CFrame = cf * CFrame.new(0, base + 2.9, -d / 2 - 0.1),
+		Size = V3(4, 5.8, 0.4),
+		CFrame = cf * CFrame.new(0, base + 2.9, -d / 2 - 0.55),
 		Color = Colors.DarkWood,
 	})
 	addPart(model, {
 		Name = "Door",
 		Size = V3(3, 5, 0.3),
-		CFrame = cf * CFrame.new(0, base + 2.5, -d / 2 - 0.25),
+		CFrame = cf * CFrame.new(0, base + 2.5, -d / 2 - 0.75),
 		Color = Color3.fromRGB(60, 40, 28),
 		Material = Enum.Material.WoodPlanks,
 	})
+	-- iron straps across the door
+	for _, y in { 1.2, 3.8 } do
+		noShadow(addPart(model, { Name = "DoorStrap", Size = V3(2.8, 0.25, 0.1), CFrame = cf * CFrame.new(0, base + y, -d / 2 - 0.92), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	end
+	-- small windows with warm light behind them and open shutters
+	if w >= 12 then
+		for _, x in { -w / 4 - 1, w / 4 + 1 } do
+			local at = cf * CFrame.new(x, base + wallH * 0.55, -d / 2 - 0.5)
+			noShadow(addPart(model, { Name = "WindowFrame", Size = V3(1.9, 1.6, 0.3), CFrame = at, Color = Colors.DarkWood, CanCollide = false }))
+			local glow = noShadow(addPart(model, { Name = "WindowGlow", Size = V3(1.3, 1.05, 0.12), CFrame = at * CFrame.new(0, 0, -0.12), Color = Color3.fromRGB(255, 168, 86), Material = Enum.Material.Neon, CanCollide = false }))
+			glow.Transparency = 0.25
+			for _, sx in { -1, 1 } do
+				noShadow(addPart(model, { Name = "Shutter", Size = V3(0.8, 1.4, 0.12), CFrame = at * CFrame.new(sx * 1.2, 0, -0.35) * CFrame.Angles(0, sx * math.rad(-50), 0), Color = vary(Color3.fromRGB(96, 50, 38), 0.1), Material = Enum.Material.WoodPlanks, CanCollide = false }))
+			end
+		end
+	end
 	if o.lantern ~= false then
 		lantern(model, cf * CFrame.new(2.8, base + 4.6, -d / 2 - 0.6))
 	end
@@ -1009,7 +1098,7 @@ local function hall(model, cf: CFrame, o)
 			for k = 1, count do
 				local x = -w / 2 + (k - 0.5) * (w / count)
 				if side == 1 or math.abs(x) > 3 then -- keep the door clear
-					local at = cf * CFrame.new(x, base + wallH * 0.62, side * (d / 2 + 0.45)) * CFrame.Angles(0, math.pi / 2, 0)
+					local at = cf * CFrame.new(x, base + wallH * 0.62, side * (d / 2 + 0.7)) * CFrame.Angles(0, math.pi / 2, 0)
 					addPart(model, { Name = "Shield", Shape = Enum.PartType.Cylinder, Size = V3(0.25, 2.2, 2.2), CFrame = at, Color = palette[(k + (side == 1 and 0 or 2)) % #palette + 1], Material = Enum.Material.Wood, CanCollide = false })
 					addPart(model, { Name = "ShieldBoss", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.55, CFrame = at * CFrame.new(side * 0.15, 0, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false })
 				end
@@ -1135,13 +1224,25 @@ function Builders.Cottage(model, w, d)
 	local rise = halfW * math.tan(angle)
 	local slope = halfW / math.cos(angle) + 0.4
 	for _, side in { 1, -1 } do
-		addPart(model, {
+		local slab = addPart(model, {
 			Name = "Roof",
 			Size = V3(slope, 0.9, depth + 1.6),
 			CFrame = CFrame.new(side * halfW / 2, base + rise / 2, 0) * CFrame.Angles(0, 0, -side * angle),
-			Color = Colors.Shingle,
+			Color = Colors.Shingle:Lerp(Color3.new(0, 0, 0), 0.25),
 			Material = Enum.Material.WoodPlanks,
 		})
+		local rows = math.max(4, math.floor(slope / 1.5))
+		local rowLen = slope / rows
+		for r = 1, rows do
+			noShadow(addPart(model, {
+				Name = "RoofCourse",
+				Size = V3(rowLen + 0.45, 0.28, depth + 1.7),
+				CFrame = slab.CFrame * CFrame.new(side * (slope / 2 - (r - 0.5) * rowLen), 0.6 + 0.02 * r, 0) * CFrame.Angles(0, 0, side * math.rad(-4)),
+				Color = vary(Colors.Shingle, 0.12),
+				Material = Enum.Material.WoodPlanks,
+				CanCollide = false,
+			}))
+		end
 	end
 	local steps = 7
 	local stepH = rise / steps
@@ -1517,19 +1618,29 @@ function ModelFactory.pine(rng: Random, scale: number?): (Model, BasePart)
 	model.Name = "Pine"
 	local trunk = post(model, Vector3.zero, 7 * s, 1.2 * s)
 	trunk.Name = "Trunk"
+	-- a flared root at the base
+	noShadow(addPart(model, { Name = "Root", Shape = Enum.PartType.Cylinder, Size = V3(0.9 * s, 1.9 * s, 1.9 * s), CFrame = CFrame.new(0, 0.3 * s, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = vary(Colors.DarkWood, 0.1), CanCollide = false }))
 	local tiers = 5
 	local twist = rng:NextNumber(0, math.pi)
+	local tint = rng:NextNumber(-0.08, 0.08)
+	local function shade(c: Color3, i: number)
+		local k = 1 + tint + (i / tiers) * 0.12 + rng:NextNumber(-0.05, 0.05) -- lighter toward the sunlit top
+		return Color3.new(math.clamp(c.R * k, 0, 1), math.clamp(c.G * k, 0, 1), math.clamp(c.B * k, 0, 1))
+	end
 	for i = 1, tiers do
 		local t = (i - 1) / (tiers - 1)
 		local width = (7.5 - 5.6 * t) * s
-		addPart(model, {
-			Name = "Needles",
-			Size = V3(width, 2.4 * s, width),
-			CFrame = CFrame.new(0, (3.6 + i * 2.5) * s, 0) * CFrame.Angles(0, twist + i * math.pi / 4, 0),
-			Color = i % 2 == 0 and Colors.PineLight or Colors.Pine,
-			Material = Enum.Material.Grass,
-			CanCollide = false,
-		})
+		-- two crossed, drooping layers per tier give a ragged star of boughs
+		for layer = 0, 1 do
+			addPart(model, {
+				Name = "Needles",
+				Size = V3(width * (1 - layer * 0.12), (2.4 - layer * 0.5) * s, width * (1 - layer * 0.12)),
+				CFrame = CFrame.new(0, (3.6 + i * 2.5 + layer * 0.5) * s, 0) * CFrame.Angles(0, twist + i * math.pi / 4 + layer * math.pi / 4, 0) * CFrame.Angles(rng:NextNumber(-0.08, 0.08), 0, rng:NextNumber(-0.08, 0.08)),
+				Color = shade(layer == 0 and Colors.Pine or Colors.PineLight, i),
+				Material = Enum.Material.Grass,
+				CanCollide = false,
+			})
+		end
 	end
 	addPart(model, {
 		Name = "Tip",
@@ -1550,14 +1661,32 @@ function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
 	model.Name = "Birch"
 	local trunk = post(model, Vector3.zero, 9 * s, 1 * s, Colors.Birch)
 	trunk.Name = "Trunk"
+	-- dark bark marks up the white trunk
+	for i = 1, 5 do
+		noShadow(addPart(model, {
+			Name = "Bark",
+			Size = V3(0.5 * s, 0.18 * s, 1.04 * s),
+			CFrame = CFrame.new(0, (1 + i * 1.5 + rng:NextNumber(-0.4, 0.4)) * s, 0) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0) * CFrame.new(0.3 * s, 0, 0),
+			Color = Color3.fromRGB(40, 38, 36),
+			Material = Enum.Material.Wood,
+			CanCollide = false,
+		}))
+	end
+	-- a few branches reaching into the crown
 	for i = 1, 3 do
-		local a = i * 2.1 + rng:NextNumber(0, 1)
+		local a = i * 2.1
+		noShadow(addPart(model, { Name = "Branch", Size = V3(0.35 * s, 3 * s, 0.35 * s), CFrame = CFrame.new(0, 7.5 * s, 0) * CFrame.Angles(0, a, 0) * CFrame.Angles(0, 0, 0.7) * CFrame.new(0, 1.3 * s, 0), Color = Colors.Birch, CanCollide = false }))
+	end
+	local greens = { Color3.fromRGB(96, 134, 64), Colors.Leaf, Color3.fromRGB(112, 146, 70), Color3.fromRGB(84, 120, 56) }
+	for i = 1, 6 do
+		local a = i * 2.4 + rng:NextNumber(0, 1)
+		local r = (i == 6) and 0 or rng:NextNumber(1.2, 2.4)
 		addPart(model, {
 			Name = "Leaves",
 			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * rng:NextNumber(4.5, 6.5) * s,
-			Position = V3(math.cos(a) * 1.6 * s, (8.5 + i * 0.8) * s, math.sin(a) * 1.6 * s),
-			Color = i == 2 and Colors.Leaf or Color3.fromRGB(96, 134, 64),
+			Size = Vector3.one * rng:NextNumber(3.6, 5.6) * s,
+			Position = V3(math.cos(a) * r * s, (8.2 + (i % 3) * 1 + (i == 6 and 1.8 or 0)) * s, math.sin(a) * r * s),
+			Color = vary(greens[(i % #greens) + 1], 0.06),
 			Material = Enum.Material.Grass,
 			CanCollide = false,
 		})
@@ -1575,17 +1704,23 @@ function ModelFactory.spruce(rng: Random, scale: number?): (Model, BasePart)
 	trunk.Name = "Trunk"
 	local tiers = 8
 	local twist = rng:NextNumber(0, math.pi)
+	noShadow(addPart(model, { Name = "Root", Shape = Enum.PartType.Cylinder, Size = V3(0.8 * s, 1.6 * s, 1.6 * s), CFrame = CFrame.new(0, 0.3 * s, 0) * CFrame.Angles(0, 0, math.pi / 2), Color = vary(Colors.DarkWood, 0.1), CanCollide = false }))
+	local tint = rng:NextNumber(-0.1, 0.06)
 	for i = 1, tiers do
 		local t = (i - 1) / (tiers - 1)
 		local width = (5.4 - 4.4 * t) * s
-		addPart(model, {
-			Name = "Needles",
-			Size = V3(width, 1.9 * s, width),
-			CFrame = CFrame.new(0, (2.6 + i * 1.75) * s, 0) * CFrame.Angles(0, twist + i * 0.7, 0) * CFrame.Angles(0.12, 0, 0.12),
-			Color = i % 2 == 0 and Color3.fromRGB(34, 60, 42) or Color3.fromRGB(28, 52, 38),
-			Material = Enum.Material.Grass,
-			CanCollide = false,
-		})
+		local k = 1 + tint + t * 0.15 + rng:NextNumber(-0.05, 0.05)
+		local base = i % 2 == 0 and Color3.fromRGB(34, 60, 42) or Color3.fromRGB(28, 52, 38)
+		for layer = 0, 1 do
+			addPart(model, {
+				Name = "Needles",
+				Size = V3(width * (1 - layer * 0.15), (1.9 - layer * 0.4) * s, width * (1 - layer * 0.15)),
+				CFrame = CFrame.new(0, (2.6 + i * 1.75 + layer * 0.35) * s, 0) * CFrame.Angles(0, twist + i * 0.7 + layer * math.pi / 4, 0) * CFrame.Angles(0.12, 0, 0.12),
+				Color = Color3.new(math.clamp(base.R * k, 0, 1), math.clamp(base.G * k * (1 + layer * 0.08), 0, 1), math.clamp(base.B * k, 0, 1)),
+				Material = Enum.Material.Grass,
+				CanCollide = false,
+			})
+		end
 	end
 	addPart(model, {
 		Name = "Tip",
@@ -1647,16 +1782,19 @@ function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
 	local model = Instance.new("Model")
 	model.Name = "Boulder"
 	local main
-	for i = 1, 3 do
-		local size = V3(rng:NextNumber(2.5, 5), rng:NextNumber(1.8, 3.5), rng:NextNumber(2.5, 5)) * s * (i == 1 and 1.2 or 0.8)
+	for i = 1, 5 do
+		local size = V3(rng:NextNumber(2.5, 5), rng:NextNumber(1.8, 3.5), rng:NextNumber(2.5, 5)) * s * (i == 1 and 1.2 or (i <= 3 and 0.8 or 0.45))
 		local p = addPart(model, {
 			Name = i == 1 and "Rock" or "RockBit",
 			Size = size,
 			CFrame = CFrame.new(rng:NextNumber(-1.5, 1.5) * s * (i - 1), size.Y / 2 - 0.4, rng:NextNumber(-1.5, 1.5) * s * (i - 1))
 				* CFrame.Angles(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, math.pi), rng:NextNumber(-0.25, 0.25)),
-			Color = i == 1 and Colors.Stone or Color3.fromRGB(108, 110, 106),
-			Material = Enum.Material.Slate,
+			Color = vary(i == 1 and Colors.Stone or Color3.fromRGB(108, 110, 106), 0.1),
+			Material = (i % 2 == 0) and Enum.Material.Rock or Enum.Material.Slate,
 		})
+		if i > 3 then
+			p.CastShadow = false
+		end
 		main = main or p
 	end
 	if rng:NextNumber() < 0.6 then
@@ -1718,18 +1856,35 @@ end
 function ModelFactory.dock(length: number): Model
 	local model = Instance.new("Model")
 	model.Name = "Dock"
-	addPart(model, {
-		Name = "Deck",
-		Size = V3(6, 0.5, length),
-		Position = V3(0, 1.2, -length / 2),
-		Color = Colors.Weathered,
-		Material = Enum.Material.WoodPlanks,
-	})
+	-- plank by plank, sun-bleached and uneven
+	local plank = 1.15
+	for z = plank / 2, length - plank / 2, plank + 0.08 do
+		addPart(model, {
+			Name = "Plank",
+			Size = V3(6 + detail:NextNumber(-0.2, 0.3), 0.45, plank),
+			CFrame = CFrame.new(detail:NextNumber(-0.1, 0.1), 1.2 + detail:NextNumber(-0.04, 0.04), -z) * CFrame.Angles(0, detail:NextNumber(-0.015, 0.015), 0),
+			Color = vary(Colors.Weathered, 0.12),
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+	-- stringers under the planks
+	for _, x in { -2.2, 2.2 } do
+		noShadow(addPart(model, { Name = "Stringer", Size = V3(0.5, 0.5, length), Position = V3(x, 0.8, -length / 2), Color = Colors.DarkWood }))
+	end
 	for z = 0, length, 6 do
 		for _, x in { -2.8, 2.8 } do
-			post(model, V3(x, -8, -z), 10, 0.7)
+			local pile = post(model, V3(x, -8, -z), 10.2, 0.8, vary(Colors.DarkWood, 0.1))
+			pile.Name = "Pile"
+			-- a band of rope near the top
+			noShadow(addPart(model, { Name = "Rope", Shape = Enum.PartType.Cylinder, Size = V3(0.35, 0.95, 0.95), CFrame = CFrame.new(x, 1.7, -z) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(176, 150, 104), Material = Enum.Material.Fabric, CanCollide = false }))
 		end
 	end
+	-- crates, a barrel and a coil of rope on the deck
+	for i, at in { V3(1.6, 2.4, -6), V3(1.6, 2.4, -8.1), V3(1.7, 4.3, -7) } do
+		addPart(model, { Name = "Crate" .. i, Size = V3(1.9, 1.9, 1.9), CFrame = CFrame.new(at) * CFrame.Angles(0, detail:NextNumber(-0.3, 0.3), 0), Color = vary(Colors.Wood, 0.1), Material = Enum.Material.WoodPlanks })
+	end
+	addPart(model, { Name = "Barrel", Shape = Enum.PartType.Cylinder, Size = V3(1.8, 1.5, 1.5), CFrame = CFrame.new(-1.8, 2.35, -10) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(116, 80, 50) })
+	noShadow(addPart(model, { Name = "RopeCoil", Shape = Enum.PartType.Cylinder, Size = V3(0.4, 1.4, 1.4), CFrame = CFrame.new(-1.8, 1.65, -length + 3) * CFrame.Angles(0, 0, math.pi / 2), Color = Color3.fromRGB(176, 150, 104), Material = Enum.Material.Fabric, CanCollide = false }))
 	-- a little rowing boat tied up at the end
 	addPart(model, { Name = "Boat", Size = V3(3, 1.2, 9), Position = V3(-5.5, 0.1, -length + 4), Color = Colors.Wood, Material = Enum.Material.WoodPlanks })
 	addPart(model, { Size = V3(2.2, 0.3, 7.6), Position = V3(-5.5, 0.6, -length + 4), Color = Colors.DarkWood })
@@ -1782,6 +1937,20 @@ function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 			})
 		end
 	end
+	-- a carved dragon head on the prow, with glowing eyes
+	local head = CFrame.new(0, 1.5 + 3.2 * math.sin(math.pi * 0.9) + 2.9, -L / 2 - 0.6)
+	addPart(model, { Name = "DragonHead", Size = V3(0.9, 1.3, 2.4), CFrame = head * CFrame.Angles(math.rad(-15), 0, 0), Color = Color3.fromRGB(74, 52, 36), CanCollide = false })
+	addPart(model, { Name = "DragonJaw", Size = V3(0.7, 0.4, 1.6), CFrame = head * CFrame.new(0, -0.7, -0.6) * CFrame.Angles(math.rad(12), 0, 0), Color = Color3.fromRGB(64, 44, 30), CanCollide = false })
+	for _, x in { -0.5, 0.5 } do
+		noShadow(addPart(model, { Name = "DragonEye", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.28, CFrame = head * CFrame.new(x, 0.25, -0.5), Color = Color3.fromRGB(240, 180, 60), Material = Enum.Material.Neon, CanCollide = false }))
+		noShadow(addPart(model, { Name = "DragonHorn", Size = V3(0.2, 1.1, 0.2), CFrame = head * CFrame.new(x * 0.8, 0.9, 0.6) * CFrame.Angles(math.rad(-35), 0, x * 0.6), Color = Color3.fromRGB(210, 196, 168), CanCollide = false }))
+	end
+	-- rigging: stays from the masthead to bow and stern
+	local top = V3(0, 19, -1)
+	for _, to in { V3(0, 2.6, -L / 2 + 2), V3(0, 2.6, L / 2 - 2), V3(maxW * 0.45, 1.2, 2), V3(-maxW * 0.45, 1.2, 2) } do
+		local mid = (top + to) / 2
+		noShadow(addPart(model, { Name = "Stay", Size = V3(0.12, 0.12, (to - top).Magnitude), CFrame = CFrame.lookAt(mid, to), Color = Color3.fromRGB(150, 128, 92), Material = Enum.Material.Fabric, CanCollide = false }))
+	end
 	-- deck, mast, yard and striped sail
 	addPart(model, { Name = "Deck", Size = V3(maxW * 0.8, 0.3, L * 0.72), Position = V3(0, -0.3, 0), Color = Colors.Weathered, Material = Enum.Material.WoodPlanks })
 	post(model, V3(0, -0.3, -1), 20, 0.7)
@@ -1821,6 +1990,129 @@ function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 				CanCollide = false,
 			})
 		end
+	end
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
+-- Village props ---------------------------------------------------------------
+-- Little things that make the valley feel lived in. ModelFactory.prop(kind)
+-- builds one; kinds: Cart, Haystack, FishRack, Barrels, Woodpile, Banner,
+-- BoatUpturned, FenceRun. Pivot = centre of the base, at ground level.
+local Props = {}
+
+local function barrel(model, at: Vector3, upright: boolean)
+	local cf = upright and CFrame.new(at + V3(0, 0.95, 0)) * CFrame.Angles(0, 0, math.pi / 2) or CFrame.new(at + V3(0, 0.75, 0))
+	addPart(model, { Name = "Barrel", Shape = Enum.PartType.Cylinder, Size = V3(1.9, 1.5, 1.5), CFrame = cf, Color = vary(Color3.fromRGB(118, 82, 50), 0.1) })
+	for _, off in { -0.6, 0.6 } do
+		noShadow(addPart(model, { Name = "Hoop", Shape = Enum.PartType.Cylinder, Size = V3(0.14, 1.56, 1.56), CFrame = cf * CFrame.new(off, 0, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	end
+end
+
+function Props.Barrels(model)
+	barrel(model, V3(0, 0, 0), true)
+	barrel(model, V3(1.6, 0, 0.4), true)
+	barrel(model, V3(0.7, 0, -1.6), false)
+	addPart(model, { Name = "Crate", Size = V3(1.8, 1.8, 1.8), CFrame = CFrame.new(-1.8, 0.9, -0.6) * CFrame.Angles(0, 0.3, 0), Color = vary(Colors.Wood, 0.1), Material = Enum.Material.WoodPlanks })
+end
+
+function Props.Cart(model)
+	addPart(model, { Name = "Bed", Size = V3(3.2, 0.35, 5), CFrame = CFrame.new(0, 2, 0) * CFrame.Angles(math.rad(-6), 0, 0), Color = vary(Colors.Wood, 0.08), Material = Enum.Material.WoodPlanks })
+	for _, x in { -1.6, 1.6 } do
+		noShadow(addPart(model, { Name = "Side", Size = V3(0.25, 0.9, 5), CFrame = CFrame.new(x, 2.55, 0) * CFrame.Angles(math.rad(-6), 0, 0), Color = Colors.Weathered, Material = Enum.Material.WoodPlanks }))
+		addPart(model, { Name = "Wheel", Shape = Enum.PartType.Cylinder, Size = V3(0.35, 3, 3), CFrame = CFrame.new(x * 1.12, 1.5, 0.8), Color = Colors.DarkWood })
+		noShadow(addPart(model, { Name = "Hub", Shape = Enum.PartType.Cylinder, Size = V3(0.5, 0.7, 0.7), CFrame = CFrame.new(x * 1.18, 1.5, 0.8), Color = Colors.Iron, Material = Enum.Material.Metal }))
+	end
+	for _, x in { -0.6, 0.6 } do
+		noShadow(addPart(model, { Name = "Shaft", Size = V3(0.25, 0.25, 4.5), CFrame = CFrame.new(x, 1.1, -4.2) * CFrame.Angles(math.rad(14), 0, 0), Color = Colors.Wood }))
+	end
+	-- a load of hay
+	addPart(model, { Name = "Load", Size = V3(2.8, 1.3, 3.6), CFrame = CFrame.new(0, 2.9, 0.3) * CFrame.Angles(math.rad(-6), 0, 0), Color = vary(Colors.Thatch, 0.08), Material = Enum.Material.Grass, CanCollide = false })
+end
+
+function Props.Haystack(model)
+	addPart(model, { Name = "Hay", Shape = Enum.PartType.Ball, Size = Vector3.one * 6, CFrame = CFrame.new(0, 1.6, 0), Color = vary(Colors.Thatch, 0.06), Material = Enum.Material.Grass })
+	addPart(model, { Name = "Hay", Shape = Enum.PartType.Ball, Size = Vector3.one * 4.2, CFrame = CFrame.new(0, 4, 0), Color = vary(Colors.Thatch, 0.06), Material = Enum.Material.Grass, CanCollide = false })
+	post(model, V3(0, 3, 0), 4.2, 0.3, Colors.Weathered)
+	noShadow(addPart(model, { Name = "Fork", Size = V3(0.15, 4, 0.15), CFrame = CFrame.new(2.6, 2.2, 1) * CFrame.Angles(0.3, 0, -0.35), Color = Colors.Wood, CanCollide = false }))
+end
+
+function Props.FishRack(model)
+	-- a rack of stockfish drying in the wind off the fjord
+	for _, x in { -3, 3 } do
+		for _, z in { -0.8, 0.8 } do
+			addPart(model, { Name = "Leg", Size = V3(0.35, 4.6, 0.35), CFrame = CFrame.new(x, 2.2, z) * CFrame.Angles(z > 0 and -0.25 or 0.25, 0, 0), Color = Colors.Weathered })
+		end
+	end
+	noShadow(addPart(model, { Name = "Pole", Shape = Enum.PartType.Cylinder, Size = V3(7, 0.3, 0.3), CFrame = CFrame.new(0, 4.3, 0), Color = Colors.DarkWood }))
+	for i = 1, 9 do
+		local x = -2.8 + i * 0.6
+		noShadow(addPart(model, { Name = "Fish", Size = V3(0.3, 1.6 + detail:NextNumber(-0.3, 0.3), 0.1), CFrame = CFrame.new(x, 3.4, (i % 2 == 0) and 0.1 or -0.1) * CFrame.Angles(0, 0, detail:NextNumber(-0.1, 0.1)), Color = vary(Color3.fromRGB(190, 176, 150), 0.1), Material = Enum.Material.Fabric, CanCollide = false }))
+	end
+end
+
+function Props.Woodpile(model)
+	for row = 0, 2 do
+		for i = 0, 4 - row do
+			addPart(model, {
+				Name = "Log",
+				Shape = Enum.PartType.Cylinder,
+				Size = V3(5 + detail:NextNumber(-0.3, 0.3), 1, 1),
+				CFrame = CFrame.new(detail:NextNumber(-0.2, 0.2), 0.5 + row * 0.86, (i - (4 - row) / 2) * 1.02),
+				Color = vary(Colors.Wood, 0.14),
+			})
+		end
+	end
+	noShadow(addPart(model, { Name = "Cover", Size = V3(6, 0.3, 6), CFrame = CFrame.new(0, 3.3, 0) * CFrame.Angles(0, 0, math.rad(8)), Color = Colors.Shingle, Material = Enum.Material.WoodPlanks, CanCollide = false }))
+end
+
+function Props.Banner(model)
+	post(model, V3(0, 0, 0), 11, 0.5, Colors.DarkWood)
+	noShadow(addPart(model, { Name = "Crossbar", Size = V3(3.2, 0.3, 0.3), Position = V3(0, 10.4, 0), Color = Colors.DarkWood }))
+	local red = Color3.fromRGB(150, 40, 36)
+	addPart(model, { Name = "Cloth", Size = V3(2.8, 5, 0.1), Position = V3(0, 7.6, 0), Color = red, Material = Enum.Material.Fabric, CanCollide = false })
+	noShadow(addPart(model, { Name = "Emblem", Shape = Enum.PartType.Cylinder, Size = V3(0.12, 1.6, 1.6), CFrame = CFrame.new(0, 8, -0.08) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(214, 176, 96), Material = Enum.Material.Fabric, CanCollide = false }))
+	for i = 0, 2 do
+		noShadow(addPart(model, { Name = "Tail", Size = V3(0.8, 1, 0.1), CFrame = CFrame.new(-1 + i, 4.7, 0) * CFrame.Angles(0, 0, math.rad(45)), Color = red, Material = Enum.Material.Fabric, CanCollide = false }))
+	end
+end
+
+function Props.BoatUpturned(model)
+	-- a small boat pulled up the beach, upside down on two trestles
+	for _, z in { -2, 2 } do
+		addPart(model, { Name = "Trestle", Size = V3(3.4, 1.4, 0.4), Position = V3(0, 0.7, z), Color = Colors.Weathered })
+	end
+	for i = -3, 3 do
+		local t = 1 - math.abs(i) / 4
+		addPart(model, { Name = "Hull", Size = V3(3 * t + 0.6, 0.9, 1.25), CFrame = CFrame.new(0, 1.85 + (1 - t) * 0.5, i * 1.2), Color = vary(Color3.fromRGB(96, 68, 46), 0.08), Material = Enum.Material.WoodPlanks })
+	end
+	noShadow(addPart(model, { Name = "KeelLine", Size = V3(0.3, 0.3, 8.6), Position = V3(0, 2.4, 0), Color = Colors.DarkWood }))
+end
+
+function Props.FenceRun(model)
+	-- a split-rail fence 190 studs long along X
+	local length = 190
+	local step = 5
+	for x = -length / 2, length / 2, step do
+		post(model, V3(x, 0, detail:NextNumber(-0.2, 0.2)), 3.2, 0.45, vary(Colors.Weathered, 0.12))
+	end
+	for x = -length / 2, length / 2 - 20, 20 do
+		for _, y in { 1.2, 2.4 } do
+			noShadow(addPart(model, { Name = "Rail", Size = V3(20.4, 0.3, 0.3), Position = V3(x + 10, y + detail:NextNumber(-0.1, 0.1), 0), Color = vary(Colors.Weathered, 0.1) }))
+		end
+	end
+end
+
+function ModelFactory.prop(kind: string, _rng: Random?): Model
+	local custom = ModelFactory.customAsset and ModelFactory.customAsset("Prop_" .. kind)
+	if custom and ModelFactory.prepareProp then
+		return ModelFactory.prepareProp(custom, kind)
+	end
+	local model = Instance.new("Model")
+	model.Name = kind
+	local builder = Props[kind]
+	if builder then
+		builder(model)
 	end
 	model.WorldPivot = CFrame.new()
 	return model
@@ -2197,7 +2489,8 @@ ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
 	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower",
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
-	"Axe", "Pickaxe", "Bow", "Torch", "Longship",
+	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
+	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
 }
 
 -- Models laid out in Workspace > ModelWorkshop (see bakeTemplates) are
@@ -2228,7 +2521,7 @@ end
 
 -- Wraps loose parts in a Model, anchors it, optionally scales it to fit
 -- `fit` (x/z), and puts its pivot at the bottom-centre at (0, 0, 0).
-local function prepare(item: Instance, anchored: boolean, fit: Vector3?, scale: number?): Model
+local function wrap(item: Instance): Model
 	local model: Model
 	if item:IsA("Model") then
 		model = item
@@ -2243,25 +2536,68 @@ local function prepare(item: Instance, anchored: boolean, fit: Vector3?, scale: 
 			d:Destroy()
 		end
 	end
+	return model
+end
+
+local function setAnchored(model: Instance, anchored: boolean)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = anchored
 		end
 	end
-	local _, size = model:GetBoundingBox()
-	local factor = scale or 1
-	-- Templates (baked from the built-in models) already have the right size,
-	-- so they are kept exactly as you shaped them.
-	if fit and not model:GetAttribute("Template") and size.X > 0 and size.Z > 0 then
-		factor *= math.min(fit.X / size.X, fit.Z / size.Z)
+end
+
+--[[
+	Fits a custom model (an imported mesh or a free model) onto the built-in
+	version `reference`: scaled to the same size and placed in the same spot,
+	so a mesh drops in whatever units or position it was exported with.
+	  mode "height"     match the height (trees, tools, deer)
+	  mode "footprint"  fit inside the ground footprint (buildings, ships)
+	Templates (the built-in models baked into the ModelWorkshop and edited by
+	hand) are kept exactly as they are.
+]]
+local function fitTo(custom: Model, reference: Model, mode: string, extraScale: number?)
+	local refCF, refSize = reference:GetBoundingBox()
+	local refBottom = reference:GetPivot():PointToObjectSpace(refCF.Position - V3(0, refSize.Y / 2, 0))
+	if custom:GetAttribute("Template") then
+		-- keep its own pivot (the built-in one), just bring it home
+		custom:PivotTo(CFrame.new())
+		return
 	end
-	if math.abs(factor - 1) > 0.01 then
-		model:ScaleTo(model:GetScale() * factor)
+	local _, size = custom:GetBoundingBox()
+	if size.X <= 0 or size.Y <= 0 or size.Z <= 0 then
+		return
 	end
-	local cf, newSize = model:GetBoundingBox()
-	model.WorldPivot = CFrame.new(cf.Position - Vector3.new(0, newSize.Y / 2, 0))
-	model:PivotTo(CFrame.new())
-	return model
+	local factor
+	if mode == "height" then
+		factor = refSize.Y / size.Y
+	else
+		factor = math.min(refSize.X / size.X, refSize.Z / size.Z)
+	end
+	factor *= extraScale or 1
+	if math.abs(factor - 1) > 0.005 then
+		custom:ScaleTo(custom:GetScale() * factor)
+	end
+	local cf, newSize = custom:GetBoundingBox()
+	custom.WorldPivot = CFrame.new(cf.Position - V3(0, newSize.Y / 2, 0))
+	-- the same bottom-centre spot as the built-in model, relative to its pivot
+	custom:PivotTo(CFrame.new(refBottom))
+	custom.WorldPivot = CFrame.new()
+end
+
+-- Lights, fires and smoke from the built-in model go along with a custom
+-- one (a mesh can't carry them), as do attributes like a tower's ArcherPost.
+local function keepGlow(custom: Model, reference: Model)
+	for _, d in reference:GetDescendants() do
+		if d:IsA("BasePart") and (d:FindFirstChildWhichIsA("Light") or d:FindFirstChildOfClass("Fire") or d:FindFirstChildOfClass("Smoke") or d:FindFirstChildOfClass("ParticleEmitter")) then
+			d.Parent = custom
+		end
+	end
+	for name, value in reference:GetAttributes() do
+		if custom:GetAttribute(name) == nil then
+			custom:SetAttribute(name, value)
+		end
+	end
 end
 
 local partBuilt = {
@@ -2278,72 +2614,95 @@ local partBuilt = {
 
 function ModelFactory.building(buildingType: string): Model
 	local custom = customAsset(buildingType)
-	if custom then
-		local def = Config.Buildings[buildingType]
-		local model = prepare(custom, true, V3(def.Size[1] * CELL * 0.96, 0, def.Size[2] * CELL * 0.96))
-		model.Name = buildingType
-		return model
+	if not custom then
+		return partBuilt.building(buildingType)
 	end
-	return partBuilt.building(buildingType)
+	local reference = partBuilt.building(buildingType)
+	local model = wrap(custom)
+	setAnchored(model, true)
+	fitTo(model, reference, "footprint")
+	keepGlow(model, reference)
+	reference:Destroy()
+	model.Name = buildingType
+	return model
 end
 
-local function customTree(slot: string, rng: Random, scale: number?)
+-- A custom tree, rock or bush, sized like the built-in one it replaces.
+local function customNature(slot: string, reference: Model, mainOf: BasePart?)
 	local custom = customAsset(slot)
 	if not custom then
 		return nil
 	end
-	local model = prepare(custom, true, nil, scale or rng:NextNumber(0.85, 1.4))
-	return model, largestPart(model)
+	local model = wrap(custom)
+	setAnchored(model, true)
+	fitTo(model, reference, "height")
+	reference:Destroy()
+	model.Name = slot
+	return model, largestPart(model) or mainOf
 end
 
 function ModelFactory.pine(rng: Random, scale: number?): (Model, BasePart)
-	local model, main = customTree("Tree_Pine", rng, scale)
+	local reference, trunk = partBuilt.pine(rng, scale)
+	local model, main = customNature("Tree_Pine", reference, trunk)
 	if model then
 		return model, main
 	end
-	return partBuilt.pine(rng, scale)
+	return reference, trunk
 end
 
 function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
-	local model, main = customTree("Tree_Birch", rng, scale)
+	local reference, trunk = partBuilt.birch(rng, scale)
+	local model, main = customNature("Tree_Birch", reference, trunk)
 	if model then
 		return model, main
 	end
-	return partBuilt.birch(rng, scale)
+	return reference, trunk
 end
 
 function ModelFactory.spruce(rng: Random, scale: number?): (Model, BasePart)
-	local model, main = customTree("Tree_Spruce", rng, scale)
+	local reference, trunk = partBuilt.spruce(rng, scale)
+	local model, main = customNature("Tree_Spruce", reference, trunk)
 	if model then
 		return model, main
 	end
-	return partBuilt.spruce(rng, scale)
+	return reference, trunk
 end
 
 function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
-	local model, main = customTree("Rock", rng, scale)
+	local reference, rock = partBuilt.boulder(rng, scale)
+	local model, main = customNature("Rock", reference, rock)
 	if model then
+		-- every rock turned its own way
+		model:PivotTo(CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+		model.WorldPivot = CFrame.new()
 		return model, main
 	end
-	return partBuilt.boulder(rng, scale)
+	return reference, rock
 end
 
 function ModelFactory.node(kind: string, rng: Random): (Model, BasePart)
 	if kind == "Bush" then
-		local model, main = customTree("Bush", rng, 1)
+		local reference, bush = partBuilt.node(kind, rng)
+		local model, main = customNature("Bush", reference, bush)
 		if model then
 			return model, main
 		end
+		return reference, bush
 	end
 	return partBuilt.node(kind, rng)
 end
 
 function ModelFactory.dock(length: number): Model
 	local custom = customAsset("Dock")
-	if custom then
-		return prepare(custom, true)
+	if not custom then
+		return partBuilt.dock(length)
 	end
-	return partBuilt.dock(length)
+	local reference = partBuilt.dock(length)
+	local model = wrap(custom)
+	setAnchored(model, true)
+	fitTo(model, reference, "footprint")
+	reference:Destroy()
+	return model
 end
 
 function ModelFactory.deer(rng: Random): Model
@@ -2351,7 +2710,11 @@ function ModelFactory.deer(rng: Random): Model
 	if not custom then
 		return partBuilt.deer(rng)
 	end
-	local model = prepare(custom, false)
+	local reference = partBuilt.deer(rng)
+	local model = wrap(custom)
+	setAnchored(model, false)
+	fitTo(model, reference, "height")
+	reference:Destroy()
 	model.Name = "Deer"
 	local body = model.PrimaryPart or largestPart(model)
 	for _, d in model:GetDescendants() do
@@ -2375,15 +2738,46 @@ end
 local partLongship = ModelFactory.longship
 function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 	local custom = customAsset("Longship")
-	if custom then
-		return prepare(custom, true)
+	if not custom then
+		return partLongship(length, sailColor)
 	end
-	return partLongship(length, sailColor)
+	local reference = partLongship(length, sailColor)
+	local model = wrap(custom)
+	setAnchored(model, true)
+	-- same length and the same depth in the water as the built-in ship
+	fitTo(model, reference, "footprint")
+	reference:Destroy()
+	return model
 end
 
+-- Village props (Prop_Cart, Prop_Haystack, ...): sized like the built-in prop.
+function ModelFactory.prepareProp(custom: Instance, kind: string): Model
+	local reference = Instance.new("Model")
+	if Props[kind] then
+		Props[kind](reference)
+	end
+	reference.WorldPivot = CFrame.new()
+	local model = wrap(custom)
+	setAnchored(model, true)
+	if #reference:GetChildren() > 0 then
+		fitTo(model, reference, "footprint")
+	end
+	reference:Destroy()
+	model.Name = kind
+	return model
+end
+
+--[[
+	Tools: a slot can hold a ready-made Tool (used as it is), or just a model
+	or mesh. A model is fitted over the built-in tool, whose own parts are
+	hidden, so the grip, swing and fire all keep working.
+]]
 function ModelFactory.tool(kind: string): Tool
 	local custom = customAsset(kind)
-	if custom and custom:IsA("Tool") then
+	if not custom then
+		return partBuilt.tool(kind)
+	end
+	if custom:IsA("Tool") then
 		custom.Name = kind
 		for _, d in custom:GetDescendants() do
 			if d:IsA("LuaSourceContainer") then
@@ -2392,7 +2786,39 @@ function ModelFactory.tool(kind: string): Tool
 		end
 		return custom
 	end
-	return partBuilt.tool(kind)
+	local tool = partBuilt.tool(kind)
+	local handle = tool:FindFirstChild("Handle") :: BasePart
+	local model = wrap(custom)
+	setAnchored(model, false)
+	-- fit over the built-in tool (measured with its handle at the origin)
+	local reference = Instance.new("Model")
+	for _, d in tool:GetChildren() do
+		if d:IsA("BasePart") then
+			d:Clone().Parent = reference
+		end
+	end
+	reference.WorldPivot = handle.CFrame
+	fitTo(model, reference, "height")
+	reference:Destroy()
+	for _, d in tool:GetChildren() do
+		if d:IsA("BasePart") and not d:FindFirstChildOfClass("Fire") and not d:FindFirstChildWhichIsA("Light") then
+			d.Transparency = 1
+		end
+	end
+	model:PivotTo(handle.CFrame * model:GetPivot())
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			d.Massless = true
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = handle
+			weld.Part1 = d
+			weld.Parent = d
+			d.Parent = tool
+		end
+	end
+	model:Destroy()
+	return tool
 end
 
 -- Editing models in Studio ------------------------------------------------------
@@ -2456,6 +2882,15 @@ function ModelFactory.bakeTemplates(): number
 	for b in Config.Buildings do
 		makers[b] = function()
 			return partBuilt.building(b)
+		end
+	end
+	for kind, build in Props do
+		makers["Prop_" .. kind] = function()
+			local m = Instance.new("Model")
+			m.Name = kind
+			build(m)
+			m.WorldPivot = CFrame.new()
+			return m
 		end
 	end
 
@@ -9690,6 +10125,21 @@ local function inRivalArea(x: number, z: number): boolean
 	return rivalAt(x, z) ~= nil
 end
 
+-- A cobbled path from the front of each plot down to its jetty, wandering a little.
+local function inPath(x: number, z: number): boolean
+	if z > 1 or z < -36 then
+		return false
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		local dockX = o.X + Grid.PLOT_SIZE * 0.25 + math.sin(z / 9) * 1.5
+		if math.abs(x - dockX) < 3.2 + fbm(x, z, 1 / 6, 2, 71) * 1.6 then
+			return true
+		end
+	end
+	return false
+end
+
 local function inApron(x: number, z: number): boolean
 	if z < -16 or z > 0 then
 		return false
@@ -9712,6 +10162,9 @@ end
 
 -- Picks the surface material from height, steepness and position.
 local function surfaceMaterial(x: number, z: number, h: number, slope: number)
+	if inPath(x, z) then
+		return M.Cobblestone
+	end
 	if inApron(x, z) then
 		return M.Ground
 	end
@@ -10059,6 +10512,29 @@ local function scatterScenery()
 			light.Parent = flame
 			torch.Parent = folder
 		end
+
+		-- village life on the beach and in the gaps between plots
+		local function placeProp(kind: string, x: number, z: number, turn: number)
+			local prop = ModelFactory.prop(kind, rng)
+			local hit = groundAt(x, z)
+			local y = hit and hit.Position.Y or TOP
+			prop:PivotTo(CFrame.new(x, y, z) * CFrame.Angles(0, turn, 0))
+			prop.Parent = folder
+		end
+		placeProp("FishRack", dockX - 14, -24, rng:NextNumber(-0.3, 0.3))
+		placeProp("Barrels", dockX + 7, -30, rng:NextNumber(0, 6))
+		placeProp("BoatUpturned", dockX + 22, -30, math.rad(80) + rng:NextNumber(-0.2, 0.2))
+		local gapX = o.X - Config.PLOT_GAP / 2
+		do
+			placeProp("Banner", gapX, -6, 0)
+			placeProp("Haystack", gapX + rng:NextNumber(-3, 3), 60 + rng:NextNumber(-10, 10), rng:NextNumber(0, 6))
+			placeProp("Cart", gapX + rng:NextNumber(-2, 2), 110 + rng:NextNumber(-10, 10), math.rad(90) + rng:NextNumber(-0.4, 0.4))
+			placeProp("Woodpile", gapX, 170, math.rad(90))
+		end
+		-- a split-rail fence between the village and the deer meadow
+		local fence = ModelFactory.prop("FenceRun", rng)
+		fence:PivotTo(CFrame.new(o.X + Grid.PLOT_SIZE / 2, TOP, LAND_MAX_Z * Config.CELL + 6))
+		fence.Parent = folder
 	end
 end
 
@@ -10154,7 +10630,7 @@ local function setupLighting()
 	Lighting.Ambient = Color3.fromRGB(58, 60, 68)
 	Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114)
 	Lighting.EnvironmentDiffuseScale = 1
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.EnvironmentSpecularScale = 1 -- wet stone, metal and water catch the light
 	Lighting.ShadowSoftness = 0.25
 	Lighting.GlobalShadows = true
 

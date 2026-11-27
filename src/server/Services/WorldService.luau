@@ -167,6 +167,21 @@ local function inRivalArea(x: number, z: number): boolean
 	return rivalAt(x, z) ~= nil
 end
 
+-- A cobbled path from the front of each plot down to its jetty, wandering a little.
+local function inPath(x: number, z: number): boolean
+	if z > 1 or z < -36 then
+		return false
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		local dockX = o.X + Grid.PLOT_SIZE * 0.25 + math.sin(z / 9) * 1.5
+		if math.abs(x - dockX) < 3.2 + fbm(x, z, 1 / 6, 2, 71) * 1.6 then
+			return true
+		end
+	end
+	return false
+end
+
 local function inApron(x: number, z: number): boolean
 	if z < -16 or z > 0 then
 		return false
@@ -189,6 +204,9 @@ end
 
 -- Picks the surface material from height, steepness and position.
 local function surfaceMaterial(x: number, z: number, h: number, slope: number)
+	if inPath(x, z) then
+		return M.Cobblestone
+	end
 	if inApron(x, z) then
 		return M.Ground
 	end
@@ -536,6 +554,29 @@ local function scatterScenery()
 			light.Parent = flame
 			torch.Parent = folder
 		end
+
+		-- village life on the beach and in the gaps between plots
+		local function placeProp(kind: string, x: number, z: number, turn: number)
+			local prop = ModelFactory.prop(kind, rng)
+			local hit = groundAt(x, z)
+			local y = hit and hit.Position.Y or TOP
+			prop:PivotTo(CFrame.new(x, y, z) * CFrame.Angles(0, turn, 0))
+			prop.Parent = folder
+		end
+		placeProp("FishRack", dockX - 14, -24, rng:NextNumber(-0.3, 0.3))
+		placeProp("Barrels", dockX + 7, -30, rng:NextNumber(0, 6))
+		placeProp("BoatUpturned", dockX + 22, -30, math.rad(80) + rng:NextNumber(-0.2, 0.2))
+		local gapX = o.X - Config.PLOT_GAP / 2
+		do
+			placeProp("Banner", gapX, -6, 0)
+			placeProp("Haystack", gapX + rng:NextNumber(-3, 3), 60 + rng:NextNumber(-10, 10), rng:NextNumber(0, 6))
+			placeProp("Cart", gapX + rng:NextNumber(-2, 2), 110 + rng:NextNumber(-10, 10), math.rad(90) + rng:NextNumber(-0.4, 0.4))
+			placeProp("Woodpile", gapX, 170, math.rad(90))
+		end
+		-- a split-rail fence between the village and the deer meadow
+		local fence = ModelFactory.prop("FenceRun", rng)
+		fence:PivotTo(CFrame.new(o.X + Grid.PLOT_SIZE / 2, TOP, LAND_MAX_Z * Config.CELL + 6))
+		fence.Parent = folder
 	end
 end
 
@@ -631,7 +672,7 @@ local function setupLighting()
 	Lighting.Ambient = Color3.fromRGB(58, 60, 68)
 	Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114)
 	Lighting.EnvironmentDiffuseScale = 1
-	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.EnvironmentSpecularScale = 1 -- wet stone, metal and water catch the light
 	Lighting.ShadowSoftness = 0.25
 	Lighting.GlobalShadows = true
 
