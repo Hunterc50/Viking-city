@@ -11527,23 +11527,39 @@ local function clampToArea(area, x: number, z: number): (number, number)
 	return math.clamp(x, area.minX, area.maxX), math.clamp(z, area.minZ, area.maxZ)
 end
 
+local STEP = 5 -- studs per leg of a walk, so the deer follows hills and dips
+
+-- Walks the deer to (x, z) in short legs, each one set on the ground, so it
+-- never cuts through a hill or floats over a hollow. Returns the total time.
 local function moveTo(deer, x: number, z: number, speed: number)
 	local body = deer.body
 	local from = body.Position
-	local y = services.WorldService:GroundHeight(x, z) + deer.offset
-	local to = Vector3.new(x, y, z)
-	local flat = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local flat = Vector3.new(x - from.X, 0, z - from.Z)
 	if flat.Magnitude < 1 then
 		return 0
 	end
-	local duration = flat.Magnitude / speed
-	body.CFrame = CFrame.lookAt(from, from + flat)
+	local legs = math.max(1, math.ceil(flat.Magnitude / STEP))
+	local legTime = flat.Magnitude / legs / speed
 	if deer.tween then
 		deer.tween:Cancel()
 	end
-	deer.tween = TweenService:Create(body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) })
-	deer.tween:Play()
-	return duration
+	deer.walk = (deer.walk or 0) + 1
+	local walk = deer.walk
+	local dir = flat.Unit
+	task.spawn(function()
+		for i = 1, legs do
+			if deer.walk ~= walk or not body.Parent then
+				return
+			end
+			local p = Vector3.new(from.X, 0, from.Z) + flat * (i / legs)
+			local y = services.WorldService:GroundHeight(p.X, p.Z) + deer.offset
+			local to = Vector3.new(p.X, y, p.Z)
+			deer.tween = TweenService:Create(body, TweenInfo.new(legTime, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + dir) })
+			deer.tween:Play()
+			task.wait(legTime)
+		end
+	end)
+	return legTime * legs
 end
 
 function WildlifeService:Spawn(area)
@@ -11572,6 +11588,7 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 		return
 	end
 	herd[model] = nil
+	deer.walk = (deer.walk or 0) + 1
 	if deer.tween then
 		deer.tween:Cancel()
 	end
