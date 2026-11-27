@@ -4,6 +4,7 @@
 	  Winter  snowfall
 	  Autumn  drifting gold and red leaves
 	  Spring  a few floating pollen motes
+	and in winter you leave footprints in the snow that slowly fill in.
 ]]
 
 local RunService = game:GetService("RunService")
@@ -100,6 +101,63 @@ function SeasonFxController:Start()
 	mist.Acceleration = Vector3.new(0.4, 0, 0.2)
 	mist.LightInfluence = 0.8
 
+	-- footprints in the snow: left, right, left... each fades away
+	local Players = game:GetService("Players")
+	local TweenService = game:GetService("TweenService")
+	local prints = Instance.new("Folder")
+	prints.Name = "Footprints"
+	prints.Parent = workspace
+	local lastPrint: Vector3? = nil
+	local leftFoot = true
+	local printParams = RaycastParams.new()
+	printParams.FilterType = Enum.RaycastFilterType.Include
+	printParams.FilterDescendantsInstances = { workspace.Terrain }
+	local function stepPrints()
+		if workspace:GetAttribute("Season") ~= "Winter" then
+			lastPrint = nil
+			return
+		end
+		local character = Players.LocalPlayer.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not root or not humanoid or humanoid.FloorMaterial == Enum.Material.Air then
+			return
+		end
+		local pos = root.Position
+		if lastPrint and (pos - lastPrint).Magnitude < 2.2 then
+			return
+		end
+		local move = lastPrint and (pos - lastPrint) or root.CFrame.LookVector
+		lastPrint = pos
+		local flat = Vector3.new(move.X, 0, move.Z)
+		if flat.Magnitude < 0.01 then
+			return
+		end
+		flat = flat.Unit
+		local side = Vector3.new(-flat.Z, 0, flat.X) * (leftFoot and -0.45 or 0.45)
+		leftFoot = not leftFoot
+		local hit = workspace:Raycast(pos + side + Vector3.new(0, 2, 0), Vector3.new(0, -10, 0), printParams)
+		if not hit then
+			return
+		end
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Size = Vector3.new(0.55, 0.05, 1)
+		p.Color = Color3.fromRGB(176, 186, 200)
+		p.Material = Enum.Material.SmoothPlastic
+		p.Transparency = 0.35
+		p.CFrame = CFrame.lookAt(hit.Position, hit.Position + flat, hit.Normal) * CFrame.new(0, 0.03, 0)
+		p.Parent = prints
+		TweenService:Create(p, TweenInfo.new(10, Enum.EasingStyle.Linear), { Transparency = 1 }):Play()
+		task.delay(10.5, function()
+			p:Destroy()
+		end)
+	end
+
 	local Lighting = game:GetService("Lighting")
 	local mistTimer = 0
 	RunService.RenderStepped:Connect(function(dt)
@@ -108,6 +166,7 @@ function SeasonFxController:Start()
 		box.CFrame = CFrame.new(cam.X, cam.Y + 35, cam.Z)
 		-- the mist stays low, at the water and on the valley floor
 		mistBox.CFrame = CFrame.new(cam.X, 2.5, cam.Z)
+		stepPrints()
 		mistTimer += dt
 		if mistTimer > 1 then
 			mistTimer = 0
