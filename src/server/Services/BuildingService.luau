@@ -19,8 +19,44 @@ function BuildingService:Init(allServices)
 	services = allServices
 end
 
+-- Construction effect: the building rises out of the ground in a puff of dust.
+local function raiseUp(model: Model, finalCFrame: CFrame)
+	local _, size = model:GetBoundingBox()
+	local depth = size.Y + 1
+	local dust = Instance.new("Part")
+	dust.Anchored = true
+	dust.CanCollide = false
+	dust.CanQuery = false
+	dust.Transparency = 1
+	dust.Size = Vector3.new(size.X, 1, size.Z)
+	dust.CFrame = finalCFrame
+	dust.Parent = model.Parent
+	local puff = Instance.new("Smoke")
+	puff.Color = Color3.fromRGB(150, 130, 100)
+	puff.Opacity = 0.25
+	puff.RiseVelocity = 2
+	puff.Size = math.max(size.X, size.Z) / 3
+	puff.Parent = dust
+	task.spawn(function()
+		local duration = 1.2
+		local start = os.clock()
+		while model.Parent do
+			local t = math.min((os.clock() - start) / duration, 1)
+			local e = 1 - (1 - t) ^ 3 -- ease out
+			model:PivotTo(finalCFrame * CFrame.new(0, -depth * (1 - e), 0))
+			if t >= 1 then
+				break
+			end
+			task.wait()
+		end
+		puff.Enabled = false
+		task.wait(2)
+		dust:Destroy()
+	end)
+end
+
 -- Creates the building without any checks or cost. Returns the building record.
-function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number)
+function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number, animate: boolean?)
 	local ColonyService = services.ColonyService
 	local sx, sz = Grid.footprint(buildingType, rot)
 	local id = ColonyService:NewId(colony)
@@ -30,8 +66,12 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	model:SetAttribute("BuildingId", id)
 	model:SetAttribute("BuildingType", buildingType)
 	model:SetAttribute("OwnerUserId", colony.player.UserId)
-	model:PivotTo(Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot))
+	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
+	model:PivotTo(finalCFrame)
 	model.Parent = colony.plot.Buildings
+	if animate then
+		raiseUp(model, finalCFrame)
+	end
 
 	local building = {
 		id = id,
@@ -87,7 +127,7 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 		return false, "Not enough resources (" .. Grid.costText(def.Cost) .. ")"
 	end
 
-	self:Create(colony, buildingType, cx, cz, rot)
+	self:Create(colony, buildingType, cx, cz, rot, true)
 	ColonyService:Sync(colony)
 	return true, def.Display .. " built"
 end

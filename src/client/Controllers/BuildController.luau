@@ -58,9 +58,48 @@ local function clearGhost()
 	current = nil
 end
 
+-- Faint grid lines over your plot while you are placing something.
+local gridLines: Folder? = nil
+local function showGrid(visible: boolean)
+	if gridLines then
+		gridLines:Destroy()
+		gridLines = nil
+	end
+	local origin = player:GetAttribute("PlotOrigin")
+	if not visible or not origin then
+		return
+	end
+	gridLines = Instance.new("Folder")
+	gridLines.Name = "BuildGrid"
+	local size = Grid.PLOT_SIZE
+	for i = 0, Config.PLOT_CELLS do
+		for axis = 1, 2 do
+			local line = Instance.new("Part")
+			line.Anchored = true
+			line.CanCollide = false
+			line.CanQuery = false
+			line.CastShadow = false
+			line.Material = Enum.Material.Neon
+			line.Color = Color3.fromRGB(255, 236, 190)
+			line.Transparency = 0.82
+			local offset = i * Config.CELL
+			if axis == 1 then
+				line.Size = Vector3.new(0.12, 0.05, size)
+				line.Position = origin + Vector3.new(offset, 0.08, size / 2)
+			else
+				line.Size = Vector3.new(size, 0.05, 0.12)
+				line.Position = origin + Vector3.new(size / 2, 0.08, offset)
+			end
+			line.Parent = gridLines
+		end
+	end
+	gridLines.Parent = workspace
+end
+
 local function setMode(newMode)
 	clearGhost()
 	mode = newMode
+	showGrid(mode ~= nil and mode.kind == "place")
 	if mode and mode.kind == "place" then
 		ghost = ModelFactory.building(mode.type)
 		ModelFactory.makeGhost(ghost)

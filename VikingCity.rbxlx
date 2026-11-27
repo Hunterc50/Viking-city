@@ -1586,8 +1586,44 @@ function BuildingService:Init(allServices)
 	services = allServices
 end
 
+-- Construction effect: the building rises out of the ground in a puff of dust.
+local function raiseUp(model: Model, finalCFrame: CFrame)
+	local _, size = model:GetBoundingBox()
+	local depth = size.Y + 1
+	local dust = Instance.new("Part")
+	dust.Anchored = true
+	dust.CanCollide = false
+	dust.CanQuery = false
+	dust.Transparency = 1
+	dust.Size = Vector3.new(size.X, 1, size.Z)
+	dust.CFrame = finalCFrame
+	dust.Parent = model.Parent
+	local puff = Instance.new("Smoke")
+	puff.Color = Color3.fromRGB(150, 130, 100)
+	puff.Opacity = 0.25
+	puff.RiseVelocity = 2
+	puff.Size = math.max(size.X, size.Z) / 3
+	puff.Parent = dust
+	task.spawn(function()
+		local duration = 1.2
+		local start = os.clock()
+		while model.Parent do
+			local t = math.min((os.clock() - start) / duration, 1)
+			local e = 1 - (1 - t) ^ 3 -- ease out
+			model:PivotTo(finalCFrame * CFrame.new(0, -depth * (1 - e), 0))
+			if t >= 1 then
+				break
+			end
+			task.wait()
+		end
+		puff.Enabled = false
+		task.wait(2)
+		dust:Destroy()
+	end)
+end
+
 -- Creates the building without any checks or cost. Returns the building record.
-function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number)
+function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number, animate: boolean?)
 	local ColonyService = services.ColonyService
 	local sx, sz = Grid.footprint(buildingType, rot)
 	local id = ColonyService:NewId(colony)
@@ -1597,8 +1633,12 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	model:SetAttribute("BuildingId", id)
 	model:SetAttribute("BuildingType", buildingType)
 	model:SetAttribute("OwnerUserId", colony.player.UserId)
-	model:PivotTo(Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot))
+	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
+	model:PivotTo(finalCFrame)
 	model.Parent = colony.plot.Buildings
+	if animate then
+		raiseUp(model, finalCFrame)
+	end
 
 	local building = {
 		id = id,
@@ -1654,7 +1694,7 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 		return false, "Not enough resources (" .. Grid.costText(def.Cost) .. ")"
 	end
 
-	self:Create(colony, buildingType, cx, cz, rot)
+	self:Create(colony, buildingType, cx, cz, rot, true)
 	ColonyService:Sync(colony)
 	return true, def.Display .. " built"
 end
@@ -3511,9 +3551,48 @@ local function clearGhost()
 	current = nil
 end
 
+-- Faint grid lines over your plot while you are placing something.
+local gridLines: Folder? = nil
+local function showGrid(visible: boolean)
+	if gridLines then
+		gridLines:Destroy()
+		gridLines = nil
+	end
+	local origin = player:GetAttribute("PlotOrigin")
+	if not visible or not origin then
+		return
+	end
+	gridLines = Instance.new("Folder")
+	gridLines.Name = "BuildGrid"
+	local size = Grid.PLOT_SIZE
+	for i = 0, Config.PLOT_CELLS do
+		for axis = 1, 2 do
+			local line = Instance.new("Part")
+			line.Anchored = true
+			line.CanCollide = false
+			line.CanQuery = false
+			line.CastShadow = false
+			line.Material = Enum.Material.Neon
+			line.Color = Color3.fromRGB(255, 236, 190)
+			line.Transparency = 0.82
+			local offset = i * Config.CELL
+			if axis == 1 then
+				line.Size = Vector3.new(0.12, 0.05, size)
+				line.Position = origin + Vector3.new(offset, 0.08, size / 2)
+			else
+				line.Size = Vector3.new(size, 0.05, 0.12)
+				line.Position = origin + Vector3.new(size / 2, 0.08, offset)
+			end
+			line.Parent = gridLines
+		end
+	end
+	gridLines.Parent = workspace
+end
+
 local function setMode(newMode)
 	clearGhost()
 	mode = newMode
+	showGrid(mode ~= nil and mode.kind == "place")
 	if mode and mode.kind == "place" then
 		ghost = ModelFactory.building(mode.type)
 		ModelFactory.makeGhost(ghost)
