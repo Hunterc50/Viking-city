@@ -97,6 +97,7 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 		local mult = ColonyService:Has(colony, "PathWoods") and 2 or 1
 		ColonyService:Add(colony, "Food", W.Meat * mult)
 		ColonyService:Add(colony, "Hides", W.Hides * mult)
+		services.QuestService:Count(colony, "deer")
 		ColonyService:Notify(colony, "Deer hunted! +" .. W.Meat * mult .. " Food, +" .. W.Hides * mult .. " Hides", "gain")
 		ColonyService:Sync(colony)
 	end

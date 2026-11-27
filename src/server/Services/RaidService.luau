@@ -22,6 +22,7 @@ local TweenService = game:GetService("TweenService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Sounds = require(Shared.Sounds)
 local ModelFactory = require(Shared.ModelFactory)
 
 local RaidService = {}
@@ -142,6 +143,12 @@ local function ignite(building)
 		light.Brightness = 3
 		light.Parent = part
 		table.insert(flames, { fire = fire, light = light })
+		if i == 1 then
+			local crackle = Sounds.loop("Fire", part)
+			if crackle then
+				crackle.Name = "BurnFx"
+			end
+		end
 	end
 
 	-- spread to close neighbours, then die down to embers
@@ -213,6 +220,7 @@ local function makeChest(cf: CFrame)
 		end
 		chest.looted = true
 		chest.prompt.Enabled = false
+		services.QuestService:Count(colony, "plunder")
 		markRaid()
 		-- swing the lid open
 		lid.CFrame = chest.hinge * CFrame.Angles(math.rad(-100), 0, 0) * chest.hinge:Inverse() * chest.lidClosed
@@ -617,6 +625,7 @@ local function buildHold()
 	state.hornPrompt = makePrompt(hornModel:FindFirstChild("Horn"), "Sound the war horn", R.Name, Enum.KeyCode.E, 1.5)
 	state.hornPrompt.Triggered:Connect(function(player)
 		state.hornPrompt.Enabled = false
+		Sounds.play("WarHorn", CENTER)
 		markRaid()
 		notifyAll("The war horn sounds! " .. R.Name .. " forms a shield wall!", "raid")
 		-- guards line up shoulder to shoulder at the gate, then charge

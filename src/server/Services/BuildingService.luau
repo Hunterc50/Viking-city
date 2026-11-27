@@ -7,6 +7,7 @@
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Sounds = require(Shared.Sounds)
 local Grid = require(Shared.Grid)
 local Remotes = require(Shared.Remotes)
 local ModelFactory = require(Shared.ModelFactory)
@@ -131,7 +132,8 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 		return false, "Not enough resources (" .. Grid.costText(def.Cost) .. ")"
 	end
 
-	self:Create(colony, buildingType, cx, cz, rot, true)
+	local building = self:Create(colony, buildingType, cx, cz, rot, true)
+	Sounds.play("Build", building.center)
 	ColonyService:Sync(colony)
 	return true, def.Display .. " built"
 end

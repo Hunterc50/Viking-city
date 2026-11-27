@@ -16,6 +16,7 @@ local Players = game:GetService("Players")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Sounds = require(Shared.Sounds)
 local Grid = require(Shared.Grid)
 local ModelFactory = require(Shared.ModelFactory)
 
@@ -294,6 +295,7 @@ local function startRaid(attacker: Player, target: Player)
 			endRaid(raid, false, "you fell in battle")
 		end)
 	end
+	Sounds.play("WarHorn", centre)
 	notify(attacker, "RAID on " .. target.DisplayName .. "'s village! Defeat " .. count .. " militia in " .. T.Duration .. "s.", "raid")
 	notify(target, attacker.DisplayName .. " sounds the war horn! Your militia (" .. count .. ") takes up arms.", "raid")
 end

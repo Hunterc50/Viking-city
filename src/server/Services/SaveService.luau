@@ -107,6 +107,8 @@ function SaveService:Snapshot(colony)
 		villagers = villagers,
 		happiness = colony.happiness,
 		day = colony.day,
+		quest = colony.quest,
+		stats = colony.stats,
 	}
 end
 
@@ -124,6 +126,14 @@ function SaveService:Restore(colony, data)
 	end
 	colony.happiness = tonumber(data.happiness) or colony.happiness
 	colony.day = tonumber(data.day) or colony.day
+	colony.quest = tonumber(data.quest) or 1
+	if type(data.stats) == "table" then
+		for k, n in data.stats do
+			if type(k) == "string" and type(n) == "number" then
+				colony.stats[k] = n
+			end
+		end
+	end
 
 	local placed = 0
 	for _, b in data.buildings or {} do

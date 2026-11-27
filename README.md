@@ -78,9 +78,29 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 
 The rival hold rebuilds itself about 5 minutes after a raid. Seasons change every 3 minutes: farms stop in winter and everyone eats more, so stock food in autumn.
 
+The **Saga** panel (top left) always shows your next goal and its reward, from felling your first tree to building a Great Hall. It's the easiest way to learn the game.
+
+Research shows on your Viking: **Chain Mail** gives you a mail shirt and helmet, and **Iron Axes** / **Steel Edges** change your axe head.
+
 Families: a ♥ by a villager's name means they're married. Babies are only born to married couples with a free bed, so keep spare housing. Babies grow into children after 1 day and adults after 3.
 
 Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Each Longhouse holds 5 people and each Cottage 3. Immigrants only come when you have free housing and your people are happy.
+
+---
+
+## Changing the sounds and music
+
+Every sound lives in one place: **Explorer > ReplicatedStorage > Shared > Sounds**. Double-click it to open it. Each line is a slot, like `Wind = { Id = "", Volume = 0.3 }`.
+
+Music, wind, birds, waves, fire and the war horn start out empty (silent), so you can choose the ones you like. Chopping, mining, the bow, building and splashes already use Roblox's built-in sounds.
+
+To fill or change a slot:
+1. Open the **Toolbox** (View or Window menu), click the **Audio** tab, and search, for example "nordic music", "wind", "forest birds", "ocean waves", "fire crackle" or "war horn".
+2. Click a sound to hear it. When you like one, right-click it and choose **Copy Asset ID**.
+3. In the Sounds script, paste it between the quotes after `rbxassetid://`, like `Wind = { Id = "rbxassetid://1234567890", Volume = 0.3 },`
+4. Press Play. Change `Volume` (0 to 1) if it's too loud.
+
+Save your place afterwards. When you download a new version, copy your filled-in lines across.
 
 ---
 
@@ -192,6 +212,7 @@ src/
     Config.luau         every balance number: costs, rates, timings
     Grid.luau           grid maths: cells, footprints, rotation
     Remotes.luau        RemoteEvents/RemoteFunctions between client and server
+    Sounds.luau         every sound slot (swap IDs here)
     ModelFactory.luau   builds every model from parts, or uses your own from Assets / ModelWorkshop
   server/   -> ServerScriptService.Server
     init.server.luau    loads every service in Services/
@@ -206,6 +227,7 @@ src/
       ResourceNodeService.luau  trees, rocks, bushes, hand gathering, regrowth
       VillagerService.luau      jobs, food, happiness, births, immigrants, walking
       SaveService.luau          saves and loads each village with a DataStore
+      QuestService.luau         the Saga: a chain of goals with rewards
       BoatService.luau          sailing, ship health, volleys, ramming, the raider ship
       TownRaidService.luau      raiding other players' villages (militia, plunder, shields)
   client/   -> StarterPlayer.StarterPlayerScripts.Client

@@ -7,6 +7,7 @@
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Sounds = require(Shared.Sounds)
 local Grid = require(Shared.Grid)
 local ModelFactory = require(Shared.ModelFactory)
 
@@ -73,6 +74,8 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 			return
 		end
 		colony.nodes[key] = nil
+		Sounds.play(kind == "Rock" and "Mine" or "Chop", model:GetPivot().Position)
+		services.QuestService:Count(colony, kind == "Rock" and "mine" or (kind == "Tree" and "chop" or "forage"))
 		model:Destroy()
 		ColonyService:Unblock(colony, x, z)
 		local amount = def.Amount

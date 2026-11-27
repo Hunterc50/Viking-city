@@ -24,6 +24,7 @@ local Debris = game:GetService("Debris")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Sounds = require(Shared.Sounds)
 local Grid = require(Shared.Grid)
 local Remotes = require(Shared.Remotes)
 local ModelFactory = require(Shared.ModelFactory)
@@ -200,10 +201,12 @@ local function sink(ship, attacker: Player?)
 			for res, amount in loot do
 				services.ColonyService:Add(colony, res, amount)
 			end
+			services.QuestService:Count(colony, "sunk")
 			services.ColonyService:Notify(colony, ship.title .. " sinks beneath the waves! Plundered " .. Grid.costText(loot), "raid")
 		end
 	end
 
+	Sounds.play("Splash", ship.cf.Position)
 	-- list, settle and slip under
 	local model = ship.model
 	local startCf = ship.cf
@@ -291,6 +294,7 @@ local function volley(ship)
 		return false
 	end
 	ship.lastVolley = now
+	Sounds.play("Bow", ship.cf.Position)
 	local attacker = ship.owner
 	local hits = 0
 	local accuracy = attacker and 0.75 or 0.55
@@ -455,6 +459,8 @@ local function launch(player: Player, dockIndex: number)
 	ship.seat = seat
 	ship.dock = start.Position
 	boats[player] = ship
+	Sounds.play("Splash", start.Position)
+	services.QuestService:Count(colony, "launch")
 
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")

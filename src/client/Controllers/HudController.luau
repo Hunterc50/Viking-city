@@ -15,6 +15,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Grid = require(Shared.Grid)
+local Sounds = require(Shared.Sounds)
 
 local HudController = {}
 
@@ -146,6 +147,28 @@ function HudController:Start()
 			Parent = item,
 		})
 	end
+
+	---------------------------------------------------------------- saga (quest guide)
+	local saga = new("Frame", {
+		Name = "Saga",
+		Position = UDim2.fromOffset(12, 64),
+		Size = UDim2.fromOffset(300, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.12,
+		Parent = gui,
+	}, {
+		corner(10),
+		padding(10),
+		frameStroke(),
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local sagaHead = label({ Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = THEME.Muted, LayoutOrder = 1, Parent = saga })
+	local sagaTitle = label({ Size = UDim2.new(1, 0, 0, 22), Font = Enum.Font.GothamBold, TextSize = 17, TextColor3 = THEME.Accent, LayoutOrder = 2, Parent = saga })
+	local sagaText = label({ Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, TextSize = 14, LayoutOrder = 3, Parent = saga })
+	local sagaBar = new("Frame", { Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = THEME.PanelLight, LayoutOrder = 4, Parent = saga }, { corner(3) })
+	local sagaFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = THEME.Good, Parent = sagaBar }, { corner(3) })
+	local sagaReward = label({ Size = UDim2.new(1, 0, 0, 16), TextSize = 12, TextColor3 = THEME.Muted, LayoutOrder = 5, Parent = saga })
 
 	---------------------------------------------------------------- colony panel
 	local panel = new("Frame", {
@@ -508,6 +531,11 @@ function HudController:Start()
 			showRaidTitle(text)
 			return
 		end
+		if kind == "quest" then
+			Sounds.play("QuestDone")
+			showRaidTitle(text)
+			return
+		end
 		feedOrder += 1
 		local item = new("TextLabel", {
 			Size = UDim2.fromOffset(0, 28),
@@ -570,6 +598,22 @@ function HudController:Start()
 		end
 
 		lastState = state
+		local q = state.quest
+		if q then
+			if q.done then
+				sagaHead.Text = "SAGA COMPLETE"
+				sagaTitle.Text = "Your name will be sung"
+				sagaText.Text = "Every goal is done. Keep growing, raiding and sailing!"
+				sagaFill.Size = UDim2.fromScale(1, 1)
+				sagaReward.Text = ""
+			else
+				sagaHead.Text = string.format("SAGA  %d / %d", q.index, q.total)
+				sagaTitle.Text = q.title
+				sagaText.Text = q.text
+				sagaFill.Size = UDim2.fromScale(math.clamp(q.have / q.goal, 0, 1), 1)
+				sagaReward.Text = string.format("%d / %d   ·   Reward: %s", q.have, q.goal, q.reward)
+			end
+		end
 		table.clear(known)
 		for _, id in state.tech or {} do
 			known[id] = true

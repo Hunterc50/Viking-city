@@ -234,6 +234,26 @@ Config.Combat = {
 	StrikeCooldown = 0.6,
 }
 
+-- The saga: a chain of goals that teaches the game, shown top left.
+-- Kind: "stat" (something you did, counted), "building", "population",
+-- "tech" (number researched). Rewards are added when a goal is done.
+Config.Quests = {
+	{ Title = "Fell your first trees", Text = "Press 1 for the Axe, walk to a tree and hold E.", Kind = "stat", Stat = "chop", Goal = 3, Reward = { Wood = 15 } },
+	{ Title = "Plant barley", Text = "Open the Production tab and build a Barley Farm so nobody starves.", Kind = "building", Building = "Farm", Goal = 1, Reward = { Food = 20 } },
+	{ Title = "A woodcutter's hut", Text = "Build a Woodcutter. Idle villagers will take the jobs.", Kind = "building", Building = "Woodcutter", Goal = 1, Reward = { Wood = 20 } },
+	{ Title = "Break some stone", Text = "Press 2 for the Pickaxe and hold E on a rock.", Kind = "stat", Stat = "mine", Goal = 2, Reward = { Stone = 15 } },
+	{ Title = "The hunt", Text = "Press 3 for the Bow and shoot a deer in the meadow behind your plot.", Kind = "stat", Stat = "deer", Goal = 1, Reward = { Food = 20 } },
+	{ Title = "Room to grow", Text = "Build an A-frame Cottage (Housing tab). Free beds bring babies and newcomers.", Kind = "building", Building = "Cottage", Goal = 1, Reward = { Wood = 20, Stone = 10 } },
+	{ Title = "Keepers of lore", Text = "Build a Lore Hall. Its skalds earn Lore for research.", Kind = "building", Building = "LoreHall", Goal = 1, Reward = { Lore = 10 } },
+	{ Title = "New knowledge", Text = "Press T and research anything.", Kind = "tech", Goal = 1, Reward = { Wood = 30 } },
+	{ Title = "A growing village", Text = "Reach 8 people. Keep everyone fed, housed and happy.", Kind = "population", Goal = 8, Reward = { Silver = 10 } },
+	{ Title = "Plunder Greywater", Text = "Walk west to Greywater Hold, beat its guards and plunder a chest (E).", Kind = "stat", Stat = "plunder", Goal = 1, Reward = { Silver = 10 } },
+	{ Title = "Shipwrights", Text = "Build a Shipyard (War & Sea tab).", Kind = "building", Building = "Shipyard", Goal = 1, Reward = { Wood = 40 } },
+	{ Title = "Take to the sea", Text = "Research Karve (T), then hold E at the end of your jetty to launch.", Kind = "stat", Stat = "launch", Goal = 1, Reward = { Food = 30 } },
+	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
+	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+}
+
 -- Raiding other players' villages (they must be in the same server).
 -- Villages are never destroyed: the raider fights the village militia and,
 -- if every militia falls, plunders a share of the stores.

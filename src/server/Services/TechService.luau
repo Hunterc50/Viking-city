@@ -64,7 +64,7 @@ function TechService:Research(player: Player, id)
 	end
 	ColonyService:Spend(colony, Config.Tech[id].Cost)
 	colony.tech[id] = true
-	if id == "ChainMail" then
+	if id == "ChainMail" or id == "IronAxes" or id == "SteelEdges" then
 		services.ToolService:ApplyArmor(player)
 	end
 	ColonyService:Notify(colony, "Researched " .. Config.Tech[id].Name .. "! " .. Config.Tech[id].Description, "good")

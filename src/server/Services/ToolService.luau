@@ -12,6 +12,7 @@ local Debris = game:GetService("Debris")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
+local Sounds = require(Shared.Sounds)
 local Remotes = require(Shared.Remotes)
 local ModelFactory = require(Shared.ModelFactory)
 
@@ -25,6 +26,78 @@ function ToolService:Init(allServices)
 end
 
 -- Ring Mail research gives 150 health.
+-- Welds a piece of gear to a body part (removed with the character).
+local function wear(character: Model, onto: BasePart, name: string, size: Vector3, offset: CFrame, color: Color3, material, shape)
+	local old = character:FindFirstChild(name)
+	if old then
+		old:Destroy()
+	end
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = material or Enum.Material.Metal
+	if shape then
+		p.Shape = shape
+	end
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.CFrame = onto.CFrame * offset
+	p.Parent = character
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = onto
+	weld.Part1 = p
+	weld.Parent = p
+	return p
+end
+
+-- Research shows on your Viking: chain mail and a helmet with Chain Mail,
+-- darker iron then bright steel axe heads with Iron Axes / Steel Edges.
+function ToolService:ApplyGear(player: Player)
+	local character = player.Character
+	local colony = services.ColonyService:Get(player)
+	if not character or not colony then
+		return
+	end
+	local Has = function(id)
+		return services.ColonyService:Has(colony, id)
+	end
+	if Has("ChainMail") then
+		local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+		local head = character:FindFirstChild("Head")
+		local mail = Color3.fromRGB(128, 130, 136)
+		if torso then
+			wear(character, torso, "GearMail", torso.Size + Vector3.new(0.12, 0.3, 0.12), CFrame.new(0, -0.1, 0), mail, Enum.Material.DiamondPlate)
+		end
+		local lower = character:FindFirstChild("LowerTorso")
+		if lower then
+			wear(character, lower, "GearSkirt", lower.Size + Vector3.new(0.14, 0.5, 0.14), CFrame.new(0, -0.2, 0), mail, Enum.Material.DiamondPlate)
+		end
+		if head then
+			wear(character, head, "GearHelm", Vector3.new(1.3, 0.75, 1.3), CFrame.new(0, 0.38, 0), Color3.fromRGB(96, 98, 104), Enum.Material.Metal, Enum.PartType.Ball)
+			wear(character, head, "GearNose", Vector3.new(0.14, 0.55, 0.14), CFrame.new(0, 0.05, -0.6), Color3.fromRGB(96, 98, 104), Enum.Material.Metal)
+		end
+	end
+	local steel = Has("SteelEdges")
+	local iron = Has("IronAxes")
+	if steel or iron then
+		local containers = { player:FindFirstChild("Backpack"), character }
+		for _, c in containers do
+			local axe = c and c:FindFirstChild("Axe")
+			if axe and axe:IsA("Tool") then
+				for _, d in axe:GetChildren() do
+					if d:IsA("BasePart") and d.Name == "Head" then
+						d.Color = steel and Color3.fromRGB(210, 215, 225) or Color3.fromRGB(80, 82, 90)
+						d.Material = steel and Enum.Material.Foil or Enum.Material.Metal
+					end
+				end
+			end
+		end
+	end
+end
+
 function ToolService:ApplyArmor(player: Player)
 	local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	local colony = services.ColonyService:Get(player)
@@ -32,6 +105,7 @@ function ToolService:ApplyArmor(player: Player)
 		humanoid.MaxHealth = 150
 		humanoid.Health = math.max(humanoid.Health, 150)
 	end
+	self:ApplyGear(player)
 end
 
 -- True if the player is currently holding the named tool.
@@ -92,6 +166,7 @@ local function shoot(player: Player, aim)
 	local hit = workspace:Raycast(origin, dir, params)
 	local endPoint = hit and hit.Position or origin + dir
 
+	Sounds.play("Bow", head)
 	-- the visible arrow
 	local arrow = ModelFactory.arrow()
 	arrow.CFrame = CFrame.lookAt(origin, endPoint)
@@ -139,6 +214,7 @@ local function strike(player: Player)
 		return
 	end
 	lastStrike[player] = now
+	Sounds.play("Swing", root)
 	local colony = services.ColonyService:Get(player)
 	local damage = Config.Combat.AxeDamage
 	if services.ColonyService:Has(colony, "SteelEdges") then
@@ -156,8 +232,10 @@ end
 
 function ToolService:Start()
 	local function onPlayer(player: Player)
-		player.CharacterAdded:Connect(function()
+		player.CharacterAdded:Connect(function(character)
 			giveTools(player)
+			character:WaitForChild("Head", 5)
+			task.wait(0.5) -- let the avatar's look load first
 			ToolService:ApplyArmor(player)
 		end)
 		if player.Character then

@@ -162,6 +162,7 @@ function ColonyService:Sync(colony)
 			return set
 		end)(),
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
+		quest = services.QuestService:State(colony),
 	}
 
 	if colony.gridDirty then
@@ -195,6 +196,8 @@ function ColonyService:Create(player: Player)
 		villagers = {},
 		nodes = {},
 		tech = {},
+		stats = {},
+		quest = 1,
 		happiness = 60,
 		day = 1,
 		dayTimer = 0,
