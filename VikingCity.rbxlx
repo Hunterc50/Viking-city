@@ -90,8 +90,56 @@ function AssetIds.url(id: string?): string?
 	return "rbxassetid://" .. id
 end
 
+-- Textures uploaded through Open Cloud come back as Decal IDs, but a Texture
+-- needs the Image inside the decal. The server looks each one up at start
+-- (resolveTextures) and shares the answer as an attribute on ReplicatedStorage.
+local resolved = {} -- [name] = image url
+
 function AssetIds.texture(name: string): string?
+	if resolved[name] then
+		return resolved[name]
+	end
+	local shared = game:GetService("ReplicatedStorage"):GetAttribute("Tex_" .. name)
+	if typeof(shared) == "string" and shared ~= "" then
+		resolved[name] = shared
+		return shared
+	end
 	return AssetIds.url(AssetIds.Textures[name])
+end
+
+-- Server only. Turns each decal ID into its image ID (an ID that already is
+-- an image is kept as it is). Waits at most `timeout` seconds in all.
+function AssetIds.resolveTextures(timeout: number?)
+	local InsertService = game:GetService("InsertService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local pending = 0
+	for name, id in AssetIds.Textures do
+		local number = tonumber(string.match(id or "", "(%d+)%s*$") or "")
+		if number then
+			pending += 1
+			task.spawn(function()
+				local image
+				local ok, model = pcall(function()
+					return InsertService:LoadAsset(number)
+				end)
+				if ok and model then
+					local decal = model:FindFirstChildWhichIsA("Decal", true)
+					if decal and decal.Texture ~= "" then
+						image = decal.Texture
+					end
+					model:Destroy()
+				end
+				image = image or AssetIds.url(id)
+				resolved[name] = image
+				ReplicatedStorage:SetAttribute("Tex_" .. name, image)
+				pending -= 1
+			end)
+		end
+	end
+	local started = os.clock()
+	while pending > 0 and os.clock() - started < (timeout or 8) do
+		task.wait(0.1)
+	end
 end
 
 function AssetIds.sound(name: string): string?
@@ -4141,6 +4189,14 @@ local ModelFactory = require(game:GetService("ReplicatedStorage"):WaitForChild("
 local okCollect, errCollect = pcall(ModelFactory.collectWorkshop)
 if not okCollect then
 	warn("[VikingCity] couldn't use ModelWorkshop: " .. tostring(errCollect))
+end
+
+-- Our uploaded textures arrive as decals: find the image inside each one
+-- before any building is made.
+local AssetIds = require(game:GetService("ReplicatedStorage").Shared.AssetIds)
+local okTex, errTex = pcall(AssetIds.resolveTextures, 8)
+if not okTex then
+	warn("[VikingCity] couldn't look up textures: " .. tostring(errTex))
 end
 
 local services = {}

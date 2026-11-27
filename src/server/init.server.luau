@@ -14,6 +14,14 @@ if not okCollect then
 	warn("[VikingCity] couldn't use ModelWorkshop: " .. tostring(errCollect))
 end
 
+-- Our uploaded textures arrive as decals: find the image inside each one
+-- before any building is made.
+local AssetIds = require(game:GetService("ReplicatedStorage").Shared.AssetIds)
+local okTex, errTex = pcall(AssetIds.resolveTextures, 8)
+if not okTex then
+	warn("[VikingCity] couldn't look up textures: " .. tostring(errTex))
+end
+
 local services = {}
 for _, module in servicesFolder:GetChildren() do
 	if module:IsA("ModuleScript") then
