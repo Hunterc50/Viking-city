@@ -109,7 +109,8 @@ local function heightAt(x: number, z: number): number
 	-- the fjord: slope down from the beach, rise again at the far shore
 	if z < SHORE_Z then
 		local lake = smooth(SHORE_Z, SHORE_Z - 80, z) * (1 - far)
-		local bed = -15 + fbm(x, z, 1 / 90, 3, 7) * 6
+		-- shallow near the beach, dropping into a deep dark channel
+		local bed = lerp(-5, -42, smooth(SHORE_Z - 20, SHORE_Z - 260, z) * (1 - far)) + fbm(x, z, 1 / 90, 3, 7) * 6
 		h = lerp(h, bed, lake)
 	end
 
@@ -197,11 +198,13 @@ local function buildTerrain()
 	Terrain:SetMaterialColor(M.Sand, Color3.fromRGB(176, 164, 134))
 	Terrain:SetMaterialColor(M.Ground, Color3.fromRGB(104, 88, 64))
 	Terrain:SetMaterialColor(M.Mud, Color3.fromRGB(62, 56, 46))
-	Terrain.WaterColor = Color3.fromRGB(34, 58, 70)
-	Terrain.WaterTransparency = 0.3
-	Terrain.WaterReflectance = 0.85
-	Terrain.WaterWaveSize = 0.1
-	Terrain.WaterWaveSpeed = 7
+	-- deep fjord teal: low transparency so depth reads as colour, full
+	-- reflectance so the sky and mountains mirror in it
+	Terrain.WaterColor = Color3.fromRGB(22, 50, 60)
+	Terrain.WaterTransparency = 0.18
+	Terrain.WaterReflectance = 1
+	Terrain.WaterWaveSize = 0.16
+	Terrain.WaterWaveSpeed = 9
 	pcall(function()
 		Terrain.Decoration = true -- animated grass blades on Grass
 	end)
@@ -367,6 +370,50 @@ local function scatterScenery()
 		end
 	end
 
+	-- the shoreline: find where the land meets the water and line it with
+	-- foam (animated on the client) and half-sunk rocks
+	local foamFolder = Instance.new("Folder")
+	foamFolder.Name = "ShoreFoam"
+	local function shoreAt(x: number, fromZ: number, toZ: number, step: number): number?
+		local wasDry = heightAt(x, fromZ) > 0.2
+		for z = fromZ, toZ, step do
+			local dry = heightAt(x, z) > 0.2
+			if dry ~= wasDry then
+				return z
+			end
+			wasDry = dry
+		end
+		return nil
+	end
+	for x = MIN_X + 6, MAX_X - 6, 9 do
+		for _, scan in { { SHORE_Z + 10, SHORE_Z - 200, -2 }, { MIN_Z + 20, -480, 3 } } do
+			local z = shoreAt(x, scan[1], scan[2], scan[3])
+			if z then
+				for layer = 0, 1 do
+					local foam = Instance.new("Part")
+					foam.Name = "Foam"
+					foam.Anchored = true
+					foam.CanCollide = false
+					foam.CanQuery = false
+					foam.CastShadow = false
+					foam.Material = Enum.Material.SmoothPlastic
+					foam.Color = Color3.fromRGB(236, 242, 240)
+					foam.Transparency = 0.55 + layer * 0.2
+					foam.Size = Vector3.new(10.5, 0.1, 1.6 + layer * 2.5)
+					foam.CFrame = CFrame.new(x, 0.06 + layer * 0.02, z + (scan[3] < 0 and -1 or 1) * (1 + layer * 2.2))
+						* CFrame.Angles(0, rng:NextNumber(-0.12, 0.12), 0)
+					foam.Parent = foamFolder
+				end
+				if rng:NextNumber() < 0.22 and not (x > FLAT_MIN_X and x < FLAT_MAX_X and scan[3] < 0 and rng:NextNumber() < 0.6) then
+					local rock = ModelFactory.boulder(rng, rng:NextNumber(1.2, 2.8))
+					rock:PivotTo(CFrame.new(x + rng:NextNumber(-4, 4), -1.2, z + rng:NextNumber(-3, 3)) * CFrame.Angles(0, rng:NextNumber(0, 6), 0))
+					rock.Parent = folder
+				end
+			end
+		end
+	end
+	foamFolder.Parent = workspace
+
 	-- a jetty on the fjord in front of every plot, some with a longship
 	local sails = { Color3.fromRGB(160, 40, 36), Color3.fromRGB(46, 70, 120), Color3.fromRGB(150, 120, 50) }
 	for i = 1, Config.MAX_PLOTS do
@@ -490,8 +537,8 @@ local function setupLighting()
 	Lighting.GlobalShadows = true
 
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.33
-	atmosphere.Offset = 0.22
+	atmosphere.Density = 0.38
+	atmosphere.Offset = 0.3
 	atmosphere.Color = Color3.fromRGB(200, 190, 170)
 	atmosphere.Decay = Color3.fromRGB(96, 106, 122)
 	atmosphere.Glare = 0.35
@@ -504,15 +551,15 @@ local function setupLighting()
 
 	local grade = Instance.new("ColorCorrectionEffect")
 	grade.Brightness = 0.02
-	grade.Contrast = 0.1
-	grade.Saturation = 0.1
+	grade.Contrast = 0.14
+	grade.Saturation = 0.08
 	grade.TintColor = Color3.fromRGB(255, 244, 228)
 	grade.Parent = Lighting
 
 	local bloom = Instance.new("BloomEffect")
 	bloom.Intensity = 0.5
 	bloom.Size = 24
-	bloom.Threshold = 0.95
+	bloom.Threshold = 0.9
 	bloom.Parent = Lighting
 
 	local clouds = Terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
@@ -520,6 +567,14 @@ local function setupLighting()
 	clouds.Density = 0.55
 	clouds.Color = Color3.fromRGB(245, 240, 232)
 	clouds.Parent = Terrain
+
+	-- a gentle cinematic blur on the far distance
+	local dof = Instance.new("DepthOfFieldEffect")
+	dof.FarIntensity = 0.12
+	dof.NearIntensity = 0
+	dof.FocusDistance = 140
+	dof.InFocusRadius = 180
+	dof.Parent = Lighting
 
 	local rays = Instance.new("SunRaysEffect")
 	rays.Intensity = 0.05
