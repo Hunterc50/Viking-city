@@ -402,6 +402,82 @@ Config.Ranks = {
 	{ Name = "King", PopCap = 70, Needs = { Population = 32, Buildings = 24, Tech = 12 }, Reward = { Silver = 100, Lore = 60 } },
 }
 
+-- Land ----------------------------------------------------------------------
+-- Buy bigger land in stages (Jarl's Table > Land). Cells are counted from the
+-- plot's front-left corner; MinX below 0 grows the land sideways into the gap
+-- between plots, MaxZ grows it back toward the meadow. Never overlaps a
+-- neighbour: the gap between plots is 6 cells and each side takes at most 2.
+Config.LandStages = {
+	{ Name = "Homestead", MinX = 0, MaxX = 20, MaxZ = 20 },
+	{ Name = "Farmstead", MinX = 0, MaxX = 20, MaxZ = 23, Cost = { Silver = 40, Wood = 60 }, Rank = 1 },
+	{ Name = "Steading", MinX = -2, MaxX = 22, MaxZ = 23, Cost = { Silver = 90, Stone = 50 }, Rank = 2 },
+	{ Name = "Great Steading", MinX = -2, MaxX = 22, MaxZ = 26, Cost = { Silver = 160, Wood = 100, Stone = 80 }, Rank = 3 },
+}
+
+-- War band ------------------------------------------------------------------
+-- Hire grown villagers as warriors (Jarl's Table > War band). They stop
+-- working, follow you, fight beside you and crew your longship. Or send them
+-- off on their own to raid a hold and bring the loot home.
+Config.Warband = {
+	HireCost = { Silver = 10, Food = 20 },
+	MaxByRank = { 2, 3, 5, 7, 10 }, -- Settler .. King
+	Health = 100, -- + 40 with Ring Mail
+	Damage = 12, -- per blow; Iron Blades +4, Steel Edges +8
+	HitCooldown = 1.4,
+	Reach = 6,
+	Sight = 40, -- studs: how far they spot an enemy near you
+	HealPerSecond = 1, -- when not fighting
+	-- longship crew: each warrior aboard adds this much speed and one arrow per volley
+	CrewSpeed = 0.05,
+	CrewSpeedMax = 0.3,
+	-- expeditions: the band leaves, then comes home with a report
+	ExpeditionSeconds = 120, -- to a hold in the valley
+	SeaExpeditionSeconds = 180, -- to Skerholm (needs the Karve research)
+	WarriorPower = 3, -- + 1 each for Ring Mail, Iron Blades, Steel Edges
+	LootShare = 0.8, -- share of the hold's chest loot on a full victory
+}
+
+-- Diplomacy -------------------------------------------------------------------
+-- Every hold has a mood toward you, -100 (blood feud) to 100 (sworn allies).
+Config.Diplomacy = {
+	GiftCost = { Silver = 25 },
+	GiftGain = 20,
+	DemandMinPower = 0.6, -- your war band must be this strong vs the hold to demand tribute
+	TributePerDay = { Silver = 12, Food = 25 },
+	TributeDays = 4,
+	AllianceMood = 60,
+	AllianceCost = { Silver = 60 },
+	DealMood = 30,
+	AttackMood = -50, -- raiding a hold sets its mood to at most this
+	DriftPerDay = 3, -- moods slowly return toward 0
+	-- what each hold's trade deal swaps every day: you pay Give, they send Get
+	Deals = {
+		["Greywater Hold"] = { Give = { Wood = 20 }, Get = { Food = 30 } },
+		["Ravensfell"] = { Give = { Food = 20 }, Get = { Stone = 25 } },
+		["Skerholm"] = { Give = { Hides = 3 }, Get = { Silver = 12 } },
+	},
+}
+
+-- Feasts and rites ------------------------------------------------------------
+Config.Rites = {
+	Feast = {
+		Name = "Feast in the hall",
+		Cost = { Food = 80, Hides = 2 },
+		Needs = "Longhouse",
+		Happiness = 20, -- extra happiness target while it lasts
+		Days = 1,
+		CooldownDays = 2,
+	},
+	-- one blót each season, at the Shrine; it blesses the rest of the season
+	Blot = {
+		Needs = "Shrine",
+		Spring = { Name = "Sigrblót", Cost = { Food = 40, Silver = 10 }, Text = "Farms work 25% faster this season.", Farm = 1.25 },
+		Summer = { Name = "Midsummer blót", Cost = { Food = 40, Silver = 10 }, Text = "+15 happiness and newcomers come twice as often this season.", Happiness = 15, Immigration = 2 },
+		Autumn = { Name = "Haustblót", Cost = { Food = 30, Wood = 40 }, Text = "Woodcutters and quarries work 25% faster this season.", Work = 1.25 },
+		Winter = { Name = "Jólablót (Yule)", Cost = { Food = 60, Silver = 15 }, Text = "+20 happiness and your people eat less this season.", Happiness = 20, FoodUse = 0.8 },
+	},
+}
+
 -- Rival warbands raid YOUR village every few days. Fight them off, build
 -- Palisades to slow them and Watchtowers (with an archer) to shoot them.
 -- Raiders who reach your stores carry off a share; nothing is destroyed.
@@ -555,8 +631,31 @@ function Grid.footprint(buildingType: string, rot: number): (number, number)
 	return sx, sz
 end
 
-function Grid.inBounds(cx: number, cz: number, sx: number, sz: number): boolean
-	return cx >= 0 and cz >= 0 and cx + sx <= N and cz + sz <= N
+-- The cell bounds of a plot at land stage `land` (1 = starting size):
+-- minX, minZ, maxX, maxZ, with max exclusive. Cells may be negative.
+function Grid.bounds(land: number?): (number, number, number, number)
+	local stage = Config.LandStages[land or 1] or Config.LandStages[1]
+	return stage.MinX, 0, stage.MaxX, stage.MaxZ
+end
+
+-- The world-space box of the land: min corner and size (studs).
+function Grid.landRect(origin: Vector3, land: number?): (Vector3, Vector3)
+	local minX, minZ, maxX, maxZ = Grid.bounds(land)
+	return origin + Vector3.new(minX * CELL, 0, minZ * CELL), Vector3.new((maxX - minX) * CELL, 0, (maxZ - minZ) * CELL)
+end
+
+-- The largest the land can ever grow (used to keep scenery off it).
+function Grid.maxBounds(): (number, number, number, number)
+	local a, b, c, d = 0, 0, N, N
+	for _, stage in Config.LandStages do
+		a, c, d = math.min(a, stage.MinX), math.max(c, stage.MaxX), math.max(d, stage.MaxZ)
+	end
+	return a, b, c, d
+end
+
+function Grid.inBounds(cx: number, cz: number, sx: number, sz: number, land: number?): boolean
+	local minX, minZ, maxX, maxZ = Grid.bounds(land)
+	return cx >= minX and cz >= minZ and cx + sx <= maxX and cz + sz <= maxZ
 end
 
 -- Calls fn(x, z) for every cell covered by the rectangle.
@@ -569,8 +668,8 @@ function Grid.eachCell(cx: number, cz: number, sx: number, sz: number, fn: (numb
 end
 
 -- `blocked` is a set: { ["x,z"] = true/anything }.
-function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number): (boolean, string?)
-	if not Grid.inBounds(cx, cz, sx, sz) then
+function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number, land: number?): (boolean, string?)
+	if not Grid.inBounds(cx, cz, sx, sz, land) then
 		return false, "Outside your land"
 	end
 	local free = true
@@ -1923,6 +2022,67 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 	return model
 end
 
+-- Gives a villager figure a helmet, a round shield on the left arm and an axe
+-- in the right hand, for the war band. Safe to call twice.
+function ModelFactory.armWarrior(model: Model)
+	if model:GetAttribute("Warrior") then
+		return
+	end
+	local body = model.PrimaryPart
+	if not body then
+		return
+	end
+	model:SetAttribute("Warrior", true)
+	local function piece(name, size, cf: CFrame, color, material, shape, to: BasePart?)
+		local p = Instance.new("Part")
+		p.Name = name
+		if shape then
+			p.Shape = shape
+		end
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		p.Size = size
+		p.Color = color
+		p.Material = material
+		p.CFrame = cf
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = to or body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	local head = model:FindFirstChild("Head")
+	if head and head:IsA("BasePart") then
+		local r = head.Size.X
+		piece("Helmet", Vector3.new(r * 1.08, r * 0.6, r * 1.08), head.CFrame * CFrame.new(0, r * 0.22, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, Enum.PartType.Ball, head)
+		piece("Nasal", Vector3.new(r * 0.12, r * 0.45, r * 0.12), head.CFrame * CFrame.new(0, 0, -r * 0.5), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, nil, head)
+	end
+	local left, right
+	for _, arm in model:GetChildren() do
+		if arm.Name == "Arm" and arm:IsA("BasePart") then
+			if arm:GetAttribute("Side") == -1 then
+				left = arm
+			else
+				right = arm
+			end
+		end
+	end
+	local paint = ({ Color3.fromRGB(168, 44, 38), Color3.fromRGB(214, 176, 96), Color3.fromRGB(46, 74, 120) })[math.random(1, 3)]
+	if left then
+		local cf = left.CFrame * CFrame.new(-left.Size.X / 2 - 0.15, -0.1, 0) -- a cylinder lies along X: a disc on the arm
+		piece("Shield", Vector3.new(0.2, 2.4, 2.4), cf, paint, Enum.Material.Wood, Enum.PartType.Cylinder, left)
+		piece("ShieldBoss", Vector3.new(0.35, 0.6, 0.6), cf * CFrame.new(-0.15, 0, 0), Color3.fromRGB(150, 150, 156), Enum.Material.Metal, Enum.PartType.Cylinder, left)
+	end
+	if right then
+		local hand = right.CFrame * CFrame.new(0, -right.Size.Y / 2, 0)
+		piece("AxeHaft", Vector3.new(0.18, 2.6, 0.18), hand * CFrame.Angles(math.rad(-80), 0, 0) * CFrame.new(0, 0.9, 0), Color3.fromRGB(92, 66, 42), Enum.Material.Wood, nil, right)
+		piece("AxeHead", Vector3.new(0.12, 0.7, 0.8), hand * CFrame.Angles(math.rad(-80), 0, 0) * CFrame.new(0, 2, -0.3), Color3.fromRGB(150, 152, 158), Enum.Material.Metal, nil, right)
+	end
+end
+
 -- Tools -----------------------------------------------------------------------
 
 -- Builds a hand tool ("Axe", "Pickaxe", "Bow" or "Torch") that players hold.
@@ -2368,6 +2528,57 @@ return ModelFactory
       </Item>
       <Item class="ModuleScript" referent="8">
         <Properties>
+          <string name="Name">Pointer</string>
+          <string name="Source"><![CDATA[--[[
+	Pointer (client only)
+	Where the player is pointing on screen, in viewport pixels (the same space
+	as UserInputService:GetMouseLocation and Camera:ViewportPointToRay).
+	With a mouse that is the mouse; on a phone or tablet it is the last spot
+	tapped on the 3D world (taps on buttons and the thumbstick are ignored).
+]]
+
+local GuiService = game:GetService("GuiService")
+local UserInputService = game:GetService("UserInputService")
+
+local Pointer = {}
+
+local lastTouch: Vector2? = nil
+local usingTouch = false
+
+UserInputService.TouchStarted:Connect(function(input, processed)
+	if not processed then
+		usingTouch = true
+		lastTouch = Vector2.new(input.Position.X, input.Position.Y) + GuiService:GetGuiInset()
+	end
+end)
+UserInputService.TouchMoved:Connect(function(input, processed)
+	if not processed and lastTouch then
+		lastTouch = Vector2.new(input.Position.X, input.Position.Y) + GuiService:GetGuiInset()
+	end
+end)
+UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		usingTouch = false
+	end
+end)
+
+function Pointer.location(): Vector2
+	if usingTouch and lastTouch then
+		return lastTouch
+	end
+	return UserInputService:GetMouseLocation()
+end
+
+function Pointer.isTouch(): boolean
+	return usingTouch
+end
+
+return Pointer
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--[[
 	Remotes
@@ -2386,6 +2597,7 @@ local EVENTS = {
 	"BoatInput", -- client -> server: (throttle, steer) while sailing
 	"OpenTrade", -- server -> client: you're at a trading stall, show the trade window
 	"BoatFire", -- client -> server: loose a volley from your ship (F at the helm)
+	"WarReport", -- server -> client: your war band came home, here is what happened
 }
 
 local FUNCTIONS = {
@@ -2393,6 +2605,7 @@ local FUNCTIONS = {
 	"DemolishBuilding", -- client -> server: (buildingId) -> ok, message
 	"Research", -- client -> server: (techId) -> ok, message
 	"Trade", -- client -> server: (offerIndex) -> ok, message
+	"Council", -- client -> server: Jarl's Table actions (action, arg) -> ok, message
 }
 
 local Remotes = {}
@@ -2427,7 +2640,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">Sounds</string>
           <string name="Source"><![CDATA[--[[
@@ -2525,11 +2738,11 @@ return Sounds
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="10">
+  <Item class="ServerScriptService" referent="11">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="11">
+    <Item class="Script" referent="12">
       <Properties>
         <string name="Name">Server</string>
         <token name="RunContext">0</token>
@@ -2596,7 +2809,7 @@ for name, service in services do
 end
 ]]></string>
       </Properties>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">EditTools</string>
           <string name="Source"><![CDATA[--[[
@@ -2659,11 +2872,11 @@ return EditTools
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="13">
+      <Item class="Folder" referent="14">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="14">
+        <Item class="ModuleScript" referent="15">
           <Properties>
             <string name="Name">BoatService</string>
             <string name="Source"><![CDATA[--[[
@@ -2911,6 +3124,15 @@ end
 -- Combat --------------------------------------------------------------------
 
 -- An arrow from a player's bow landed on `inst`: if it's part of an enemy ship, hurt it.
+-- The player's own ship while they are at its helm (nil otherwise).
+function BoatService:ShipOf(player: Player)
+	local ship = boats[player]
+	if ship and ships[ship] and not ship.sinking and ship.seat and ship.seat.Occupant and ship.seat.Occupant.Parent == player.Character then
+		return ship
+	end
+	return nil
+end
+
 function BoatService:ArrowHit(inst: Instance, player: Player)
 	for ship in ships do
 		if ship.owner ~= player and inst:IsDescendantOf(ship.model) then
@@ -2971,8 +3193,10 @@ local function volley(ship)
 	if attacker and services.ColonyService:Has(services.ColonyService:Get(attacker), "Longbows") then
 		accuracy = 0.9
 	end
-	for i = 1, N.VolleyArrows do
-		local from = ship.cf * CFrame.new(rng:NextNumber(-2, 2), 4, (i - N.VolleyArrows / 2) * ship.length / (N.VolleyArrows + 1))
+	-- every warrior aboard looses one more arrow
+	local arrows = N.VolleyArrows + (attacker and services.WarbandService and services.WarbandService:CrewCount(attacker) or 0)
+	for i = 1, arrows do
+		local from = ship.cf * CFrame.new(rng:NextNumber(-2, 2), 4, (i - arrows / 2) * ship.length / (arrows + 1))
 		local hit = rng:NextNumber() < accuracy
 		local aim = target.cf * CFrame.new(rng:NextNumber(-2, 2), 3, rng:NextNumber(-target.length / 2.5, target.length / 2.5))
 		local to = hit and aim.Position or (aim.Position + Vector3.new(rng:NextNumber(-10, 10), -3, rng:NextNumber(-10, 10)))
@@ -3026,7 +3250,9 @@ end
 -- Movement shared by every ship. Returns the turn rate used (for the roll).
 local function steerShip(ship, throttle: number, steerInput: number, step: number): number
 	local weather = services.WeatherService
-	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1) * (weather and weather:ShipSpeed() or 1)
+	-- warriors at the oars row faster (WarbandService)
+	local crew = ship.owner and services.WarbandService and services.WarbandService:CrewBonus(ship.owner) or 0
+	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1) * (weather and weather:ShipSpeed() or 1) * (1 + crew)
 	ship.speed += (target - ship.speed) * math.min(1, step * 0.8)
 	local turnRate = steerInput * ship.turn * math.clamp(math.abs(ship.speed) / 10, 0.25, 1)
 	local heading = ship.cf * CFrame.Angles(0, -turnRate * step, 0)
@@ -3239,7 +3465,7 @@ return BoatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="15">
+        <Item class="ModuleScript" referent="16">
           <Properties>
             <string name="Name">BuildingService</string>
             <string name="Source"><![CDATA[--[[
@@ -3371,7 +3597,7 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 		return false, "Research " .. Config.Tech[def.Requires].Name .. " first (press T)"
 	end
 	local sx, sz = Grid.footprint(buildingType, rot)
-	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz)
+	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz, colony.land)
 	if not ok then
 		return false, reason
 	end
@@ -3434,7 +3660,7 @@ return BuildingService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="16">
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">ColonyService</string>
             <string name="Source"><![CDATA[--[[
@@ -3603,6 +3829,11 @@ function ColonyService:Sync(colony)
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 		quest = services.QuestService:State(colony),
 		rank = services.RankService:State(colony),
+		land = colony.land or 1,
+		council = (function()
+			local ok, council = pcall(services.CouncilService.State, services.CouncilService, colony)
+			return ok and council or nil
+		end)(),
 	}
 
 	if colony.gridDirty then
@@ -3713,7 +3944,438 @@ return ColonyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="17">
+        <Item class="ModuleScript" referent="18">
+          <Properties>
+            <string name="Name">CouncilService</string>
+            <string name="Source"><![CDATA[--[[
+	CouncilService
+	The Jarl's Table (J): one remote, "Council", for buying land, the war
+	band, diplomacy and rites. Each action checks everything on the server.
+	Also builds the table's state that goes out with every colony sync.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Remotes = require(Shared.Remotes)
+
+local CouncilService = {}
+
+local services
+local lastCall = {} -- [player] = os.clock(), a small guard against spam
+
+function CouncilService:Init(all)
+	services = all
+end
+
+function CouncilService:State(colony)
+	return {
+		land = services.LandService:State(colony),
+		warband = services.WarbandService:State(colony),
+		diplomacy = services.DiplomacyService:State(colony),
+		rites = services.RiteService:State(colony),
+	}
+end
+
+local function handle(colony, action: string, arg)
+	if action == "BuyLand" then
+		return services.LandService:Buy(colony)
+	elseif action == "Hire" then
+		return services.WarbandService:Hire(colony)
+	elseif action == "Dismiss" then
+		return services.WarbandService:Dismiss(colony)
+	elseif action == "Follow" then
+		return services.WarbandService:SetMode(colony, "follow")
+	elseif action == "StayHome" then
+		return services.WarbandService:SetMode(colony, "home")
+	elseif action == "Expedition" then
+		return services.WarbandService:Expedition(colony, arg)
+	elseif action == "Gift" then
+		return services.DiplomacyService:Gift(colony, arg)
+	elseif action == "Demand" then
+		return services.DiplomacyService:Demand(colony, arg)
+	elseif action == "Ally" then
+		return services.DiplomacyService:Ally(colony, arg)
+	elseif action == "Deal" then
+		return services.DiplomacyService:Deal(colony, arg)
+	elseif action == "Feast" then
+		return services.RiteService:Feast(colony)
+	elseif action == "Blot" then
+		return services.RiteService:Blot(colony)
+	end
+	return false, "Unknown action."
+end
+
+function CouncilService:Start()
+	Remotes.Council.OnServerInvoke = function(player, action, arg)
+		if typeof(action) ~= "string" or (arg ~= nil and typeof(arg) ~= "string") then
+			return false, "Bad request."
+		end
+		local now = os.clock()
+		if now - (lastCall[player] or 0) < 0.25 then
+			return false, "Slow down."
+		end
+		lastCall[player] = now
+		local colony = services.ColonyService:Get(player)
+		if not colony then
+			return false, "Your village isn't ready yet."
+		end
+		local ok, a, b = pcall(handle, colony, action, arg)
+		if not ok then
+			warn("[CouncilService] " .. action .. ": " .. tostring(a))
+			return false, "Something went wrong."
+		end
+		services.ColonyService:Sync(colony)
+		return a, b
+	end
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		lastCall[player] = nil
+	end)
+end
+
+return CouncilService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="19">
+          <Properties>
+            <string name="Name">DiplomacyService</string>
+            <string name="Source"><![CDATA[--[[
+	DiplomacyService
+	Each rival hold has a mood toward each village (Config.Diplomacy),
+	from -100 (blood feud) to 100 (sworn allies). Instead of raiding them you can:
+	  Gift      pay silver to warm their mood
+	  Demand    a strong war band can force them to pay tribute for a few days
+	  Ally      at a high mood: allied guards leave you alone, and allies never
+	            send warbands against your village
+	  Deal      at a friendly mood: a daily trade caravan swaps goods with you
+	Attacking a hold (striking its guards, looting its chests, sending the war
+	band) breaks any alliance, deal or tribute, and sours the mood.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local DiplomacyService = {}
+
+local D = Config.Diplomacy
+local services
+local rng = Random.new()
+
+function DiplomacyService:Init(all)
+	services = all
+end
+
+local function holdNamed(name)
+	if typeof(name) ~= "string" then
+		return nil
+	end
+	for _, def in Config.Rivals do
+		if def.Name == name then
+			return def
+		end
+	end
+	return nil
+end
+
+local function rel(colony, name: string)
+	colony.relations = colony.relations or {}
+	local r = colony.relations[name]
+	if not r then
+		r = { mood = 0, allied = false, deal = false, tributeDays = 0 }
+		colony.relations[name] = r
+	end
+	return r
+end
+
+local function notify(colony, text, kind)
+	services.ColonyService:Notify(colony, text, kind)
+end
+
+function DiplomacyService:IsAllied(colony, name: string): boolean
+	local r = colony.relations and colony.relations[name]
+	return r ~= nil and r.allied == true
+end
+
+-- Will this hold send warbands against the village? Not if allied or paying tribute.
+function DiplomacyService:WillRaid(colony, name: string): boolean
+	local r = colony.relations and colony.relations[name]
+	if not r then
+		return true
+	end
+	return not r.allied and (r.tributeDays or 0) <= 0 and r.mood < D.DealMood
+end
+
+-- Is the player at peace with this hold (its guards leave them alone)?
+function DiplomacyService:IsAlliedPlayer(player: Player, name: string): boolean
+	local colony = services.ColonyService:Get(player)
+	return colony ~= nil and self:IsAllied(colony, name)
+end
+
+function DiplomacyService:OnHostile(colony, name: string)
+	if not holdNamed(name) then
+		return
+	end
+	local r = rel(colony, name)
+	local was = r.allied or r.deal or r.tributeDays > 0
+	r.allied = false
+	r.deal = false
+	r.tributeDays = 0
+	r.mood = math.min(r.mood, D.AttackMood)
+	if was then
+		notify(colony, name .. " will remember this. Your pact with them is broken.", "bad")
+	end
+end
+
+function DiplomacyService:Gift(colony, name: string): (boolean, string)
+	local def = holdNamed(name)
+	if not def then
+		return false, "Pick a hold."
+	end
+	if not services.ColonyService:Spend(colony, D.GiftCost) then
+		return false, "A fitting gift costs " .. Grid.costText(D.GiftCost) .. "."
+	end
+	local r = rel(colony, name)
+	r.mood = math.min(100, r.mood + D.GiftGain)
+	notify(colony, name .. " accepts your gift. (Mood " .. r.mood .. ")", "good")
+	return true, "Gift sent"
+end
+
+function DiplomacyService:Demand(colony, name: string): (boolean, string)
+	local def = holdNamed(name)
+	if not def then
+		return false, "Pick a hold."
+	end
+	local r = rel(colony, name)
+	if r.allied then
+		return false, "You don't demand tribute from an ally."
+	end
+	if r.tributeDays > 0 then
+		return false, name .. " is already paying you tribute."
+	end
+	local Warband = services.WarbandService
+	local ratio = Warband:Power(colony) / Warband:HoldPower(def)
+	if ratio < D.DemandMinPower then
+		return false, "Your war band is too weak to frighten them (" .. math.floor(ratio * 100) .. "% of what's needed: " .. math.floor(D.DemandMinPower * 100) .. "%)."
+	end
+	-- the stronger you are, the likelier they bend the knee
+	if rng:NextNumber() < math.clamp(ratio * 0.8, 0.2, 0.9) then
+		r.tributeDays = D.TributeDays
+		r.mood = math.max(-100, r.mood - 15)
+		notify(colony, name .. " bends the knee and will pay " .. Grid.costText(D.TributePerDay) .. " a day for " .. D.TributeDays .. " days.", "good")
+		return true, "They pay"
+	end
+	r.mood = math.max(-100, r.mood - 30)
+	-- an insult: they send a warband soon
+	colony.nextRaidDay = math.min(colony.nextRaidDay or math.huge, colony.day + 1)
+	notify(colony, name .. " laughs at your demand. Expect their warband!", "bad")
+	return false, "They refused"
+end
+
+function DiplomacyService:Ally(colony, name: string): (boolean, string)
+	local def = holdNamed(name)
+	if not def then
+		return false, "Pick a hold."
+	end
+	local r = rel(colony, name)
+	if r.allied then
+		return false, "Already allies."
+	end
+	if r.mood < D.AllianceMood then
+		return false, name .. " needs a mood of " .. D.AllianceMood .. " to swear an alliance (now " .. r.mood .. "). Send gifts."
+	end
+	if not services.ColonyService:Spend(colony, D.AllianceCost) then
+		return false, "The oath feast costs " .. Grid.costText(D.AllianceCost) .. "."
+	end
+	r.allied = true
+	r.tributeDays = 0
+	notify(colony, "You and " .. name .. " swear an alliance! Their guards are friends now and they will never raid you.", "good")
+	services.QuestService:Count(colony, "ally")
+	return true, "Allied"
+end
+
+function DiplomacyService:Deal(colony, name: string): (boolean, string)
+	local def = holdNamed(name)
+	local deal = def and D.Deals[name]
+	if not deal then
+		return false, "No trade with them."
+	end
+	local r = rel(colony, name)
+	if r.deal then
+		r.deal = false
+		notify(colony, "You end the trade deal with " .. name .. ".", "info")
+		return true, "Deal ended"
+	end
+	if r.mood < D.DealMood and not r.allied then
+		return false, name .. " needs a mood of " .. D.DealMood .. " to trade (now " .. r.mood .. ")."
+	end
+	r.deal = true
+	notify(colony, "Trade deal with " .. name .. ": each day you send " .. Grid.costText(deal.Give) .. " and get " .. Grid.costText(deal.Get) .. ".", "good")
+	return true, "Deal made"
+end
+
+-- Once a day: caravans, tribute, and moods drifting back toward 0.
+local function newDay(colony)
+	local ColonyService = services.ColonyService
+	for _, def in Config.Rivals do
+		local r = colony.relations and colony.relations[def.Name]
+		if r then
+			if r.deal then
+				local deal = D.Deals[def.Name]
+				if deal and ColonyService:Spend(colony, deal.Give) then
+					for res, n in deal.Get do
+						ColonyService:Add(colony, res, n)
+					end
+					notify(colony, def.Name .. "'s caravan: +" .. Grid.costText(deal.Get), "gain")
+				elseif deal then
+					notify(colony, "You couldn't pay " .. def.Name .. "'s caravan (" .. Grid.costText(deal.Give) .. ").", "bad")
+				end
+			end
+			if r.tributeDays > 0 then
+				r.tributeDays -= 1
+				for res, n in D.TributePerDay do
+					ColonyService:Add(colony, res, n)
+				end
+				notify(colony, def.Name .. " pays tribute: +" .. Grid.costText(D.TributePerDay), "gain")
+			end
+			if not r.allied then
+				if r.mood > 0 then
+					r.mood = math.max(0, r.mood - D.DriftPerDay)
+				elseif r.mood < 0 then
+					r.mood = math.min(0, r.mood + D.DriftPerDay)
+				end
+			end
+		end
+	end
+end
+
+function DiplomacyService:State(colony)
+	local list = {}
+	local Warband = services.WarbandService
+	local power = Warband:Power(colony)
+	for _, def in Config.Rivals do
+		local r = (colony.relations and colony.relations[def.Name]) or { mood = 0, allied = false, deal = false, tributeDays = 0 }
+		local deal = D.Deals[def.Name]
+		table.insert(list, {
+			name = def.Name,
+			mood = r.mood,
+			allied = r.allied,
+			deal = r.deal,
+			tributeDays = r.tributeDays,
+			dealText = deal and ("Send " .. Grid.costText(deal.Give) .. ", get " .. Grid.costText(deal.Get) .. " each day") or nil,
+			fear = math.floor(power / Warband:HoldPower(def) * 100),
+		})
+	end
+	return {
+		holds = list,
+		giftCost = D.GiftCost,
+		allianceCost = D.AllianceCost,
+		allianceMood = D.AllianceMood,
+		dealMood = D.DealMood,
+		demandNeed = math.floor(D.DemandMinPower * 100),
+	}
+end
+
+function DiplomacyService:Start()
+	while true do
+		task.wait(1)
+		for _, colony in services.ColonyService:All() do
+			if colony.dipDay == nil then
+				colony.dipDay = colony.day
+			elseif colony.day > colony.dipDay then
+				colony.dipDay = colony.day
+				local ok, err = pcall(newDay, colony)
+				if not ok then
+					warn("[DiplomacyService] " .. tostring(err))
+				end
+			end
+		end
+	end
+end
+
+return DiplomacyService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="20">
+          <Properties>
+            <string name="Name">LandService</string>
+            <string name="Source"><![CDATA[--[[
+	LandService
+	Buying bigger land (Config.LandStages). The next stage costs resources and
+	may need a rank. The plot's borders, the build grid and where trees and
+	rocks can grow all follow colony.land.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local LandService = {}
+
+local services
+
+function LandService:Init(all)
+	services = all
+end
+
+-- Why the next stage can't be bought yet, or nil if it can.
+function LandService:Blocker(colony): string?
+	local nextStage = Config.LandStages[(colony.land or 1) + 1]
+	if not nextStage then
+		return "Your land is as big as it can grow."
+	end
+	if nextStage.Rank and services.RankService:Rank(colony) < nextStage.Rank then
+		return "Needs the rank of " .. Config.Ranks[nextStage.Rank].Name .. "."
+	end
+	if not services.ColonyService:CanAfford(colony, nextStage.Cost) then
+		return "Needs " .. Grid.costText(nextStage.Cost) .. "."
+	end
+	return nil
+end
+
+function LandService:Buy(colony): (boolean, string)
+	local why = self:Blocker(colony)
+	if why then
+		return false, why
+	end
+	local nextIndex = (colony.land or 1) + 1
+	local stage = Config.LandStages[nextIndex]
+	if not services.ColonyService:Spend(colony, stage.Cost) then
+		return false, "You can't afford that."
+	end
+	colony.land = nextIndex
+	services.PlotService:ApplyLand(colony)
+	-- a few new trees and rocks grow on the new ground
+	for _ = 1, 4 do
+		services.ResourceNodeService:Tick(colony, Config.NodeRegrowInterval)
+	end
+	colony.gridDirty = true
+	services.ColonyService:Notify(colony, "Your land grows: " .. stage.Name .. "! New ground marked by the border stakes.", "good")
+	services.ColonyService:Sync(colony)
+	return true, "Bought " .. stage.Name
+end
+
+function LandService:State(colony)
+	local i = colony.land or 1
+	local nextStage = Config.LandStages[i + 1]
+	local minX, _, maxX, maxZ = Grid.bounds(i)
+	return {
+		index = i,
+		name = Config.LandStages[i].Name,
+		size = (maxX - minX) .. " x " .. maxZ,
+		nextName = nextStage and nextStage.Name,
+		nextCost = nextStage and nextStage.Cost,
+		nextRank = nextStage and nextStage.Rank and Config.Ranks[nextStage.Rank].Name,
+		nextSize = nextStage and ((nextStage.MaxX - nextStage.MinX) .. " x " .. nextStage.MaxZ),
+		blocker = self:Blocker(colony),
+	}
+end
+
+return LandService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">PlotService</string>
             <string name="Source"><![CDATA[--[[
@@ -3732,6 +4394,7 @@ local PlotService = {}
 
 local plotsFolder: Folder
 local used = {} -- [index] = player
+local drawBorders
 
 local function makePart(props)
 	local p = Instance.new("Part")
@@ -3742,6 +4405,67 @@ local function makePart(props)
 		p[k] = v
 	end
 	return p
+end
+
+-- Wooden posts at the corners and stakes along the edges, so you can see
+-- your borders. Redrawn when the land grows.
+drawBorders = function(plot: Model, origin: Vector3, land: number)
+	for _, child in plot:GetChildren() do
+		if child.Name == "BorderPost" or child.Name == "BorderStake" then
+			child:Destroy()
+		end
+	end
+	local corner, size = Grid.landRect(origin, land)
+	local first
+	for _, x in { 0, size.X } do
+		for _, z in { 0, size.Z } do
+			local post = makePart({
+				Name = "BorderPost",
+				Size = Vector3.new(1, 6, 1),
+				Position = corner + Vector3.new(x, 3, z),
+				Color = Color3.fromRGB(78, 54, 36),
+				Material = Enum.Material.Wood,
+				Parent = plot,
+			})
+			first = first or post
+		end
+	end
+	-- low stakes every 4 cells along the sides and back
+	local step = Config.CELL * 4
+	local function stake(p: Vector3)
+		makePart({
+			Name = "BorderStake",
+			Size = Vector3.new(0.5, 2.4, 0.5),
+			Position = p + Vector3.new(0, 1.2, 0),
+			Color = Color3.fromRGB(96, 70, 46),
+			Material = Enum.Material.Wood,
+			CanCollide = false,
+			Parent = plot,
+		})
+	end
+	for d = step, size.Z - 1, step do
+		stake(corner + Vector3.new(0, 0, d))
+		stake(corner + Vector3.new(size.X, 0, d))
+	end
+	for d = step, size.X - 1, step do
+		stake(corner + Vector3.new(d, 0, size.Z))
+	end
+	local ground = plot:FindFirstChild("Ground")
+	if ground then
+		ground.Size = Vector3.new(size.X, 1, size.Z)
+		ground.Position = corner + Vector3.new(size.X / 2, -0.5, size.Z / 2)
+	end
+	local sign = plot:FindFirstChild("OwnerSign")
+	if sign and first then
+		sign.Adornee = first
+	end
+end
+
+-- Grows (or restores) the plot's visible borders to the colony's land stage.
+function PlotService:ApplyLand(colony)
+	if colony.plot then
+		drawBorders(colony.plot, colony.origin, colony.land or 1)
+	end
 end
 
 function PlotService:Init()
@@ -3780,7 +4504,7 @@ function PlotService:Assign(player: Player)
 
 	makePart({
 		-- Invisible: the grass you see is Terrain (WorldService). This part
-		-- is what the build preview aims at.
+		-- is what the build preview aims at. Resized when you buy land.
 		Name = "Ground",
 		Size = Vector3.new(size, 1, size),
 		Position = origin + Vector3.new(size / 2, -0.5, size / 2),
@@ -3788,21 +4512,9 @@ function PlotService:Assign(player: Player)
 		CanCollide = false,
 		Parent = plot,
 	})
-	-- Wooden marker posts at the corners so you can see your borders.
-	for _, x in { 0, size } do
-		for _, z in { 0, size } do
-			makePart({
-				Name = "BorderPost",
-				Size = Vector3.new(1, 6, 1),
-				Position = origin + Vector3.new(x, 3, z),
-				Color = Color3.fromRGB(78, 54, 36),
-				Material = Enum.Material.Wood,
-				Parent = plot,
-			})
-		end
-	end
 
 	local sign = Instance.new("BillboardGui")
+	sign.Name = "OwnerSign"
 	sign.Size = UDim2.fromOffset(260, 40)
 	sign.StudsOffset = Vector3.new(0, 4, 0)
 	sign.MaxDistance = 400
@@ -3815,7 +4527,8 @@ function PlotService:Assign(player: Player)
 	label.TextStrokeTransparency = 0.4
 	label.Text = player.DisplayName .. "'s settlement"
 	label.Parent = sign
-	sign.Parent = plot:FindFirstChild("BorderPost")
+	sign.Parent = plot
+	drawBorders(plot, origin, 1)
 
 	for _, name in { "Buildings", "Nodes", "Villagers" } do
 		local f = Instance.new("Folder")
@@ -3858,7 +4571,7 @@ return PlotService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="18">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--[[
@@ -3971,7 +4684,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="19">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">RaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -4201,6 +4914,9 @@ local function newHold(R)
 			chest.looted = true
 			chest.prompt.Enabled = false
 			services.QuestService:Count(colony, "plunder")
+			if services.DiplomacyService then
+				services.DiplomacyService:OnHostile(colony, R.Name)
+			end
 			markRaid()
 			-- swing the lid open
 			lid.CFrame = chest.hinge * CFrame.Angles(math.rad(-100), 0, 0) * chest.hinge:Inverse() * chest.lidClosed
@@ -4359,6 +5075,10 @@ local function newHold(R)
 			return
 		end
 		humanoid:TakeDamage(amount)
+		local colony = attacker and services.ColonyService:Get(attacker)
+		if colony and services.DiplomacyService then
+			services.DiplomacyService:OnHostile(colony, R.Name)
+		end
 		if not state.alarm then
 			state.alarm = true
 			notifyAll(attacker.DisplayName .. " is raiding " .. R.Name .. "!", "raid")
@@ -4390,13 +5110,29 @@ local function newHold(R)
 		return found
 	end
 
+	-- The closest living guard to `position` (for the war band).
+	function hold:NearestDefender(position: Vector3, range: number): (Model?, BasePart?)
+		local best, bestRoot, bestD = nil, nil, range
+		for _, g in state.defenders do
+			if not g.dead and g.root and g.root.Parent then
+				local d = (g.root.Position - position).Magnitude
+				if d < bestD then
+					best, bestRoot, bestD = g.model, g.root, d
+				end
+			end
+		end
+		return best, bestRoot
+	end
+
 	local function nearestTarget(from: Vector3, maxDist: number): (Model?, number)
 		local best, bestDist = nil, maxDist
 		for _, player in Players:GetPlayers() do
 			local character = player.Character
 			local root = character and character:FindFirstChild("HumanoidRootPart")
 			local hum = character and character:FindFirstChildOfClass("Humanoid")
-			if root and hum and hum.Health > 0 then
+			-- allies of this hold are left alone (DiplomacyService)
+			local allied = services.DiplomacyService and services.DiplomacyService:IsAlliedPlayer(player, R.Name)
+			if root and hum and hum.Health > 0 and not allied then
 				local inTerritory = flat(root.Position - CENTER).Magnitude < R.DefenderAggro
 				local d = (root.Position - from).Magnitude
 				if (inTerritory or state.alarm) and d < bestDist then
@@ -4813,6 +5549,18 @@ function RaidService:DefendersNear(position: Vector3, look: Vector3, range: numb
 	return found
 end
 
+-- The closest living guard of any hold (for the war band), and its damage.
+function RaidService:NearestDefender(position: Vector3, range: number): (Model?, BasePart?, number?)
+	local best, bestRoot, bestDmg, bestD = nil, nil, nil, range
+	for _, h in holds do
+		local m, root = h:NearestDefender(position, bestD)
+		if m and root then
+			best, bestRoot, bestDmg, bestD = m, root, h.def.DefenderDamage, (root.Position - position).Magnitude
+		end
+	end
+	return best, bestRoot, bestDmg
+end
+
 function RaidService:Start()
 	for _, def in Config.Rivals do
 		local h = newHold(def)
@@ -4827,7 +5575,7 @@ return RaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">RankService</string>
             <string name="Source"><![CDATA[--[[
@@ -4936,7 +5684,7 @@ return RankService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
@@ -4967,9 +5715,10 @@ function ResourceNodeService:Init(allServices)
 end
 
 local function randomFreeCell(colony)
+	local minX, minZ, maxX, maxZ = Grid.bounds(colony.land)
 	for _ = 1, 60 do
-		local x = rng:NextInteger(0, Config.PLOT_CELLS - 1)
-		local z = rng:NextInteger(0, Config.PLOT_CELLS - 1)
+		local x = rng:NextInteger(minX, maxX - 1)
+		local z = rng:NextInteger(minZ, maxZ - 1)
 		if not colony.blocked[Grid.key(x, z)] then
 			return x, z
 		end
@@ -5250,7 +5999,198 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="26">
+          <Properties>
+            <string name="Name">RiteService</string>
+            <string name="Source"><![CDATA[--[[
+	RiteService
+	Feasts and seasonal blóts (Config.Rites), held from the Jarl's Table.
+	  Feast  at a Longhouse or Great Hall: costs food, lifts happiness for a
+	         day, then needs a rest before the next one
+	  Blót   once each season at the Shrine; the season decides the blessing
+	         (faster farms in spring, joy and newcomers in summer, faster wood
+	         and stone in autumn, joy and less hunger at Yule)
+	A bonfire burns while the rite lasts and the villagers gather round it.
+]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Sounds = require(Shared.Sounds)
+
+local RiteService = {}
+
+local R = Config.Rites
+local services
+
+function RiteService:Init(all)
+	services = all
+end
+
+local function rites(colony)
+	colony.rites = colony.rites or { feastUntil = 0, feastReady = 0 }
+	return colony.rites
+end
+
+local function findBuilding(colony, types)
+	for _, b in colony.buildings do
+		if table.find(types, b.type) then
+			return b
+		end
+	end
+	return nil
+end
+
+-- A crackling bonfire beside the building, for `seconds`.
+local function bonfire(colony, building, seconds: number)
+	local at = building.center + Vector3.new(0, 0, -(building.sz * Config.CELL / 2 + 6))
+	local model = Instance.new("Model")
+	model.Name = "RiteFire"
+	for i = 1, 6 do
+		local log = Instance.new("Part")
+		log.Anchored = true
+		log.CanCollide = false
+		log.Size = Vector3.new(0.6, 0.6, 3.2)
+		log.Color = Color3.fromRGB(70, 48, 30)
+		log.Material = Enum.Material.Wood
+		log.CFrame = CFrame.new(at + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, i * math.pi / 3, math.rad(18))
+		log.Parent = model
+	end
+	local core = Instance.new("Part")
+	core.Name = "Core"
+	core.Anchored = true
+	core.CanCollide = false
+	core.Transparency = 1
+	core.Size = Vector3.new(2, 1, 2)
+	core.Position = at + Vector3.new(0, 1, 0)
+	core.Parent = model
+	local fire = Instance.new("Fire")
+	fire.Size = 9
+	fire.Heat = 14
+	fire.Parent = core
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 170, 90)
+	light.Range = 30
+	light.Brightness = 2.5
+	light.Parent = core
+	Sounds.loop("Fire", core)
+	model.Parent = colony.plot
+	task.delay(seconds, function()
+		model:Destroy()
+	end)
+	-- everyone comes to warm their hands
+	for _, v in colony.villagers do
+		if v.body and not v.warrior and not v.away then
+			local a = math.random() * math.pi * 2
+			local r = 6 + math.random() * 5
+			local spot = at + Vector3.new(math.cos(a) * r, v.height, math.sin(a) * r)
+			v.body.CFrame = CFrame.lookAt(spot, Vector3.new(at.X, spot.Y, at.Z))
+			v.busyUntil = os.clock() + 25
+		end
+	end
+end
+
+-- Feast ------------------------------------------------------------------------
+
+function RiteService:Feast(colony): (boolean, string)
+	local F = R.Feast
+	local r = rites(colony)
+	local hall = findBuilding(colony, { "GreatHall", F.Needs })
+	if not hall then
+		return false, "You need a " .. Config.Buildings[F.Needs].Display .. " to feast in."
+	end
+	if colony.day < r.feastReady then
+		return false, "Your people are still full from the last feast (ready on day " .. r.feastReady .. ")."
+	end
+	if not services.ColonyService:Spend(colony, F.Cost) then
+		return false, "A feast needs " .. Grid.costText(F.Cost) .. "."
+	end
+	r.feastUntil = colony.day + F.Days
+	r.feastReady = colony.day + F.CooldownDays
+	bonfire(colony, hall, 60)
+	Sounds.play("QuestDone", hall.center)
+	services.ColonyService:Notify(colony, "Skål! Mead flows and the hall roars with song. +" .. F.Happiness .. " happiness for a day.", "quest")
+	services.ColonyService:Sync(colony)
+	return true, "Feast held"
+end
+
+function RiteService:FeastBonus(colony): number
+	local r = colony.rites
+	if r and colony.day < (r.feastUntil or 0) then
+		return R.Feast.Happiness
+	end
+	return 0
+end
+
+-- Blót -------------------------------------------------------------------------
+
+local function seasonName(): string
+	return workspace:GetAttribute("Season") or "Summer"
+end
+
+local function seasonTurn(): number
+	return workspace:GetAttribute("SeasonTurn") or 1
+end
+
+-- The blessing active this season, or nil.
+function RiteService:Blessing(colony)
+	local r = colony.rites
+	if r and r.blotTurn == seasonTurn() then
+		return R.Blot[seasonName()]
+	end
+	return nil
+end
+
+function RiteService:Blot(colony): (boolean, string)
+	local r = rites(colony)
+	local def = R.Blot[seasonName()]
+	if not def then
+		return false, "No rite for this season."
+	end
+	local shrine = findBuilding(colony, { R.Blot.Needs })
+	if not shrine then
+		return false, "Build a Shrine to hold a blót."
+	end
+	if r.blotTurn == seasonTurn() then
+		return false, "You already held the " .. def.Name .. " this season."
+	end
+	if not services.ColonyService:Spend(colony, def.Cost) then
+		return false, "The " .. def.Name .. " needs " .. Grid.costText(def.Cost) .. "."
+	end
+	r.blotTurn = seasonTurn()
+	bonfire(colony, shrine, 60)
+	Sounds.play("QuestDone", shrine.center)
+	services.ColonyService:Notify(colony, "The " .. def.Name .. " is held at the shrine. " .. def.Text, "quest")
+	services.QuestService:Count(colony, "blot")
+	services.ColonyService:Sync(colony)
+	return true, "Blót held"
+end
+
+function RiteService:State(colony)
+	local r = rites(colony)
+	local def = R.Blot[seasonName()]
+	local hall = findBuilding(colony, { "GreatHall", R.Feast.Needs }) ~= nil
+	local shrine = findBuilding(colony, { R.Blot.Needs }) ~= nil
+	return {
+		feastCost = R.Feast.Cost,
+		feastHappiness = R.Feast.Happiness,
+		feastActive = colony.day < (r.feastUntil or 0),
+		feastReadyDay = r.feastReady or 0,
+		hasHall = hall,
+		blotName = def and def.Name,
+		blotText = def and def.Text,
+		blotCost = def and def.Cost,
+		blotDone = r.blotTurn == seasonTurn(),
+		hasShrine = shrine,
+		season = seasonName(),
+	}
+end
+
+return RiteService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">SaveService</string>
             <string name="Source"><![CDATA[--[[
@@ -5343,7 +6283,7 @@ function SaveService:Snapshot(colony)
 		for _, pid in v.parents or {} do
 			table.insert(parents, index[pid])
 		end
-		villagers[i] = { n = v.name, c = v.isChild, a = v.age, p = v.partner and index[v.partner], f = parents }
+		villagers[i] = { n = v.name, c = v.isChild, a = v.age, p = v.partner and index[v.partner], f = parents, w = v.warrior or nil }
 	end
 	local resources = {}
 	for name, amount in colony.resources do
@@ -5365,6 +6305,10 @@ function SaveService:Snapshot(colony)
 		quest = colony.quest,
 		rank = colony.rank,
 		stats = colony.stats,
+		land = colony.land,
+		relations = colony.relations,
+		rites = colony.rites,
+		warbandMode = colony.warband and colony.warband.mode == "follow" and "follow" or nil,
 	}
 end
 
@@ -5384,6 +6328,31 @@ function SaveService:Restore(colony, data)
 	colony.day = tonumber(data.day) or colony.day
 	colony.quest = tonumber(data.quest) or 1
 	colony.rank = tonumber(data.rank) or 1
+	-- land first, so buildings out on the bought ground fit
+	local land = tonumber(data.land)
+	if land and Config.LandStages[math.floor(land)] then
+		colony.land = math.floor(land)
+		services.PlotService:ApplyLand(colony)
+	end
+	if type(data.relations) == "table" then
+		colony.relations = {}
+		for name, rel in data.relations do
+			if type(name) == "string" and type(rel) == "table" then
+				colony.relations[name] = {
+					mood = tonumber(rel.mood) or 0,
+					allied = rel.allied == true,
+					deal = rel.deal == true,
+					tributeDays = tonumber(rel.tributeDays) or 0,
+				}
+			end
+		end
+	end
+	if type(data.rites) == "table" then
+		colony.rites = {
+			feastUntil = tonumber(data.rites.feastUntil) or 0,
+			feastReady = tonumber(data.rites.feastReady) or 0,
+		}
+	end
 	if type(data.stats) == "table" then
 		for k, n in data.stats do
 			if type(k) == "string" and type(n) == "number" then
@@ -5413,6 +6382,13 @@ function SaveService:Restore(colony, data)
 	local made = {}
 	for i, saved in villagers do
 		made[i] = services.VillagerService:Add(colony, saved.c == true, nil, type(saved.n) == "string" and saved.n or nil, tonumber(saved.a) or 0)
+		if saved.w == true and saved.c ~= true then
+			made[i].warrior = true
+			services.VillagerService:Rebuild(colony, made[i])
+		end
+	end
+	if data.warbandMode == "follow" then
+		colony.warband = { mode = "follow" }
 	end
 	-- re-link families
 	for i, saved in villagers do
@@ -5489,7 +6465,7 @@ return SaveService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--[[
@@ -5519,6 +6495,7 @@ local services
 local Terrain = Workspace.Terrain
 local M = Enum.Material
 local currentIndex = 1
+local turn = 0 -- how many seasons have begun since the server started
 
 local SNOW = Color3.fromRGB(236, 240, 246)
 
@@ -5645,6 +6622,8 @@ local function apply(index: number, announce: boolean)
 	local season = Config.Seasons[index]
 	Workspace:SetAttribute("Season", season.Name)
 	Workspace:SetAttribute("SeasonIndex", index)
+	turn += 1
+	Workspace:SetAttribute("SeasonTurn", turn)
 
 	for material, color in TERRAIN[season.Name] do
 		Terrain:SetMaterialColor(M[material], color)
@@ -5680,7 +6659,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">TechService</string>
             <string name="Source"><![CDATA[--[[
@@ -5767,7 +6746,7 @@ return TechService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">ToolService</string>
             <string name="Source"><![CDATA[--[[
@@ -6050,7 +7029,7 @@ return ToolService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">TownRaidService</string>
             <string name="Source"><![CDATA[--[[
@@ -6382,6 +7361,24 @@ function TownRaidService:MilitiaNear(position: Vector3, look: Vector3, range: nu
 	return found
 end
 
+-- The closest militia fighting `attacker`'s raid (for the war band).
+function TownRaidService:NearestMilitia(attacker: Player, position: Vector3, range: number): (Model?, BasePart?)
+	local best, bestRoot, bestD = nil, nil, range
+	for _, raid in raids do
+		if raid.attacker == attacker then
+			for _, m in raid.militia do
+				if not m.dead and m.root and m.root.Parent then
+					local d = (m.root.Position - position).Magnitude
+					if d < bestD then
+						best, bestRoot, bestD = m.model, m.root, d
+					end
+				end
+			end
+		end
+	end
+	return best, bestRoot
+end
+
 function TownRaidService:DamageMilitia(model: Model, amount: number, attacker: Player)
 	local raid
 	for _, r in raids do
@@ -6406,7 +7403,7 @@ function TownRaidService:Start()
 	-- a war horn post on the west edge of every plot
 	for i = 1, Config.MAX_PLOTS do
 		local o = Grid.plotOrigin(i)
-		local x, z = o.X - 6, o.Z + Grid.PLOT_SIZE / 2
+		local x, z = o.X - Config.PLOT_GAP / 2, o.Z + Grid.PLOT_SIZE / 2
 		local y = services.WorldService:GroundHeight(x, z)
 		local post = Instance.new("Part")
 		post.Name = "WarHornPost"
@@ -6482,7 +7479,7 @@ return TownRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">TradeService</string>
             <string name="Source"><![CDATA[--[[
@@ -6622,7 +7619,7 @@ return TradeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">VillageDefenseService</string>
             <string name="Source"><![CDATA[--[[
@@ -6880,7 +7877,8 @@ local function startRaid(colony, hold)
 	-- they come from the side of the plot nearest their hold
 	local o = colony.origin
 	local fromWest = hold.Center.X < o.X
-	local x = fromWest and (o.X - 14) or (o.X + Grid.PLOT_SIZE + 14)
+	-- the middle of the gap beside the plot, clear of even the biggest land
+	local x = fromWest and (o.X - Config.PLOT_GAP / 2) or (o.X + Grid.PLOT_SIZE + Config.PLOT_GAP / 2)
 	for i = 1, count do
 		local z = o.Z + Grid.PLOT_SIZE * 0.3 + i * 6
 		local y = services.WorldService:GroundHeight(x, z)
@@ -6899,7 +7897,18 @@ for _, r in Config.Rivals do
 end
 
 local function warnOf(colony)
-	local hold = landHolds[rng:NextInteger(1, #landHolds)]
+	-- allies and holds paying you tribute don't raid you (DiplomacyService)
+	local hostile = {}
+	for _, r in landHolds do
+		if not services.DiplomacyService or services.DiplomacyService:WillRaid(colony, r.Name) then
+			table.insert(hostile, r)
+		end
+	end
+	if #hostile == 0 then
+		colony.nextRaidDay = colony.day + rng:NextInteger(VR.EveryDays[1], VR.EveryDays[2])
+		return
+	end
+	local hold = hostile[rng:NextInteger(1, #hostile)]
 	colony.raidWarned = true
 	notify(colony, "Scouts report a " .. hold.Name .. " warband marching on your village! They arrive in " .. VR.WarningSeconds .. " seconds.", "raid")
 	task.delay(VR.WarningSeconds, function()
@@ -7030,6 +8039,24 @@ function VillageDefenseService:RaidersNear(position: Vector3, look: Vector3, ran
 	return found
 end
 
+-- The closest raider attacking `colony` (for the war band).
+function VillageDefenseService:NearestRaider(colony, position: Vector3, range: number): (Model?, BasePart?)
+	local raid = raids[colony]
+	if not raid then
+		return nil, nil
+	end
+	local best, bestRoot, bestD = nil, nil, range
+	for _, r in raid.raiders do
+		if not r.dead and not r.fled and r.root and r.root.Parent then
+			local d = (r.root.Position - position).Magnitude
+			if d < bestD then
+				best, bestRoot, bestD = r.model, r.root, d
+			end
+		end
+	end
+	return best, bestRoot
+end
+
 function VillageDefenseService:DamageRaider(model: Model, amount: number)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid and humanoid.Health > 0 then
@@ -7063,7 +8090,7 @@ return VillageDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -7115,9 +8142,8 @@ local function counts(colony)
 end
 
 local function clampToPlot(colony, pos: Vector3): Vector3
-	local o = colony.origin
-	local size = Grid.PLOT_SIZE
-	return Vector3.new(math.clamp(pos.X, o.X + 2, o.X + size - 2), o.Y, math.clamp(pos.Z, o.Z + 2, o.Z + size - 2))
+	local o, size = Grid.landRect(colony.origin, colony.land)
+	return Vector3.new(math.clamp(pos.X, o.X + 2, o.X + size.X - 2), o.Y, math.clamp(pos.Z, o.Z + 2, o.Z + size.Z - 2))
 end
 
 -- A random spot just outside the edge of a building.
@@ -7189,6 +8215,8 @@ local function updateLabel(colony, v)
 	local heart = v.partner and colony.villagers[v.partner] and " ♥" or ""
 	if stage == "baby" or stage == "child" then
 		label.Text = v.name .. " (" .. stage .. ")"
+	elseif v.warrior then
+		label.Text = v.name .. heart .. " (Warrior)"
 	elseif v.job and colony.buildings[v.job] then
 		label.Text = v.name .. heart .. " (" .. Config.Buildings[colony.buildings[v.job].type].Display .. ")"
 	else
@@ -7205,9 +8233,19 @@ local function makeModel(colony, v, groundPos: Vector3)
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
-	v.model.Parent = colony.plot.Villagers
+	if v.warrior then
+		ModelFactory.armWarrior(v.model)
+	end
+	-- away on an expedition: the figure waits until they come home
+	v.model.Parent = (not v.away) and colony.plot.Villagers or nil
 	v.busyUntil = 0
 	updateLabel(colony, v)
+end
+
+-- Builds a fresh figure for `v` where they stand (e.g. after leaving the war band).
+function VillagerService:Rebuild(colony, v)
+	local pos = v.body and (v.body.Position - Vector3.new(0, v.height or 0, 0)) or colony.origin
+	makeModel(colony, v, pos)
 end
 
 -- Redraws the name tag (after a name or age is restored from a save).
@@ -7282,6 +8320,9 @@ end
 local function assignJobs(colony)
 	local filled = {}
 	for _, v in colony.villagers do
+		if v.job and v.warrior then
+			v.job = nil
+		end
 		if v.job then
 			if colony.buildings[v.job] then
 				filled[v.job] = (filled[v.job] or 0) + 1
@@ -7304,7 +8345,7 @@ local function assignJobs(colony)
 		if #openings == 0 then
 			break
 		end
-		if not v.isChild and not v.job then
+		if not v.isChild and not v.job and not v.warrior then
 			v.job = table.remove(openings, 1)
 			v.busyUntil = 0 -- walk to work right away
 			updateLabel(colony, v)
@@ -7325,6 +8366,7 @@ local function produce(colony, dt: number)
 		end
 	end
 	local season = services.SeasonService:Current()
+	local blessing = services.RiteService and services.RiteService:Blessing(colony) or nil
 	for id, b in colony.buildings do
 		local produces = Config.Buildings[b.type].Produces
 		local n = workers[id]
@@ -7342,6 +8384,13 @@ local function produce(colony, dt: number)
 				elseif b.type == "LoreHall" and ColonyService:Has(colony, "SagaTellers") then
 					bonus *= 1.5
 				end
+				if blessing then
+					if b.type == "Farm" and blessing.Farm then
+						bonus *= blessing.Farm
+					elseif (b.type == "Woodcutter" or b.type == "Quarry") and blessing.Work then
+						bonus *= blessing.Work
+					end
+				end
 				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal * bonus)
 			end
 		end
@@ -7353,6 +8402,10 @@ local function eat(colony, dt: number)
 	local foodUse = services.SeasonService:Current().FoodUse
 	if services.ColonyService:Has(colony, "MidwinterRite") then
 		foodUse = 1
+	end
+	local blessing = services.RiteService and services.RiteService:Blessing(colony)
+	if blessing and blessing.FoodUse then
+		foodUse *= blessing.FoodUse
 	end
 	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * foodUse
 	local food = colony.resources.Food or 0
@@ -7399,10 +8452,23 @@ local function updateHappiness(colony, dt: number)
 	if ColonyService:Has(colony, "PathHearth") then
 		target += 10
 	end
+	-- feasts and blóts (RiteService)
+	local Rites = services.RiteService
+	if Rites then
+		target += Rites:FeastBonus(colony)
+		local blessing = Rites:Blessing(colony)
+		if blessing and blessing.Happiness then
+			target += blessing.Happiness
+		end
+	end
 	target = math.clamp(target, 0, 100)
 
 	colony.happiness += (target - colony.happiness) * math.min(1, 0.05 * dt)
 	colony.homeless = homeless
+end
+
+local function blessingOf(colony)
+	return (services.RiteService and services.RiteService:Blessing(colony)) or {}
 end
 
 local function newDay(self, colony)
@@ -7489,7 +8555,7 @@ local function newDay(self, colony)
 	end
 
 	-- Immigration from neighbouring tribes.
-	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay then
+	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay * (blessingOf(colony).Immigration or 1) then
 		local maxGroup = V.ImmigrationMaxGroup * (ColonyService:Has(colony, "OpenArms") and 2 or 1)
 		local n = rng:NextInteger(1, math.min(maxGroup, free))
 		local tribe = Config.Tribes[rng:NextInteger(1, #Config.Tribes)]
@@ -7564,7 +8630,9 @@ function VillagerService:Tick(colony, dt: number)
 
 	local now = os.clock()
 	for _, v in colony.villagers do
-		walk(colony, v, now)
+		if not v.warrior then -- the war band moves itself (WarbandService)
+			walk(colony, v, now)
+		end
 	end
 end
 
@@ -7572,7 +8640,599 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="35">
+          <Properties>
+            <string name="Name">WarbandService</string>
+            <string name="Source"><![CDATA[--[[
+	WarbandService
+	Hire grown villagers as warriors (Config.Warband). A warrior stops working
+	and joins your war band. The band has three orders:
+	  home    they drill around the village and fight raiders who come
+	  follow  they walk with you, fight whatever you fight, and crew your
+	          longship (faster rowing, more arrows per volley)
+	  away    an expedition: they march (or sail) off to a rival hold on their
+	          own and come back with loot and a report, so you can stay home
+	          and build
+	Warriors are villagers with v.warrior = true, so they are saved with
+	everyone else and still eat. A warrior who falls is gone for good.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+local Sounds = require(Shared.Sounds)
+local ModelFactory = require(Shared.ModelFactory)
+
+local WarbandService = {}
+
+local W = Config.Warband
+local services
+local rng = Random.new()
+
+function WarbandService:Init(all)
+	services = all
+end
+
+local function band(colony)
+	colony.warband = colony.warband or { mode = "home" }
+	return colony.warband
+end
+
+local function warriors(colony)
+	local list = {}
+	for _, v in colony.villagers do
+		if v.warrior then
+			table.insert(list, v)
+		end
+	end
+	table.sort(list, function(a, b)
+		return a.id < b.id
+	end)
+	return list
+end
+WarbandService.Warriors = function(_, colony)
+	return warriors(colony)
+end
+
+function WarbandService:Max(colony): number
+	return W.MaxByRank[services.RankService:Rank(colony)] or W.MaxByRank[#W.MaxByRank]
+end
+
+local function maxHealth(colony): number
+	return W.Health + (services.ColonyService:Has(colony, "ChainMail") and 40 or 0)
+end
+
+local function blowDamage(colony): number
+	local ColonyService = services.ColonyService
+	return W.Damage + (ColonyService:Has(colony, "SteelEdges") and 8 or (ColonyService:Has(colony, "IronAxes") and 4 or 0))
+end
+
+-- How strong one warrior is on an expedition.
+function WarbandService:WarriorPower(colony): number
+	local ColonyService = services.ColonyService
+	local p = W.WarriorPower
+	for _, t in { "ChainMail", "IronAxes", "SteelEdges" } do
+		if ColonyService:Has(colony, t) then
+			p += 1
+		end
+	end
+	return p
+end
+
+-- The whole band's strength (counted whether home or following).
+function WarbandService:Power(colony): number
+	local n = 0
+	for _, v in warriors(colony) do
+		if not v.away then
+			n += 1
+		end
+	end
+	return n * self:WarriorPower(colony)
+end
+
+-- A hold's strength, to weigh an expedition (or a tribute demand) against.
+function WarbandService:HoldPower(def): number
+	return def.Defenders * 2 + def.Archers * 2
+end
+
+local function holdNamed(name: string)
+	for _, def in Config.Rivals do
+		if def.Name == name then
+			return def
+		end
+	end
+	return nil
+end
+
+local function relabel(colony, v)
+	services.VillagerService:RefreshLabel(colony, v)
+end
+
+-- Hiring and dismissing --------------------------------------------------------
+
+function WarbandService:Hire(colony): (boolean, string)
+	local ColonyService = services.ColonyService
+	local list = warriors(colony)
+	if #list >= self:Max(colony) then
+		return false, "Your rank allows " .. self:Max(colony) .. " warriors. Rise in rank for more."
+	end
+	if band(colony).mode == "away" then
+		return false, "Wait until the war band is home."
+	end
+	-- the youngest grown villager without a family to look after is keenest
+	local pick
+	for _, v in colony.villagers do
+		if not v.isChild and not v.warrior and v.stage ~= "elder" then
+			if not pick or (v.job == nil and pick.job ~= nil) or ((v.job == nil) == (pick.job == nil) and v.age < pick.age) then
+				pick = v
+			end
+		end
+	end
+	if not pick then
+		return false, "No grown villager is free to take up arms."
+	end
+	if not ColonyService:Spend(colony, W.HireCost) then
+		return false, "Needs " .. Grid.costText(W.HireCost) .. "."
+	end
+	pick.warrior = true
+	pick.job = nil
+	pick.hp = maxHealth(colony)
+	if pick.model then
+		ModelFactory.armWarrior(pick.model)
+	end
+	relabel(colony, pick)
+	Sounds.play("QuestDone", pick.body and pick.body.Position or nil)
+	ColonyService:Notify(colony, pick.name .. " takes up axe and shield and joins your war band!", "good")
+	ColonyService:Sync(colony)
+	return true, pick.name .. " joined"
+end
+
+function WarbandService:Dismiss(colony): (boolean, string)
+	if band(colony).mode == "away" then
+		return false, "Wait until the war band is home."
+	end
+	local list = warriors(colony)
+	local v = list[#list]
+	if not v then
+		return false, "You have no warriors."
+	end
+	v.warrior = nil
+	v.hp = nil
+	-- a fresh figure without the gear
+	services.VillagerService:Rebuild(colony, v)
+	services.ColonyService:Notify(colony, v.name .. " hangs up the axe and goes back to work.", "info")
+	services.ColonyService:Sync(colony)
+	return true, v.name .. " went back to work"
+end
+
+function WarbandService:SetMode(colony, mode: string): (boolean, string)
+	if mode ~= "home" and mode ~= "follow" then
+		return false, "Unknown order."
+	end
+	local b = band(colony)
+	if b.mode == "away" then
+		return false, "The war band is away on an expedition."
+	end
+	if #warriors(colony) == 0 then
+		return false, "Hire some warriors first."
+	end
+	b.mode = mode
+	services.ColonyService:Notify(colony, mode == "follow" and "Your war band falls in behind you." or "Your war band stays to guard the village.", "info")
+	services.ColonyService:Sync(colony)
+	return true, mode
+end
+
+-- Following and fighting ---------------------------------------------------------
+
+local function groundY(x: number, z: number): number
+	return services.WorldService:GroundHeight(x, z)
+end
+
+local function moveTo(v, target: Vector3, speed: number, dt: number)
+	local from = v.body.Position
+	local flat = Vector3.new(target.X - from.X, 0, target.Z - from.Z)
+	local dist = flat.Magnitude
+	if dist < 0.6 then
+		return
+	end
+	local stepLen = math.min(dist, speed * dt)
+	local nx, nz = from.X + flat.Unit.X * stepLen, from.Z + flat.Unit.Z * stepLen
+	local to = Vector3.new(nx, math.max(groundY(nx, nz), 0.5) + v.height, nz)
+	-- a short tween so the motion is smooth between our updates
+	TweenService:Create(v.body, TweenInfo.new(dt, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) }):Play()
+end
+
+local function swing(v)
+	for _, arm in v.model:GetChildren() do
+		if arm.Name == "Arm" and arm:GetAttribute("Side") == 1 then
+			local joint = arm:FindFirstChild("Joint")
+			if joint and joint:IsA("Weld") then
+				local rest = joint.C0
+				local hip = arm:GetAttribute("Hip")
+				local half = arm:GetAttribute("HalfLen") or 0.7
+				if typeof(hip) == "CFrame" then
+					joint.C0 = hip * CFrame.Angles(math.rad(-120), 0, 0) * CFrame.new(0, -half, 0)
+					task.delay(0.2, function()
+						if joint.Parent then
+							joint.C0 = rest
+						end
+					end)
+				end
+			end
+		end
+	end
+end
+
+-- The nearest enemy of this colony to `pos`: rival guards, raiders attacking
+-- the village, or militia in a town raid you started.
+local function nearestEnemy(colony, pos: Vector3, range: number)
+	local best, bestRoot, bestDmg = services.RaidService:NearestDefender(pos, range)
+	local bestD = bestRoot and (bestRoot.Position - pos).Magnitude or range
+	local kind = best and "defender"
+	local m, root = services.VillageDefenseService:NearestRaider(colony, pos, bestD)
+	if m and root then
+		best, bestRoot, bestDmg, kind = m, root, Config.VillageRaids.RaiderDamage, "raider"
+		bestD = (root.Position - pos).Magnitude
+	end
+	m, root = services.TownRaidService:NearestMilitia(colony.player, pos, bestD)
+	if m and root then
+		best, bestRoot, bestDmg, kind = m, root, Config.TownRaid.MilitiaDamage or 8, "militia"
+	end
+	return best, bestRoot, bestDmg, kind
+end
+
+local function hit(colony, kind: string, model: Model, amount: number)
+	if kind == "defender" then
+		services.RaidService:DamageDefender(model, amount, colony.player)
+	elseif kind == "raider" then
+		services.VillageDefenseService:DamageRaider(model, amount)
+	elseif kind == "militia" then
+		services.TownRaidService:DamageMilitia(model, amount, colony.player)
+	end
+end
+
+local function fall(colony, v)
+	services.ColonyService:Notify(colony, v.name .. " fell in battle. Their name will be sung in the hall.", "bad")
+	services.VillagerService:Remove(colony, v)
+end
+
+-- One fighting step for a warrior near an enemy. Returns true if it fought.
+local function fight(colony, v, now: number, dt: number, anchor: Vector3): boolean
+	local enemy, root, dmg, kind = nearestEnemy(colony, v.body.Position, W.Sight)
+	if not enemy or not root or (root.Position - anchor).Magnitude > W.Sight * 1.5 then
+		return false
+	end
+	local d = (root.Position - v.body.Position) * Vector3.new(1, 0, 1)
+	if d.Magnitude > W.Reach then
+		moveTo(v, root.Position - d.Unit * (W.Reach - 1.5), Config.Villagers.WalkSpeed * 2.4, dt)
+	else
+		v.body.CFrame = CFrame.lookAt(v.body.Position, v.body.Position + d)
+		if now - (v.lastBlow or 0) >= W.HitCooldown then
+			v.lastBlow = now
+			swing(v)
+			Sounds.play("Swing", v.body.Position)
+			hit(colony, kind, enemy, blowDamage(colony))
+		end
+		-- the enemy hits back now and then
+		if now - (v.lastHurt or 0) >= W.HitCooldown * 1.3 then
+			v.lastHurt = now
+			if rng:NextNumber() < 0.5 then
+				v.hp = (v.hp or maxHealth(colony)) - (dmg or 10) * 0.6
+				if v.hp <= 0 then
+					fall(colony, v)
+				end
+			end
+		end
+	end
+	v.fighting = now
+	return true
+end
+
+-- Places for the band on the deck of the player's longship.
+local function deckSpot(ship, i: number): CFrame
+	local side = (i % 2 == 0) and 1 or -1
+	local row = math.floor((i - 1) / 2)
+	local z = -ship.length * 0.28 + row * 4.5
+	return ship.seat.CFrame * CFrame.new(side * 2.4, -0.2, z - ship.length * 0.32)
+end
+
+function WarbandService:CrewCount(player: Player): number
+	local colony = services.ColonyService:Get(player)
+	if not colony or band(colony).mode ~= "follow" then
+		return 0
+	end
+	if not services.BoatService:ShipOf(player) then
+		return 0
+	end
+	local n = 0
+	for _, v in warriors(colony) do
+		if not v.away then
+			n += 1
+		end
+	end
+	return n
+end
+
+function WarbandService:CrewBonus(player: Player): number
+	return math.min(self:CrewCount(player) * W.CrewSpeed, W.CrewSpeedMax)
+end
+
+local function stepColony(colony, now: number, dt: number)
+	local b = band(colony)
+	if b.mode == "away" then
+		return
+	end
+	local list = warriors(colony)
+	if #list == 0 then
+		return
+	end
+	local player = colony.player
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local ship = b.mode == "follow" and services.BoatService:ShipOf(player)
+	local heal = maxHealth(colony)
+
+	for i, v in list do
+		if not v.body or not v.model or not v.model.Parent then
+			continue
+		end
+		if now - (v.fighting or 0) > 4 and (v.hp or heal) < heal then
+			v.hp = math.min(heal, (v.hp or heal) + W.HealPerSecond * dt)
+		end
+		if b.mode == "follow" and root then
+			if ship then
+				-- aboard: stand at the oars, riding with the ship
+				v.body.CFrame = deckSpot(ship, i) * CFrame.new(0, v.height, 0)
+				continue
+			end
+			local anchor = root.Position
+			if not fight(colony, v, now, dt, anchor) then
+				-- a loose wedge behind you
+				local look = root.CFrame.LookVector * Vector3.new(1, 0, 1)
+				look = look.Magnitude > 0.1 and look.Unit or Vector3.new(0, 0, 1)
+				local right = Vector3.new(-look.Z, 0, look.X)
+				local row = math.ceil(i / 2)
+				local spot = anchor - look * (3 + row * 3) + right * ((i % 2 == 0) and 2.5 or -2.5) * row * 0.8
+				local far = (spot - v.body.Position).Magnitude
+				if far > 120 then
+					-- left far behind (you sailed off or respawned): catch up at once
+					local y = math.max(groundY(spot.X, spot.Z), 0.5)
+					v.body.CFrame = CFrame.new(spot.X, y + v.height, spot.Z)
+				elseif far > 2 then
+					moveTo(v, spot, root.AssemblyLinearVelocity.Magnitude > 10 and 20 or Config.Villagers.WalkSpeed * 2, dt)
+				end
+			end
+		else
+			-- at home: guard the village, fight raiders who come in
+			local corner, size = Grid.landRect(colony.origin, colony.land)
+			local middle = corner + size / 2
+			if not fight(colony, v, now, dt, middle) then
+				v.homeWalk = v.homeWalk or 0
+				if now > v.homeWalk then
+					v.homeWalk = now + rng:NextNumber(4, 9)
+					v.homeSpot = middle + Vector3.new(rng:NextNumber(-size.X * 0.4, size.X * 0.4), 0, rng:NextNumber(-size.Z * 0.45, -size.Z * 0.2))
+				end
+				if v.homeSpot and (v.homeSpot - v.body.Position).Magnitude > 120 then
+					v.body.CFrame = CFrame.new(v.homeSpot + Vector3.new(0, v.height, 0))
+				elseif v.homeSpot then
+					moveTo(v, v.homeSpot, Config.Villagers.WalkSpeed, dt)
+				end
+			end
+		end
+	end
+end
+
+-- Expeditions ------------------------------------------------------------------
+
+function WarbandService:Expedition(colony, holdName: string): (boolean, string)
+	local ColonyService = services.ColonyService
+	local b = band(colony)
+	if b.mode == "away" then
+		return false, "The war band is already away."
+	end
+	local def = typeof(holdName) == "string" and holdNamed(holdName)
+	if not def then
+		return false, "Pick a hold to raid."
+	end
+	local list = warriors(colony)
+	if #list == 0 then
+		return false, "Hire some warriors first."
+	end
+	if def.Sea and not ColonyService:Has(colony, "Karve") then
+		return false, def.Name .. " is across the water: research Karve first."
+	end
+	if services.DiplomacyService and services.DiplomacyService:IsAllied(colony, def.Name) then
+		return false, def.Name .. " is your ally."
+	end
+	local seconds = def.Sea and W.SeaExpeditionSeconds or W.ExpeditionSeconds
+	b.mode = "away"
+	b.target = def.Name
+	b.returnAt = os.clock() + seconds
+	b.seconds = seconds
+	b.power = #list * self:WarriorPower(colony)
+	for _, v in list do
+		v.away = true
+		if v.model then
+			v.model.Parent = nil
+		end
+	end
+	-- raiding them sours the mood straight away
+	if services.DiplomacyService then
+		services.DiplomacyService:OnHostile(colony, def.Name)
+	end
+	Sounds.play("WarHorn", colony.origin + Vector3.new(Grid.PLOT_SIZE / 2, 0, 0))
+	ColonyService:Notify(colony, "Your war band of " .. #list .. " " .. (def.Sea and "sails" or "marches") .. " for " .. def.Name .. ". Back in about " .. math.floor(seconds / 60 + 0.5) .. " minutes.", "raid")
+	ColonyService:Sync(colony)
+	return true, "Off they go"
+end
+
+local function finishExpedition(colony)
+	local ColonyService = services.ColonyService
+	local b = band(colony)
+	local def = holdNamed(b.target or "") or Config.Rival
+	local list = {}
+	for _, v in warriors(colony) do
+		if v.away then
+			table.insert(list, v)
+		end
+	end
+	local ratio = (b.power or 0) / WarbandService:HoldPower(def)
+	local won = rng:NextNumber() < math.clamp(ratio * 0.75, 0.05, 0.95)
+
+	-- losses
+	local deathChance = math.clamp(0.3 - 0.2 * ratio, 0.03, 0.3) * (won and 1 or 2)
+	local fallen, wounded = {}, {}
+	local heal = maxHealth(colony)
+	for _, v in list do
+		v.away = nil
+		if rng:NextNumber() < deathChance then
+			table.insert(fallen, v.name)
+			services.VillagerService:Remove(colony, v)
+		else
+			if rng:NextNumber() < 0.4 then
+				v.hp = heal * rng:NextNumber(0.3, 0.7)
+				table.insert(wounded, v.name)
+			end
+			if v.model then
+				v.model.Parent = colony.plot.Villagers
+				local arrive = colony.origin + Vector3.new(Grid.PLOT_SIZE / 2 + rng:NextNumber(-8, 8), 0, -6)
+				v.body.CFrame = CFrame.new(arrive + Vector3.new(0, v.height, 0))
+			end
+		end
+	end
+
+	-- loot
+	local loot = {}
+	local share = won and W.LootShare * math.clamp(ratio, 0.6, 1.25) or 0.2
+	if #list - #fallen <= 0 then
+		share = 0 -- nobody came back to carry it
+	end
+	if ColonyService:Has(colony, "SeaRaiders") and def.Sea then
+		share *= 1.5
+	end
+	for res, base in def.ChestLoot do
+		local n = math.floor(base * share)
+		if n > 0 then
+			loot[res] = n
+			ColonyService:Add(colony, res, n)
+		end
+	end
+	if won then
+		services.QuestService:Count(colony, "plunder")
+	end
+
+	b.mode = "home"
+	b.target = nil
+	b.returnAt = nil
+	local report = {
+		hold = def.Name,
+		won = won,
+		sent = #list,
+		loot = loot,
+		fallen = fallen,
+		wounded = wounded,
+	}
+	Remotes.WarReport:FireClient(colony.player, report)
+	local lootText = next(loot) and Grid.costText(loot) or "nothing"
+	ColonyService:Notify(colony, (won and "Victory! " or "Beaten back! ") .. "Your war band is home from " .. def.Name .. " with " .. lootText .. ".", won and "good" or "bad")
+	ColonyService:Sync(colony)
+end
+
+function WarbandService:State(colony)
+	local b = band(colony)
+	local list = warriors(colony)
+	local heal = maxHealth(colony)
+	local members = {}
+	for _, v in list do
+		table.insert(members, { name = v.name, hp = math.floor(((v.hp or heal) / heal) * 100 + 0.5), away = v.away == true })
+	end
+	local targets = {}
+	for _, def in Config.Rivals do
+		local hp = self:HoldPower(def)
+		table.insert(targets, {
+			name = def.Name,
+			sea = def.Sea == true,
+			power = hp,
+			chance = math.floor(math.clamp((#list * self:WarriorPower(colony)) / hp * 0.75, 0.05, 0.95) * 100),
+			allied = services.DiplomacyService and services.DiplomacyService:IsAllied(colony, def.Name) or false,
+		})
+	end
+	return {
+		mode = b.mode,
+		target = b.target,
+		secondsLeft = b.returnAt and math.max(0, math.floor(b.returnAt - os.clock())) or nil,
+		count = #list,
+		max = self:Max(colony),
+		power = #list * self:WarriorPower(colony),
+		members = members,
+		targets = targets,
+		hireCost = W.HireCost,
+	}
+end
+
+function WarbandService:Start()
+	Players.PlayerRemoving:Connect(function(player)
+		local colony = services.ColonyService:Get(player)
+		if colony and band(colony).mode == "away" then
+			-- they come home safe (and empty-handed) so the save keeps them
+			for _, v in warriors(colony) do
+				v.away = nil
+			end
+			band(colony).mode = "home"
+		end
+	end)
+
+	local last = os.clock()
+	local acc = 0
+	RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		if acc < 0.25 then
+			-- on a ship they need to ride smoothly, every frame
+			for _, colony in services.ColonyService:All() do
+				local b = colony.warband
+				if b and b.mode == "follow" then
+					local ship = services.BoatService:ShipOf(colony.player)
+					if ship then
+						for i, v in warriors(colony) do
+							if v.body and not v.away then
+								v.body.CFrame = deckSpot(ship, i) * CFrame.new(0, v.height, 0)
+							end
+						end
+					end
+				end
+			end
+			return
+		end
+		local now = os.clock()
+		local step = now - last
+		last = now
+		acc = 0
+		for _, colony in services.ColonyService:All() do
+			local ok, err = pcall(function()
+				local b = band(colony)
+				if b.mode == "away" and b.returnAt and now >= b.returnAt then
+					finishExpedition(colony)
+				else
+					stepColony(colony, now, step)
+				end
+			end)
+			if not ok then
+				warn("[WarbandService] " .. tostring(err))
+			end
+		end
+	end)
+end
+
+return WarbandService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">WeatherService</string>
             <string name="Source"><![CDATA[--[[
@@ -7691,7 +9351,7 @@ return WeatherService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
@@ -7718,7 +9378,8 @@ local folder: Folder
 local herd = {} -- [model] = deer record
 local nextId = 0
 
-local MEADOW_MIN_Z, MEADOW_MAX_Z = Grid.PLOT_SIZE + 18, Grid.PLOT_SIZE + 105
+local _, _, _, LAND_MAX_Z = Grid.maxBounds()
+local MEADOW_MIN_Z, MEADOW_MAX_Z = LAND_MAX_Z * Config.CELL + 16, Grid.PLOT_SIZE + 105
 
 function WildlifeService:Init(allServices)
 	services = allServices
@@ -7857,7 +9518,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -7999,13 +9660,15 @@ local function heightAt(x: number, z: number): number
 	return lerp(h, TOP, flatMask(x, z))
 end
 
+-- (covers the biggest the land can grow, see Config.LandStages)
+local LAND_MIN_X, _, LAND_MAX_X, LAND_MAX_Z = Grid.maxBounds()
 local function inPlotArea(x: number, z: number): boolean
-	if z < -50 or z > Grid.PLOT_SIZE + 12 then
+	if z < -50 or z > LAND_MAX_Z * Config.CELL + 12 then
 		return false
 	end
 	for i = 1, Config.MAX_PLOTS do
 		local o = Grid.plotOrigin(i)
-		if x > o.X - 8 and x < o.X + Grid.PLOT_SIZE + 8 then
+		if x > o.X + LAND_MIN_X * Config.CELL - 8 and x < o.X + LAND_MAX_X * Config.CELL + 8 then
 			return true
 		end
 	end
@@ -8648,15 +10311,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="33">
+  <Item class="StarterPlayer" referent="39">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="34">
+    <Item class="StarterPlayerScripts" referent="40">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="35">
+      <Item class="LocalScript" referent="41">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -8689,11 +10352,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="36">
+        <Item class="Folder" referent="42">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="37">
+          <Item class="ModuleScript" referent="43">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -8803,7 +10466,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="38">
+          <Item class="ModuleScript" referent="44">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -8865,7 +10528,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="39">
+          <Item class="ModuleScript" referent="45">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -8885,6 +10548,10 @@ local BoatController = {}
 
 local player = Players.LocalPlayer
 
+-- set by the on-screen buttons on phones and tablets (TouchController)
+BoatController.TouchThrottle = 0
+BoatController.TouchSteer = 0
+
 local function down(...)
 	for _, key in { ... } do
 		if UserInputService:IsKeyDown(key) then
@@ -8894,12 +10561,18 @@ local function down(...)
 	return false
 end
 
+function BoatController:Volley()
+	Remotes.BoatFire:FireServer()
+end
+
 local function atHelm(): boolean
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local seat = humanoid and humanoid.SeatPart
 	return seat ~= nil and seat:GetAttribute("Boat") == true
 end
+
+BoatController.AtHelm = atHelm
 
 function BoatController:Start()
 	UserInputService.InputBegan:Connect(function(input, processed)
@@ -8921,8 +10594,8 @@ function BoatController:Start()
 			return
 		end
 		local K = Enum.KeyCode
-		local throttle = (down(K.W, K.Up) and 1 or 0) - (down(K.S, K.Down) and 1 or 0)
-		local steer = (down(K.D, K.Right) and 1 or 0) - (down(K.A, K.Left) and 1 or 0)
+		local throttle = math.clamp((down(K.W, K.Up) and 1 or 0) - (down(K.S, K.Down) and 1 or 0) + BoatController.TouchThrottle, -1, 1)
+		local steer = math.clamp((down(K.D, K.Right) and 1 or 0) - (down(K.A, K.Left) and 1 or 0) + BoatController.TouchSteer, -1, 1)
 		timer += dt
 		if throttle ~= last[1] or steer ~= last[2] or timer > 0.5 then
 			timer = 0
@@ -8936,7 +10609,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="40">
+          <Item class="ModuleScript" referent="46">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -8955,6 +10628,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Grid = require(Shared.Grid)
+local Pointer = require(Shared.Pointer)
 local Remotes = require(Shared.Remotes)
 local ModelFactory = require(Shared.ModelFactory)
 
@@ -8985,7 +10659,7 @@ end
 
 local function mouseRay(): (Vector3, Vector3)
 	local camera = workspace.CurrentCamera
-	local pos = UserInputService:GetMouseLocation()
+	local pos = Pointer.location()
 	local ray = camera:ViewportPointToRay(pos.X, pos.Y)
 	return ray.Origin, ray.Direction * 1000
 end
@@ -9012,9 +10686,12 @@ local function showGrid(visible: boolean)
 	end
 	gridLines = Instance.new("Folder")
 	gridLines.Name = "BuildGrid"
-	local size = Grid.PLOT_SIZE
-	for i = 0, Config.PLOT_CELLS do
-		for axis = 1, 2 do
+	local state = controllers.StateController.State
+	local minX, minZ, maxX, maxZ = Grid.bounds(state and state.land)
+	local corner = origin + Vector3.new(minX * Config.CELL, 0, minZ * Config.CELL)
+	local sizeX, sizeZ = (maxX - minX) * Config.CELL, (maxZ - minZ) * Config.CELL
+	for axis = 1, 2 do
+		for i = 0, (axis == 1 and (maxX - minX) or (maxZ - minZ)) do
 			local line = Instance.new("Part")
 			line.Anchored = true
 			line.CanCollide = false
@@ -9025,11 +10702,11 @@ local function showGrid(visible: boolean)
 			line.Transparency = 0.82
 			local offset = i * Config.CELL
 			if axis == 1 then
-				line.Size = Vector3.new(0.12, 0.05, size)
-				line.Position = origin + Vector3.new(offset, 0.08, size / 2)
+				line.Size = Vector3.new(0.12, 0.05, sizeZ)
+				line.Position = corner + Vector3.new(offset, 0.08, sizeZ / 2)
 			else
-				line.Size = Vector3.new(size, 0.05, 0.12)
-				line.Position = origin + Vector3.new(size / 2, 0.08, offset)
+				line.Size = Vector3.new(sizeX, 0.05, 0.12)
+				line.Position = corner + Vector3.new(sizeX / 2, 0.08, offset)
 			end
 			line.Parent = gridLines
 		end
@@ -9091,11 +10768,13 @@ local function updatePlacement()
 	local sx, sz = Grid.footprint(mode.type, rot)
 	local cx, cz = Grid.worldToCell(origin, hit.Position, sx, sz)
 	-- keep the preview inside the plot so it doesn't jump off the edge
-	cx = math.clamp(cx, 0, Config.PLOT_CELLS - sx)
-	cz = math.clamp(cz, 0, Config.PLOT_CELLS - sz)
-
 	local state = controllers.StateController.State
-	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz)
+	local land = state and state.land
+	local minX, minZ, maxX, maxZ = Grid.bounds(land)
+	cx = math.clamp(cx, minX, maxX - sx)
+	cz = math.clamp(cz, minZ, maxZ - sz)
+
+	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz, land)
 	local affordable = state ~= nil and Grid.canAfford(state.resources, Config.Buildings[mode.type].Cost)
 	local ok = free and affordable
 
@@ -9164,6 +10843,21 @@ local function confirm()
 	end
 end
 
+-- For the touch buttons (TouchController).
+function BuildController:Confirm()
+	confirm()
+end
+
+function BuildController:Rotate()
+	if mode and mode.kind == "place" then
+		rot = (rot + 1) % 4
+	end
+end
+
+function BuildController:Mode()
+	return mode
+end
+
 function BuildController:Init(allControllers)
 	controllers = allControllers
 end
@@ -9200,8 +10894,12 @@ function BuildController:Start()
 		if processed then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			confirm()
+		elseif input.UserInputType == Enum.UserInputType.Touch then
+			-- on a touch screen a tap moves the preview; the Place button builds
+			-- (TouchController), so a stray tap never spends your wood
+			return
 		elseif input.KeyCode == Enum.KeyCode.R and mode and mode.kind == "place" then
 			rot = (rot + 1) % 4
 		elseif input.KeyCode == Enum.KeyCode.Q and mode then
@@ -9214,7 +10912,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="41">
+          <Item class="ModuleScript" referent="47">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -9250,18 +10948,55 @@ function CameraController:IsEnabled(): boolean
 	return enabled
 end
 
+function CameraController:Toggle()
+	enabled = not enabled
+	if not enabled then
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+	end
+end
+
 function CameraController:Start()
 	local camera = workspace.CurrentCamera
+
+	-- phones and tablets: pinch to zoom, twist two fingers to turn,
+	-- drag two fingers up or down to tilt
+	local pinchStart = targetDistance
+	UserInputService.TouchPinch:Connect(function(_, scale, _, state, processed)
+		if not enabled or processed then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			pinchStart = targetDistance
+		end
+		targetDistance = math.clamp(pinchStart / math.max(scale, 0.05), MIN_DIST, MAX_DIST)
+	end)
+	local rotateStart = yaw
+	UserInputService.TouchRotate:Connect(function(_, rotation, _, state, processed)
+		if not enabled or processed then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			rotateStart = yaw
+		end
+		yaw = rotateStart - math.rad(rotation)
+	end)
+	local panStart = pitch
+	UserInputService.TouchPan:Connect(function(positions, translation, _, state, processed)
+		if not enabled or processed or #positions < 2 then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			panStart = pitch
+		end
+		pitch = math.clamp(panStart + translation.Y * 0.005, MIN_PITCH, MAX_PITCH)
+	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseButton2 and enabled then
 			rotating = true
 			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
 		elseif input.KeyCode == Enum.KeyCode.V and not processed then
-			enabled = not enabled
-			if not enabled then
-				camera.CameraType = Enum.CameraType.Custom
-			end
+			CameraController:Toggle()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
@@ -9304,7 +11039,463 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="42">
+          <Item class="ModuleScript" referent="48">
+            <Properties>
+              <string name="Name">CouncilController</string>
+              <string name="Source"><![CDATA[--[[
+	CouncilController
+	The Jarl's Table: press J (or the button under the colony panel).
+	Four tabs:
+	  Land       buy the next, bigger stage of land
+	  War band   hire warriors, give orders, send them on expeditions
+	  Diplomacy  gifts, tribute, alliances and trade deals with the holds
+	  Rites      feasts and the season's blót
+	Also shows the report when the war band comes home from an expedition.
+	Everything it shows comes from state.council (CouncilService on the server).
+]]
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Grid = require(Shared.Grid)
+local Remotes = require(Shared.Remotes)
+
+local CouncilController = {}
+
+local controllers
+local player = Players.LocalPlayer
+
+local THEME = {
+	Panel = Color3.fromRGB(28, 23, 18),
+	Card = Color3.fromRGB(52, 42, 32),
+	Button = Color3.fromRGB(86, 66, 34),
+	ButtonOff = Color3.fromRGB(44, 38, 32),
+	Accent = Color3.fromRGB(214, 170, 92),
+	Text = Color3.fromRGB(245, 235, 215),
+	Muted = Color3.fromRGB(170, 156, 134),
+	Good = Color3.fromRGB(130, 200, 110),
+	Bad = Color3.fromRGB(230, 110, 96),
+}
+
+local TABS = {
+	{ id = "land", title = "🗺  Land" },
+	{ id = "warband", title = "⚔️  War band" },
+	{ id = "diplomacy", title = "🤝  Diplomacy" },
+	{ id = "rites", title = "🔥  Rites" },
+}
+
+local function new(className, props)
+	local inst = Instance.new(className)
+	for k, v in props do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+local function corner(parent, r)
+	new("UICorner", { CornerRadius = UDim.new(0, r or 8), Parent = parent })
+end
+
+local function text(parent, str: string, props)
+	local defaults = {
+		Size = UDim2.new(1, 0, 0, 20),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 15,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = THEME.Text,
+		Text = str,
+		Parent = parent,
+	}
+	for k, v in props or {} do
+		defaults[k] = v
+	end
+	return new("TextLabel", defaults)
+end
+
+-- Sends an action to the server and shows the answer as a toast.
+local function act(action: string, arg: string?)
+	local ok, msg = Remotes.Council:InvokeServer(action, arg)
+	if msg then
+		controllers.StateController:LocalNotify(msg, ok and "good" or "bad")
+	end
+end
+
+local function button(parent, label: string, enabled: boolean, onClick, width: number?)
+	local b = new("TextButton", {
+		Size = UDim2.fromOffset(width or 170, 34),
+		BackgroundColor3 = enabled and THEME.Button or THEME.ButtonOff,
+		AutoButtonColor = enabled,
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		TextColor3 = enabled and THEME.Accent or THEME.Muted,
+		Text = label,
+		Parent = parent,
+	})
+	corner(b, 6)
+	b.Activated:Connect(function()
+		-- disabled buttons still ask the server, which explains what's missing
+		onClick()
+	end)
+	return b
+end
+
+local function row(parent, order: number)
+	local f = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = order, Parent = parent })
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Parent = f })
+	return f
+end
+
+local function card(parent, order: number)
+	local c = new("Frame", {
+		Size = UDim2.new(1, -8, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Card,
+		LayoutOrder = order,
+		Parent = parent,
+	})
+	corner(c)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 10), Parent = c })
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = c })
+	return c
+end
+
+local function have(state, cost): boolean
+	return state ~= nil and cost ~= nil and Grid.canAfford(state.resources, cost)
+end
+
+-- Tab builders ------------------------------------------------------------------
+
+local function buildLand(body, state)
+	local land = state.council.land
+	local c = card(body, 1)
+	text(c, "Your land: " .. land.name, { Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = THEME.Accent, LayoutOrder = 1 })
+	text(c, "Size " .. land.size .. " cells. The border stakes show where it ends.", { TextColor3 = THEME.Muted, LayoutOrder = 2 })
+	local n = card(body, 2)
+	if land.nextName then
+		text(n, "Next: " .. land.nextName .. "  (" .. land.nextSize .. " cells)", { Font = Enum.Font.GothamBold, TextSize = 17, LayoutOrder = 1 })
+		local need = Grid.costText(land.nextCost)
+		if land.nextRank then
+			need ..= "   ·   rank " .. land.nextRank
+		end
+		text(n, "Costs " .. need, { TextColor3 = have(state, land.nextCost) and THEME.Good or THEME.Bad, LayoutOrder = 2 })
+		if land.blocker then
+			text(n, land.blocker, { TextColor3 = THEME.Muted, TextSize = 13, LayoutOrder = 3 })
+		end
+		local r = row(n, 4)
+		button(r, "Buy land", land.blocker == nil, function()
+			act("BuyLand")
+		end)
+	else
+		text(n, "Your land is as big as it can grow. A true Great Steading!", { TextColor3 = THEME.Good, LayoutOrder = 1 })
+	end
+	text(body, "Bigger land grows toward the meadow and into the gaps beside your plot. It never touches a neighbour.", { TextColor3 = THEME.Muted, TextSize = 13, LayoutOrder = 3 })
+end
+
+local function buildWarband(body, state)
+	local w = state.council.warband
+	local c = card(body, 1)
+	local modeText = ({ home = "guarding the village", follow = "following you", away = "away raiding " .. tostring(w.target) })[w.mode] or w.mode
+	text(c, "War band: " .. w.count .. " / " .. w.max .. " warriors, " .. modeText, { Font = Enum.Font.GothamBold, TextSize = 17, TextColor3 = THEME.Accent, LayoutOrder = 1 })
+	if w.mode == "away" and w.secondsLeft then
+		text(c, "Back in about " .. math.max(1, math.ceil(w.secondsLeft / 60)) .. " min (" .. w.secondsLeft .. " s).", { TextColor3 = THEME.Muted, LayoutOrder = 2 })
+	end
+	local names = {}
+	for _, m in w.members do
+		table.insert(names, m.name .. (m.away and "" or (" " .. m.hp .. "%")))
+	end
+	text(c, #names > 0 and table.concat(names, ",  ") or "No warriors yet. Hire grown villagers below; they stop working while they serve.", { TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 3 })
+	local r = row(c, 4)
+	button(r, "Hire (" .. Grid.costText(w.hireCost) .. ")", w.mode ~= "away" and w.count < w.max and have(state, w.hireCost), function()
+		act("Hire")
+	end, 210)
+	button(r, "Dismiss one", w.mode ~= "away" and w.count > 0, function()
+		act("Dismiss")
+	end, 130)
+	local r2 = row(c, 5)
+	button(r2, "Follow me", w.mode == "home" and w.count > 0, function()
+		act("Follow")
+	end, 150)
+	button(r2, "Guard the village", w.mode == "follow", function()
+		act("StayHome")
+	end, 180)
+	text(c, "Following warriors fight beside you and row your longship: faster ship, one more arrow each per volley.", { TextSize = 12, TextColor3 = THEME.Muted, LayoutOrder = 6 })
+
+	local e = card(body, 2)
+	text(e, "Send them raiding on their own (strength " .. w.power .. ")", { Font = Enum.Font.GothamBold, TextSize = 16, LayoutOrder = 1 })
+	text(e, "They're away a few minutes and bring back loot, so you can stay home and build. Some may not come back.", { TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 2 })
+	for i, t in w.targets do
+		local r3 = row(e, 2 + i)
+		local label = t.name .. (t.sea and " (by sea)" or "") .. "   ·   " .. (t.allied and "ally" or (t.chance .. "% to win"))
+		text(r3, label, { Size = UDim2.new(0, 330, 0, 34), AutomaticSize = Enum.AutomaticSize.None, TextColor3 = t.allied and THEME.Muted or (t.chance >= 50 and THEME.Good or THEME.Bad) })
+		button(r3, "Send", w.mode ~= "away" and w.count > 0 and not t.allied, function()
+			act("Expedition", t.name)
+		end, 90)
+	end
+end
+
+local function moodWord(m: number): string
+	if m >= 60 then
+		return "friendly"
+	elseif m >= 30 then
+		return "warm"
+	elseif m > -30 then
+		return "wary"
+	elseif m > -60 then
+		return "hostile"
+	end
+	return "blood feud"
+end
+
+local function buildDiplomacy(body, state)
+	local d = state.council.diplomacy
+	for i, h in d.holds do
+		local c = card(body, i)
+		local status = h.allied and "Sworn allies" or (h.tributeDays > 0 and ("Paying you tribute (" .. h.tributeDays .. " days left)") or ("Mood " .. h.mood .. " (" .. moodWord(h.mood) .. ")"))
+		text(c, h.name .. "   ·   " .. status, { Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = h.allied and THEME.Good or (h.mood < -30 and THEME.Bad or THEME.Accent), LayoutOrder = 1 })
+		if h.dealText then
+			text(c, (h.deal and "Trade deal running: " or "Trade deal: ") .. h.dealText .. (h.deal and "" or ("  (needs mood " .. d.dealMood .. ")")), { TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 2 })
+		end
+		local r = row(c, 3)
+		button(r, "Gift (" .. Grid.costText(d.giftCost) .. ")", have(state, d.giftCost), function()
+			act("Gift", h.name)
+		end, 170)
+		button(r, "Demand tribute", not h.allied and h.tributeDays <= 0 and h.fear >= d.demandNeed, function()
+			act("Demand", h.name)
+		end, 150)
+		button(r, h.allied and "Allied" or ("Alliance (" .. Grid.costText(d.allianceCost) .. ")"), not h.allied and h.mood >= d.allianceMood, function()
+			act("Ally", h.name)
+		end, 190)
+		if h.dealText then
+			button(r, h.deal and "End deal" or "Trade deal", h.deal or h.allied or h.mood >= d.dealMood, function()
+				act("Deal", h.name)
+			end, 120)
+		end
+	end
+	text(body, "Gifts warm a hold's mood. Allies never raid you and their guards leave you be. Tribute needs a war band at least " .. d.demandNeed .. "% as strong as the hold. Attacking a hold breaks every pact with it.", { TextSize = 13, TextColor3 = THEME.Muted, LayoutOrder = 10 })
+end
+
+local function buildRites(body, state)
+	local r = state.council.rites
+	local f = card(body, 1)
+	text(f, "Feast in the hall", { Font = Enum.Font.GothamBold, TextSize = 17, TextColor3 = THEME.Accent, LayoutOrder = 1 })
+	local fText = "Mead, meat and song: +" .. r.feastHappiness .. " happiness for a day. Costs " .. Grid.costText(r.feastCost) .. "."
+	if not r.hasHall then
+		fText ..= " Needs a Longhouse or Great Hall."
+	elseif r.feastActive then
+		fText ..= " The feast is on!"
+	elseif state.day < r.feastReadyDay then
+		fText ..= " Next feast from day " .. r.feastReadyDay .. "."
+	end
+	text(f, fText, { TextSize = 14, TextColor3 = THEME.Muted, LayoutOrder = 2 })
+	local fr = row(f, 3)
+	button(fr, "Hold a feast", r.hasHall and state.day >= r.feastReadyDay and have(state, r.feastCost), function()
+		act("Feast")
+	end)
+
+	local b = card(body, 2)
+	text(b, (r.blotName or "Blót") .. "  ·  " .. r.season, { Font = Enum.Font.GothamBold, TextSize = 17, TextColor3 = THEME.Accent, LayoutOrder = 1 })
+	local bText = (r.blotText or "") .. " Once per season, at the Shrine. Costs " .. (r.blotCost and Grid.costText(r.blotCost) or "?") .. "."
+	if not r.hasShrine then
+		bText ..= " Build a Shrine first."
+	elseif r.blotDone then
+		bText ..= " Held this season: the gods are pleased."
+	end
+	text(b, bText, { TextSize = 14, TextColor3 = THEME.Muted, LayoutOrder = 2 })
+	local br = row(b, 3)
+	button(br, "Hold the blót", r.hasShrine and not r.blotDone and have(state, r.blotCost), function()
+		act("Blot")
+	end)
+end
+
+local BUILDERS = { land = buildLand, warband = buildWarband, diplomacy = buildDiplomacy, rites = buildRites }
+
+function CouncilController:Init(all)
+	controllers = all
+end
+
+function CouncilController:Start()
+	local gui = new("ScreenGui", { Name = "JarlsTable", ResetOnSpawn = false, DisplayOrder = 11, Parent = player:WaitForChild("PlayerGui") })
+
+	local openButton = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -129, 0, 170),
+		Size = UDim2.fromOffset(113, 36),
+		BackgroundColor3 = Color3.fromRGB(70, 54, 34),
+		Font = Enum.Font.GothamBold,
+		TextSize = 13,
+		TextColor3 = THEME.Accent,
+		Text = "Jarl's Table (J)",
+		Parent = gui,
+	})
+	corner(openButton)
+
+	local panel = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(760, 560),
+		BackgroundColor3 = THEME.Panel,
+		BackgroundTransparency = 0.04,
+		Visible = false,
+		Parent = gui,
+	})
+	corner(panel, 12)
+	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.4, Parent = panel })
+	text(panel, "The Jarl's Table", { Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -80, 0, 34), AutomaticSize = Enum.AutomaticSize.None, Font = Enum.Font.Fantasy, TextSize = 30, TextColor3 = THEME.Accent })
+	local close = new("TextButton", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 14),
+		Size = UDim2.fromOffset(32, 32),
+		BackgroundColor3 = THEME.Card,
+		Font = Enum.Font.GothamBold,
+		TextSize = 18,
+		TextColor3 = THEME.Text,
+		Text = "X",
+		Parent = panel,
+	})
+	corner(close, 6)
+
+	local tabBar = new("Frame", { Position = UDim2.fromOffset(16, 56), Size = UDim2.new(1, -32, 0, 36), BackgroundTransparency = 1, Parent = panel })
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = tabBar })
+	local body = new("ScrollingFrame", {
+		Position = UDim2.fromOffset(16, 102),
+		Size = UDim2.new(1, -32, 1, -118),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 5,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(),
+		Parent = panel,
+	})
+
+	local current = "land"
+	local lastKey = ""
+	local tabButtons = {}
+
+	local function render(force: boolean?)
+		local state = controllers.StateController.State
+		if not state or not state.council then
+			return
+		end
+		local tabState = state.council[current]
+		-- rebuild only when something shown actually changed (keeps buttons steady)
+		local key = current .. HttpService:JSONEncode(tabState) .. HttpService:JSONEncode(state.resources) .. tostring(state.day)
+		if key == lastKey and not force then
+			return
+		end
+		lastKey = key
+		for _, child in body:GetChildren() do
+			if not child:IsA("UIListLayout") then
+				child:Destroy()
+			end
+		end
+		if not body:FindFirstChildOfClass("UIListLayout") then
+			new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder, Parent = body })
+		end
+		local ok, err = pcall(BUILDERS[current], body, state)
+		if not ok then
+			warn("[CouncilController] " .. tostring(err))
+		end
+		for id, b in tabButtons do
+			b.BackgroundColor3 = id == current and THEME.Button or THEME.Card
+			b.TextColor3 = id == current and THEME.Accent or THEME.Text
+		end
+	end
+
+	for i, tab in TABS do
+		local b = new("TextButton", {
+			Size = UDim2.fromOffset(170, 36),
+			BackgroundColor3 = THEME.Card,
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextColor3 = THEME.Text,
+			Text = tab.title,
+			LayoutOrder = i,
+			Parent = tabBar,
+		})
+		corner(b, 6)
+		b.Activated:Connect(function()
+			current = tab.id
+			render(true)
+		end)
+		tabButtons[tab.id] = b
+	end
+
+	local function toggle()
+		panel.Visible = not panel.Visible
+		if panel.Visible then
+			render(true)
+		end
+	end
+	CouncilController.Toggle = toggle
+	openButton.Activated:Connect(toggle)
+	close.Activated:Connect(toggle)
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and input.KeyCode == Enum.KeyCode.J then
+			toggle()
+		end
+	end)
+	controllers.StateController.Changed:Connect(function()
+		if panel.Visible then
+			render(false)
+		end
+	end)
+
+	-------------------------------------------------------------- war report
+	local report = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.45),
+		Size = UDim2.fromOffset(460, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = THEME.Panel,
+		Visible = false,
+		Parent = gui,
+	})
+	corner(report, 12)
+	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.3, Parent = report })
+	new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18), PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 14), Parent = report })
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = report })
+	local rTitle = text(report, "", { Font = Enum.Font.Fantasy, TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
+	local rBody = text(report, "", { TextSize = 15, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 2 })
+	local okRow = new("Frame", { Size = UDim2.fromOffset(140, 34), BackgroundTransparency = 1, LayoutOrder = 3, Parent = report })
+	button(okRow, "Skål!", true, function()
+		report.Visible = false
+	end, 140)
+
+	Remotes.WarReport.OnClientEvent:Connect(function(r)
+		if type(r) ~= "table" then
+			return
+		end
+		rTitle.Text = (r.won and "Victory at " or "Beaten back at ") .. tostring(r.hold)
+		rTitle.TextColor3 = r.won and THEME.Accent or THEME.Bad
+		local lines = { "You sent " .. tostring(r.sent) .. " warriors." }
+		local loot = r.loot and next(r.loot) and Grid.costText(r.loot) or "nothing"
+		table.insert(lines, "They brought home: " .. loot)
+		if r.fallen and #r.fallen > 0 then
+			table.insert(lines, "Fallen: " .. table.concat(r.fallen, ", "))
+		else
+			table.insert(lines, "Every warrior came home.")
+		end
+		if r.wounded and #r.wounded > 0 then
+			table.insert(lines, "Wounded (healing at home): " .. table.concat(r.wounded, ", "))
+		end
+		rBody.Text = table.concat(lines, "\n")
+		report.Visible = true
+	end)
+end
+
+return CouncilController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -9398,7 +11589,7 @@ local function frameStroke()
 	return new("UIStroke", { Color = THEME.Accent, Thickness = 1, Transparency = 0.55, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 end
 
-local DEFAULT_HINT = "Pick a tab and a building. Walk up to trees, rocks and bushes and hold E to gather."
+local DEFAULT_HINT = "Pick a tab and a building. Swing the Axe at trees and the Pickaxe at rocks to gather."
 
 local function moodWord(h: number): string
 	if h >= 75 then
@@ -9786,9 +11977,24 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   M: map size\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   J: Jarl's Table\nM: map size   E at a berry bush: pick\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
+	if game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled then
+		-- phone or tablet: explain the touch controls instead (TouchController)
+		helpBody.Text = "Tools: tap the slots at the bottom\nTap a tree, rock or enemy to swing\nBow: tap where to shoot\nBuilding: tap to move it, then Place\nPinch: zoom   Twist: turn   2-finger drag: tilt\nAt the helm: arrows to sail, Volley to shoot"
+		task.delay(25, function()
+			helpOpen = false
+			helpBody.Visible = false
+		end)
+		-- tap the box to show or hide it
+		help.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch then
+				helpOpen = not helpOpen
+				helpBody.Visible = helpOpen
+			end
+		end)
+	end
 	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.H then
 			helpOpen = not helpOpen
@@ -9985,7 +12191,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="43">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -10066,7 +12272,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="44">
+          <Item class="ModuleScript" referent="51">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -10202,10 +12408,13 @@ function MinimapController:Start()
 		ZIndex = 8,
 		Parent = frame,
 	})
+	MinimapController.Toggle = function()
+		sizeIndex = sizeIndex % #SIZES + 1
+		frame.Size = UDim2.fromOffset(SIZES[sizeIndex], SIZES[sizeIndex])
+	end
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.M then
-			sizeIndex = sizeIndex % #SIZES + 1
-			frame.Size = UDim2.fromOffset(SIZES[sizeIndex], SIZES[sizeIndex])
+			MinimapController:Toggle()
 		end
 	end)
 
@@ -10277,7 +12486,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="45">
+          <Item class="ModuleScript" referent="52">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -10370,7 +12579,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="46">
+          <Item class="ModuleScript" referent="53">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -10422,7 +12631,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="47">
+          <Item class="ModuleScript" referent="54">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -10517,12 +12726,12 @@ function TechController:Start()
 	local openButton = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 170),
-		Size = UDim2.fromOffset(230, 36),
+		Size = UDim2.fromOffset(113, 36),
 		BackgroundColor3 = Color3.fromRGB(70, 54, 34),
 		Font = Enum.Font.GothamBold,
-		TextSize = 16,
+		TextSize = 14,
 		TextColor3 = THEME.Accent,
-		Text = "Research  (T)",
+		Text = "Research (T)",
 		Parent = gui,
 	})
 	corner(openButton)
@@ -10726,6 +12935,7 @@ function TechController:Start()
 			refresh(controllers.StateController.State)
 		end
 	end
+	TechController.Toggle = toggle
 	openButton.Activated:Connect(toggle)
 	close.Activated:Connect(toggle)
 	UserInputService.InputBegan:Connect(function(input, processed)
@@ -10744,7 +12954,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="55">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -10757,12 +12967,12 @@ return TechController
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 local Config = require(Shared.Config)
+local Pointer = require(Shared.Pointer)
 
 local ToolController = {}
 
@@ -10771,7 +12981,7 @@ local lastShot = 0
 
 local function aimPoint(): Vector3
 	local camera = workspace.CurrentCamera
-	local pos = UserInputService:GetMouseLocation()
+	local pos = Pointer.location()
 	local ray = camera:ViewportPointToRay(pos.X, pos.Y)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
@@ -10832,7 +13042,192 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="56">
+            <Properties>
+              <string name="Name">TouchController</string>
+              <string name="Source"><![CDATA[--[[
+	TouchController
+	On-screen buttons for phones and tablets (only shown on touch screens).
+	  Always      Map size, Camera mode
+	  Building    Place, Rotate, Cancel (a tap moves the preview first)
+	  At a helm   hold Row / Back / Left / Right, and Volley
+	The camera: pinch to zoom, twist two fingers to turn, drag two fingers to
+	tilt (CameraController). Tools work by tapping where you want to strike
+	or shoot. Prompts (gather, loot, talk) are tapped like buttons.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local TouchController = {}
+
+local controllers
+local player = Players.LocalPlayer
+
+local ACCENT = Color3.fromRGB(214, 170, 92)
+local PANEL = Color3.fromRGB(34, 28, 22)
+
+local function new(className, props)
+	local inst = Instance.new(className)
+	for k, v in props do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+local function roundButton(parent, text: string, size: number, pos: UDim2, textSize: number?)
+	local b = new("TextButton", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = pos,
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = PANEL,
+		BackgroundTransparency = 0.15,
+		AutoButtonColor = true,
+		Font = Enum.Font.GothamBold,
+		TextSize = textSize or 16,
+		TextColor3 = ACCENT,
+		TextWrapped = true,
+		Text = text,
+		Parent = parent,
+	})
+	new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = b })
+	new("UIStroke", { Color = ACCENT, Thickness = 1.5, Transparency = 0.4, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = b })
+	return b
+end
+
+-- A button that sets a value while held down.
+local function holdButton(parent, text: string, pos: UDim2, onDown, onUp)
+	local b = roundButton(parent, text, 64, pos, 26)
+	b.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			onDown()
+		end
+	end)
+	b.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			onUp()
+		end
+	end)
+	return b
+end
+
+function TouchController:Init(all)
+	controllers = all
+end
+
+function TouchController:Start()
+	if not UserInputService.TouchEnabled then
+		return
+	end
+	local gui = new("ScreenGui", { Name = "TouchControls", ResetOnSpawn = false, DisplayOrder = 5, Parent = player:WaitForChild("PlayerGui") })
+
+	-- always: small helpers on the right edge, above the jump button
+	local side = new("Frame", {
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -190),
+		Size = UDim2.fromOffset(60, 130),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	local mapButton = roundButton(side, "Map", 54, UDim2.new(0.5, 0, 0, 27), 14)
+	mapButton.Activated:Connect(function()
+		if controllers.MinimapController and controllers.MinimapController.Toggle then
+			controllers.MinimapController:Toggle()
+		end
+	end)
+	local camButton = roundButton(side, "Cam", 54, UDim2.new(0.5, 0, 0, 95), 14)
+	camButton.Activated:Connect(function()
+		controllers.CameraController:Toggle()
+	end)
+
+	-- building: Place / Rotate / Cancel, above the build menu
+	local build = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -250),
+		Size = UDim2.fromOffset(300, 70),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = gui,
+	})
+	local place = roundButton(build, "✔\nPlace", 68, UDim2.new(0.5, 0, 0.5, 0), 15)
+	place.BackgroundColor3 = Color3.fromRGB(46, 84, 44)
+	place.Activated:Connect(function()
+		controllers.BuildController:Confirm()
+	end)
+	local rotate = roundButton(build, "⟳\nTurn", 60, UDim2.new(0.5, -96, 0.5, 0), 14)
+	rotate.Activated:Connect(function()
+		controllers.BuildController:Rotate()
+	end)
+	local cancel = roundButton(build, "✖\nStop", 60, UDim2.new(0.5, 96, 0.5, 0), 14)
+	cancel.Activated:Connect(function()
+		controllers.BuildController:Cancel()
+	end)
+	controllers.BuildController.ModeChanged:Connect(function(mode)
+		build.Visible = mode ~= nil
+		rotate.Visible = mode ~= nil and mode.kind == "place"
+		place.Text = (mode and mode.kind == "demolish") and "✔\nTear down" or "✔\nPlace"
+	end)
+
+	-- sailing: hold buttons for the oars and rudder, and the volley
+	local boat = new("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 24, 1, -40),
+		Size = UDim2.fromOffset(220, 220),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = gui,
+	})
+	local Boat = controllers.BoatController
+	holdButton(boat, "▲", UDim2.fromOffset(110, 40), function()
+		Boat.TouchThrottle = 1
+	end, function()
+		Boat.TouchThrottle = 0
+	end)
+	holdButton(boat, "▼", UDim2.fromOffset(110, 180), function()
+		Boat.TouchThrottle = -1
+	end, function()
+		Boat.TouchThrottle = 0
+	end)
+	holdButton(boat, "◀", UDim2.fromOffset(40, 110), function()
+		Boat.TouchSteer = -1
+	end, function()
+		Boat.TouchSteer = 0
+	end)
+	holdButton(boat, "▶", UDim2.fromOffset(180, 110), function()
+		Boat.TouchSteer = 1
+	end, function()
+		Boat.TouchSteer = 0
+	end)
+	local volley = roundButton(gui, "🏹\nVolley", 76, UDim2.new(1, -150, 1, -110), 15)
+	volley.Visible = false
+	volley.Activated:Connect(function()
+		Boat:Volley()
+	end)
+
+	local wasAtHelm = false
+	RunService.Heartbeat:Connect(function()
+		local atHelm = Boat.AtHelm and Boat.AtHelm() or false
+		if atHelm ~= wasAtHelm then
+			wasAtHelm = atHelm
+			boat.Visible = atHelm
+			volley.Visible = atHelm
+			if not atHelm then
+				Boat.TouchThrottle = 0
+				Boat.TouchSteer = 0
+			end
+		end
+	end)
+end
+
+return TouchController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -11030,7 +13425,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="50">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -11083,7 +13478,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="51">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -11174,7 +13569,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="52">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -11320,12 +13715,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="53">
+  <Item class="Workspace" referent="61">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="54">
+    <Item class="Part" referent="62">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -11346,13 +13741,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="55">
+    <Item class="BoolValue" referent="63">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="56">
+    <Item class="SpawnLocation" referent="64">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -11372,7 +13767,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="57">
+    <Item class="Part" referent="65">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -11389,13 +13784,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="58">
+      <Item class="SurfaceGui" referent="66">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="59">
+        <Item class="TextLabel" referent="67">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -11427,13 +13822,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="60">
+      <Item class="SurfaceGui" referent="68">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="61">
+        <Item class="TextLabel" referent="69">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

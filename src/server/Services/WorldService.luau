@@ -137,13 +137,15 @@ local function heightAt(x: number, z: number): number
 	return lerp(h, TOP, flatMask(x, z))
 end
 
+-- (covers the biggest the land can grow, see Config.LandStages)
+local LAND_MIN_X, _, LAND_MAX_X, LAND_MAX_Z = Grid.maxBounds()
 local function inPlotArea(x: number, z: number): boolean
-	if z < -50 or z > Grid.PLOT_SIZE + 12 then
+	if z < -50 or z > LAND_MAX_Z * Config.CELL + 12 then
 		return false
 	end
 	for i = 1, Config.MAX_PLOTS do
 		local o = Grid.plotOrigin(i)
-		if x > o.X - 8 and x < o.X + Grid.PLOT_SIZE + 8 then
+		if x > o.X + LAND_MIN_X * Config.CELL - 8 and x < o.X + LAND_MAX_X * Config.CELL + 8 then
 			return true
 		end
 	end

@@ -31,18 +31,55 @@ function CameraController:IsEnabled(): boolean
 	return enabled
 end
 
+function CameraController:Toggle()
+	enabled = not enabled
+	if not enabled then
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+	end
+end
+
 function CameraController:Start()
 	local camera = workspace.CurrentCamera
+
+	-- phones and tablets: pinch to zoom, twist two fingers to turn,
+	-- drag two fingers up or down to tilt
+	local pinchStart = targetDistance
+	UserInputService.TouchPinch:Connect(function(_, scale, _, state, processed)
+		if not enabled or processed then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			pinchStart = targetDistance
+		end
+		targetDistance = math.clamp(pinchStart / math.max(scale, 0.05), MIN_DIST, MAX_DIST)
+	end)
+	local rotateStart = yaw
+	UserInputService.TouchRotate:Connect(function(_, rotation, _, state, processed)
+		if not enabled or processed then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			rotateStart = yaw
+		end
+		yaw = rotateStart - math.rad(rotation)
+	end)
+	local panStart = pitch
+	UserInputService.TouchPan:Connect(function(positions, translation, _, state, processed)
+		if not enabled or processed or #positions < 2 then
+			return
+		end
+		if state == Enum.UserInputState.Begin then
+			panStart = pitch
+		end
+		pitch = math.clamp(panStart + translation.Y * 0.005, MIN_PITCH, MAX_PITCH)
+	end)
 
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if input.UserInputType == Enum.UserInputType.MouseButton2 and enabled then
 			rotating = true
 			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
 		elseif input.KeyCode == Enum.KeyCode.V and not processed then
-			enabled = not enabled
-			if not enabled then
-				camera.CameraType = Enum.CameraType.Custom
-			end
+			CameraController:Toggle()
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)

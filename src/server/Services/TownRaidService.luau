@@ -327,6 +327,24 @@ function TownRaidService:MilitiaNear(position: Vector3, look: Vector3, range: nu
 	return found
 end
 
+-- The closest militia fighting `attacker`'s raid (for the war band).
+function TownRaidService:NearestMilitia(attacker: Player, position: Vector3, range: number): (Model?, BasePart?)
+	local best, bestRoot, bestD = nil, nil, range
+	for _, raid in raids do
+		if raid.attacker == attacker then
+			for _, m in raid.militia do
+				if not m.dead and m.root and m.root.Parent then
+					local d = (m.root.Position - position).Magnitude
+					if d < bestD then
+						best, bestRoot, bestD = m.model, m.root, d
+					end
+				end
+			end
+		end
+	end
+	return best, bestRoot
+end
+
 function TownRaidService:DamageMilitia(model: Model, amount: number, attacker: Player)
 	local raid
 	for _, r in raids do
@@ -351,7 +369,7 @@ function TownRaidService:Start()
 	-- a war horn post on the west edge of every plot
 	for i = 1, Config.MAX_PLOTS do
 		local o = Grid.plotOrigin(i)
-		local x, z = o.X - 6, o.Z + Grid.PLOT_SIZE / 2
+		local x, z = o.X - Config.PLOT_GAP / 2, o.Z + Grid.PLOT_SIZE / 2
 		local y = services.WorldService:GroundHeight(x, z)
 		local post = Instance.new("Part")
 		post.Name = "WarHornPost"

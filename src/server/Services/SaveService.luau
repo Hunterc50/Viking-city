@@ -88,7 +88,7 @@ function SaveService:Snapshot(colony)
 		for _, pid in v.parents or {} do
 			table.insert(parents, index[pid])
 		end
-		villagers[i] = { n = v.name, c = v.isChild, a = v.age, p = v.partner and index[v.partner], f = parents }
+		villagers[i] = { n = v.name, c = v.isChild, a = v.age, p = v.partner and index[v.partner], f = parents, w = v.warrior or nil }
 	end
 	local resources = {}
 	for name, amount in colony.resources do
@@ -110,6 +110,10 @@ function SaveService:Snapshot(colony)
 		quest = colony.quest,
 		rank = colony.rank,
 		stats = colony.stats,
+		land = colony.land,
+		relations = colony.relations,
+		rites = colony.rites,
+		warbandMode = colony.warband and colony.warband.mode == "follow" and "follow" or nil,
 	}
 end
 
@@ -129,6 +133,31 @@ function SaveService:Restore(colony, data)
 	colony.day = tonumber(data.day) or colony.day
 	colony.quest = tonumber(data.quest) or 1
 	colony.rank = tonumber(data.rank) or 1
+	-- land first, so buildings out on the bought ground fit
+	local land = tonumber(data.land)
+	if land and Config.LandStages[math.floor(land)] then
+		colony.land = math.floor(land)
+		services.PlotService:ApplyLand(colony)
+	end
+	if type(data.relations) == "table" then
+		colony.relations = {}
+		for name, rel in data.relations do
+			if type(name) == "string" and type(rel) == "table" then
+				colony.relations[name] = {
+					mood = tonumber(rel.mood) or 0,
+					allied = rel.allied == true,
+					deal = rel.deal == true,
+					tributeDays = tonumber(rel.tributeDays) or 0,
+				}
+			end
+		end
+	end
+	if type(data.rites) == "table" then
+		colony.rites = {
+			feastUntil = tonumber(data.rites.feastUntil) or 0,
+			feastReady = tonumber(data.rites.feastReady) or 0,
+		}
+	end
 	if type(data.stats) == "table" then
 		for k, n in data.stats do
 			if type(k) == "string" and type(n) == "number" then
@@ -158,6 +187,13 @@ function SaveService:Restore(colony, data)
 	local made = {}
 	for i, saved in villagers do
 		made[i] = services.VillagerService:Add(colony, saved.c == true, nil, type(saved.n) == "string" and saved.n or nil, tonumber(saved.a) or 0)
+		if saved.w == true and saved.c ~= true then
+			made[i].warrior = true
+			services.VillagerService:Rebuild(colony, made[i])
+		end
+	end
+	if data.warbandMode == "follow" then
+		colony.warband = { mode = "follow" }
 	end
 	-- re-link families
 	for i, saved in villagers do

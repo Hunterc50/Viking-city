@@ -33,8 +33,31 @@ function Grid.footprint(buildingType: string, rot: number): (number, number)
 	return sx, sz
 end
 
-function Grid.inBounds(cx: number, cz: number, sx: number, sz: number): boolean
-	return cx >= 0 and cz >= 0 and cx + sx <= N and cz + sz <= N
+-- The cell bounds of a plot at land stage `land` (1 = starting size):
+-- minX, minZ, maxX, maxZ, with max exclusive. Cells may be negative.
+function Grid.bounds(land: number?): (number, number, number, number)
+	local stage = Config.LandStages[land or 1] or Config.LandStages[1]
+	return stage.MinX, 0, stage.MaxX, stage.MaxZ
+end
+
+-- The world-space box of the land: min corner and size (studs).
+function Grid.landRect(origin: Vector3, land: number?): (Vector3, Vector3)
+	local minX, minZ, maxX, maxZ = Grid.bounds(land)
+	return origin + Vector3.new(minX * CELL, 0, minZ * CELL), Vector3.new((maxX - minX) * CELL, 0, (maxZ - minZ) * CELL)
+end
+
+-- The largest the land can ever grow (used to keep scenery off it).
+function Grid.maxBounds(): (number, number, number, number)
+	local a, b, c, d = 0, 0, N, N
+	for _, stage in Config.LandStages do
+		a, c, d = math.min(a, stage.MinX), math.max(c, stage.MaxX), math.max(d, stage.MaxZ)
+	end
+	return a, b, c, d
+end
+
+function Grid.inBounds(cx: number, cz: number, sx: number, sz: number, land: number?): boolean
+	local minX, minZ, maxX, maxZ = Grid.bounds(land)
+	return cx >= minX and cz >= minZ and cx + sx <= maxX and cz + sz <= maxZ
 end
 
 -- Calls fn(x, z) for every cell covered by the rectangle.
@@ -47,8 +70,8 @@ function Grid.eachCell(cx: number, cz: number, sx: number, sz: number, fn: (numb
 end
 
 -- `blocked` is a set: { ["x,z"] = true/anything }.
-function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number): (boolean, string?)
-	if not Grid.inBounds(cx, cz, sx, sz) then
+function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number, land: number?): (boolean, string?)
+	if not Grid.inBounds(cx, cz, sx, sz, land) then
 		return false, "Outside your land"
 	end
 	local free = true

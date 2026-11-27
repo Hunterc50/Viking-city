@@ -89,7 +89,7 @@ local function frameStroke()
 	return new("UIStroke", { Color = THEME.Accent, Thickness = 1, Transparency = 0.55, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
 end
 
-local DEFAULT_HINT = "Pick a tab and a building. Walk up to trees, rocks and bushes and hold E to gather."
+local DEFAULT_HINT = "Pick a tab and a building. Swing the Axe at trees and the Pickaxe at rocks to gather."
 
 local function moodWord(h: number): string
 	if h >= 75 then
@@ -477,9 +477,24 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   M: map size\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   J: Jarl's Table\nM: map size   E at a berry bush: pick\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
+	if game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled then
+		-- phone or tablet: explain the touch controls instead (TouchController)
+		helpBody.Text = "Tools: tap the slots at the bottom\nTap a tree, rock or enemy to swing\nBow: tap where to shoot\nBuilding: tap to move it, then Place\nPinch: zoom   Twist: turn   2-finger drag: tilt\nAt the helm: arrows to sail, Volley to shoot"
+		task.delay(25, function()
+			helpOpen = false
+			helpBody.Visible = false
+		end)
+		-- tap the box to show or hide it
+		help.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch then
+				helpOpen = not helpOpen
+				helpBody.Visible = helpOpen
+			end
+		end)
+	end
 	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.H then
 			helpOpen = not helpOpen

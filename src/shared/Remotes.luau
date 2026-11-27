@@ -15,6 +15,7 @@ local EVENTS = {
 	"BoatInput", -- client -> server: (throttle, steer) while sailing
 	"OpenTrade", -- server -> client: you're at a trading stall, show the trade window
 	"BoatFire", -- client -> server: loose a volley from your ship (F at the helm)
+	"WarReport", -- server -> client: your war band came home, here is what happened
 }
 
 local FUNCTIONS = {
@@ -22,6 +23,7 @@ local FUNCTIONS = {
 	"DemolishBuilding", -- client -> server: (buildingId) -> ok, message
 	"Research", -- client -> server: (techId) -> ok, message
 	"Trade", -- client -> server: (offerIndex) -> ok, message
+	"Council", -- client -> server: Jarl's Table actions (action, arg) -> ok, message
 }
 
 local Remotes = {}

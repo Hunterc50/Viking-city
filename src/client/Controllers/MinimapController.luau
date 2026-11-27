@@ -131,10 +131,13 @@ function MinimapController:Start()
 		ZIndex = 8,
 		Parent = frame,
 	})
+	MinimapController.Toggle = function()
+		sizeIndex = sizeIndex % #SIZES + 1
+		frame.Size = UDim2.fromOffset(SIZES[sizeIndex], SIZES[sizeIndex])
+	end
 	UserInputService.InputBegan:Connect(function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.M then
-			sizeIndex = sizeIndex % #SIZES + 1
-			frame.Size = UDim2.fromOffset(SIZES[sizeIndex], SIZES[sizeIndex])
+			MinimapController:Toggle()
 		end
 	end)
 

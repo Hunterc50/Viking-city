@@ -25,6 +25,7 @@ local services
 local Terrain = Workspace.Terrain
 local M = Enum.Material
 local currentIndex = 1
+local turn = 0 -- how many seasons have begun since the server started
 
 local SNOW = Color3.fromRGB(236, 240, 246)
 
@@ -151,6 +152,8 @@ local function apply(index: number, announce: boolean)
 	local season = Config.Seasons[index]
 	Workspace:SetAttribute("Season", season.Name)
 	Workspace:SetAttribute("SeasonIndex", index)
+	turn += 1
+	Workspace:SetAttribute("SeasonTurn", turn)
 
 	for material, color in TERRAIN[season.Name] do
 		Terrain:SetMaterialColor(M[material], color)

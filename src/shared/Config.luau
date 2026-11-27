@@ -373,6 +373,82 @@ Config.Ranks = {
 	{ Name = "King", PopCap = 70, Needs = { Population = 32, Buildings = 24, Tech = 12 }, Reward = { Silver = 100, Lore = 60 } },
 }
 
+-- Land ----------------------------------------------------------------------
+-- Buy bigger land in stages (Jarl's Table > Land). Cells are counted from the
+-- plot's front-left corner; MinX below 0 grows the land sideways into the gap
+-- between plots, MaxZ grows it back toward the meadow. Never overlaps a
+-- neighbour: the gap between plots is 6 cells and each side takes at most 2.
+Config.LandStages = {
+	{ Name = "Homestead", MinX = 0, MaxX = 20, MaxZ = 20 },
+	{ Name = "Farmstead", MinX = 0, MaxX = 20, MaxZ = 23, Cost = { Silver = 40, Wood = 60 }, Rank = 1 },
+	{ Name = "Steading", MinX = -2, MaxX = 22, MaxZ = 23, Cost = { Silver = 90, Stone = 50 }, Rank = 2 },
+	{ Name = "Great Steading", MinX = -2, MaxX = 22, MaxZ = 26, Cost = { Silver = 160, Wood = 100, Stone = 80 }, Rank = 3 },
+}
+
+-- War band ------------------------------------------------------------------
+-- Hire grown villagers as warriors (Jarl's Table > War band). They stop
+-- working, follow you, fight beside you and crew your longship. Or send them
+-- off on their own to raid a hold and bring the loot home.
+Config.Warband = {
+	HireCost = { Silver = 10, Food = 20 },
+	MaxByRank = { 2, 3, 5, 7, 10 }, -- Settler .. King
+	Health = 100, -- + 40 with Ring Mail
+	Damage = 12, -- per blow; Iron Blades +4, Steel Edges +8
+	HitCooldown = 1.4,
+	Reach = 6,
+	Sight = 40, -- studs: how far they spot an enemy near you
+	HealPerSecond = 1, -- when not fighting
+	-- longship crew: each warrior aboard adds this much speed and one arrow per volley
+	CrewSpeed = 0.05,
+	CrewSpeedMax = 0.3,
+	-- expeditions: the band leaves, then comes home with a report
+	ExpeditionSeconds = 120, -- to a hold in the valley
+	SeaExpeditionSeconds = 180, -- to Skerholm (needs the Karve research)
+	WarriorPower = 3, -- + 1 each for Ring Mail, Iron Blades, Steel Edges
+	LootShare = 0.8, -- share of the hold's chest loot on a full victory
+}
+
+-- Diplomacy -------------------------------------------------------------------
+-- Every hold has a mood toward you, -100 (blood feud) to 100 (sworn allies).
+Config.Diplomacy = {
+	GiftCost = { Silver = 25 },
+	GiftGain = 20,
+	DemandMinPower = 0.6, -- your war band must be this strong vs the hold to demand tribute
+	TributePerDay = { Silver = 12, Food = 25 },
+	TributeDays = 4,
+	AllianceMood = 60,
+	AllianceCost = { Silver = 60 },
+	DealMood = 30,
+	AttackMood = -50, -- raiding a hold sets its mood to at most this
+	DriftPerDay = 3, -- moods slowly return toward 0
+	-- what each hold's trade deal swaps every day: you pay Give, they send Get
+	Deals = {
+		["Greywater Hold"] = { Give = { Wood = 20 }, Get = { Food = 30 } },
+		["Ravensfell"] = { Give = { Food = 20 }, Get = { Stone = 25 } },
+		["Skerholm"] = { Give = { Hides = 3 }, Get = { Silver = 12 } },
+	},
+}
+
+-- Feasts and rites ------------------------------------------------------------
+Config.Rites = {
+	Feast = {
+		Name = "Feast in the hall",
+		Cost = { Food = 80, Hides = 2 },
+		Needs = "Longhouse",
+		Happiness = 20, -- extra happiness target while it lasts
+		Days = 1,
+		CooldownDays = 2,
+	},
+	-- one blót each season, at the Shrine; it blesses the rest of the season
+	Blot = {
+		Needs = "Shrine",
+		Spring = { Name = "Sigrblót", Cost = { Food = 40, Silver = 10 }, Text = "Farms work 25% faster this season.", Farm = 1.25 },
+		Summer = { Name = "Midsummer blót", Cost = { Food = 40, Silver = 10 }, Text = "+15 happiness and newcomers come twice as often this season.", Happiness = 15, Immigration = 2 },
+		Autumn = { Name = "Haustblót", Cost = { Food = 30, Wood = 40 }, Text = "Woodcutters and quarries work 25% faster this season.", Work = 1.25 },
+		Winter = { Name = "Jólablót (Yule)", Cost = { Food = 60, Silver = 15 }, Text = "+20 happiness and your people eat less this season.", Happiness = 20, FoodUse = 0.8 },
+	},
+}
+
 -- Rival warbands raid YOUR village every few days. Fight them off, build
 -- Palisades to slow them and Watchtowers (with an archer) to shoot them.
 -- Raiders who reach your stores carry off a share; nothing is destroyed.

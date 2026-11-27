@@ -1292,6 +1292,67 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 	return model
 end
 
+-- Gives a villager figure a helmet, a round shield on the left arm and an axe
+-- in the right hand, for the war band. Safe to call twice.
+function ModelFactory.armWarrior(model: Model)
+	if model:GetAttribute("Warrior") then
+		return
+	end
+	local body = model.PrimaryPart
+	if not body then
+		return
+	end
+	model:SetAttribute("Warrior", true)
+	local function piece(name, size, cf: CFrame, color, material, shape, to: BasePart?)
+		local p = Instance.new("Part")
+		p.Name = name
+		if shape then
+			p.Shape = shape
+		end
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.Massless = true
+		p.Size = size
+		p.Color = color
+		p.Material = material
+		p.CFrame = cf
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = to or body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	local head = model:FindFirstChild("Head")
+	if head and head:IsA("BasePart") then
+		local r = head.Size.X
+		piece("Helmet", Vector3.new(r * 1.08, r * 0.6, r * 1.08), head.CFrame * CFrame.new(0, r * 0.22, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, Enum.PartType.Ball, head)
+		piece("Nasal", Vector3.new(r * 0.12, r * 0.45, r * 0.12), head.CFrame * CFrame.new(0, 0, -r * 0.5), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, nil, head)
+	end
+	local left, right
+	for _, arm in model:GetChildren() do
+		if arm.Name == "Arm" and arm:IsA("BasePart") then
+			if arm:GetAttribute("Side") == -1 then
+				left = arm
+			else
+				right = arm
+			end
+		end
+	end
+	local paint = ({ Color3.fromRGB(168, 44, 38), Color3.fromRGB(214, 176, 96), Color3.fromRGB(46, 74, 120) })[math.random(1, 3)]
+	if left then
+		local cf = left.CFrame * CFrame.new(-left.Size.X / 2 - 0.15, -0.1, 0) -- a cylinder lies along X: a disc on the arm
+		piece("Shield", Vector3.new(0.2, 2.4, 2.4), cf, paint, Enum.Material.Wood, Enum.PartType.Cylinder, left)
+		piece("ShieldBoss", Vector3.new(0.35, 0.6, 0.6), cf * CFrame.new(-0.15, 0, 0), Color3.fromRGB(150, 150, 156), Enum.Material.Metal, Enum.PartType.Cylinder, left)
+	end
+	if right then
+		local hand = right.CFrame * CFrame.new(0, -right.Size.Y / 2, 0)
+		piece("AxeHaft", Vector3.new(0.18, 2.6, 0.18), hand * CFrame.Angles(math.rad(-80), 0, 0) * CFrame.new(0, 0.9, 0), Color3.fromRGB(92, 66, 42), Enum.Material.Wood, nil, right)
+		piece("AxeHead", Vector3.new(0.12, 0.7, 0.8), hand * CFrame.Angles(math.rad(-80), 0, 0) * CFrame.new(0, 2, -0.3), Color3.fromRGB(150, 152, 158), Enum.Material.Metal, nil, right)
+	end
+end
+
 -- Tools -----------------------------------------------------------------------
 
 -- Builds a hand tool ("Axe", "Pickaxe", "Bow" or "Torch") that players hold.

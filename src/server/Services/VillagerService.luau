@@ -47,9 +47,8 @@ local function counts(colony)
 end
 
 local function clampToPlot(colony, pos: Vector3): Vector3
-	local o = colony.origin
-	local size = Grid.PLOT_SIZE
-	return Vector3.new(math.clamp(pos.X, o.X + 2, o.X + size - 2), o.Y, math.clamp(pos.Z, o.Z + 2, o.Z + size - 2))
+	local o, size = Grid.landRect(colony.origin, colony.land)
+	return Vector3.new(math.clamp(pos.X, o.X + 2, o.X + size.X - 2), o.Y, math.clamp(pos.Z, o.Z + 2, o.Z + size.Z - 2))
 end
 
 -- A random spot just outside the edge of a building.
@@ -121,6 +120,8 @@ local function updateLabel(colony, v)
 	local heart = v.partner and colony.villagers[v.partner] and " ♥" or ""
 	if stage == "baby" or stage == "child" then
 		label.Text = v.name .. " (" .. stage .. ")"
+	elseif v.warrior then
+		label.Text = v.name .. heart .. " (Warrior)"
 	elseif v.job and colony.buildings[v.job] then
 		label.Text = v.name .. heart .. " (" .. Config.Buildings[colony.buildings[v.job].type].Display .. ")"
 	else
@@ -137,9 +138,19 @@ local function makeModel(colony, v, groundPos: Vector3)
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
-	v.model.Parent = colony.plot.Villagers
+	if v.warrior then
+		ModelFactory.armWarrior(v.model)
+	end
+	-- away on an expedition: the figure waits until they come home
+	v.model.Parent = (not v.away) and colony.plot.Villagers or nil
 	v.busyUntil = 0
 	updateLabel(colony, v)
+end
+
+-- Builds a fresh figure for `v` where they stand (e.g. after leaving the war band).
+function VillagerService:Rebuild(colony, v)
+	local pos = v.body and (v.body.Position - Vector3.new(0, v.height or 0, 0)) or colony.origin
+	makeModel(colony, v, pos)
 end
 
 -- Redraws the name tag (after a name or age is restored from a save).
@@ -214,6 +225,9 @@ end
 local function assignJobs(colony)
 	local filled = {}
 	for _, v in colony.villagers do
+		if v.job and v.warrior then
+			v.job = nil
+		end
 		if v.job then
 			if colony.buildings[v.job] then
 				filled[v.job] = (filled[v.job] or 0) + 1
@@ -236,7 +250,7 @@ local function assignJobs(colony)
 		if #openings == 0 then
 			break
 		end
-		if not v.isChild and not v.job then
+		if not v.isChild and not v.job and not v.warrior then
 			v.job = table.remove(openings, 1)
 			v.busyUntil = 0 -- walk to work right away
 			updateLabel(colony, v)
@@ -257,6 +271,7 @@ local function produce(colony, dt: number)
 		end
 	end
 	local season = services.SeasonService:Current()
+	local blessing = services.RiteService and services.RiteService:Blessing(colony) or nil
 	for id, b in colony.buildings do
 		local produces = Config.Buildings[b.type].Produces
 		local n = workers[id]
@@ -274,6 +289,13 @@ local function produce(colony, dt: number)
 				elseif b.type == "LoreHall" and ColonyService:Has(colony, "SagaTellers") then
 					bonus *= 1.5
 				end
+				if blessing then
+					if b.type == "Farm" and blessing.Farm then
+						bonus *= blessing.Farm
+					elseif (b.type == "Woodcutter" or b.type == "Quarry") and blessing.Work then
+						bonus *= blessing.Work
+					end
+				end
 				ColonyService:Add(colony, resource, rate * n * dt * efficiency * seasonal * bonus)
 			end
 		end
@@ -285,6 +307,10 @@ local function eat(colony, dt: number)
 	local foodUse = services.SeasonService:Current().FoodUse
 	if services.ColonyService:Has(colony, "MidwinterRite") then
 		foodUse = 1
+	end
+	local blessing = services.RiteService and services.RiteService:Blessing(colony)
+	if blessing and blessing.FoodUse then
+		foodUse *= blessing.FoodUse
 	end
 	local need = (adults * V.FoodPerAdultPerSecond + children * V.FoodPerChildPerSecond) * dt * foodUse
 	local food = colony.resources.Food or 0
@@ -331,10 +357,23 @@ local function updateHappiness(colony, dt: number)
 	if ColonyService:Has(colony, "PathHearth") then
 		target += 10
 	end
+	-- feasts and blóts (RiteService)
+	local Rites = services.RiteService
+	if Rites then
+		target += Rites:FeastBonus(colony)
+		local blessing = Rites:Blessing(colony)
+		if blessing and blessing.Happiness then
+			target += blessing.Happiness
+		end
+	end
 	target = math.clamp(target, 0, 100)
 
 	colony.happiness += (target - colony.happiness) * math.min(1, 0.05 * dt)
 	colony.homeless = homeless
+end
+
+local function blessingOf(colony)
+	return (services.RiteService and services.RiteService:Blessing(colony)) or {}
 end
 
 local function newDay(self, colony)
@@ -421,7 +460,7 @@ local function newDay(self, colony)
 	end
 
 	-- Immigration from neighbouring tribes.
-	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay then
+	if free > 0 and not colony.starving and h >= V.ImmigrationMinHappiness and rng:NextNumber() < V.ImmigrationChancePerDay * (blessingOf(colony).Immigration or 1) then
 		local maxGroup = V.ImmigrationMaxGroup * (ColonyService:Has(colony, "OpenArms") and 2 or 1)
 		local n = rng:NextInteger(1, math.min(maxGroup, free))
 		local tribe = Config.Tribes[rng:NextInteger(1, #Config.Tribes)]
@@ -496,7 +535,9 @@ function VillagerService:Tick(colony, dt: number)
 
 	local now = os.clock()
 	for _, v in colony.villagers do
-		walk(colony, v, now)
+		if not v.warrior then -- the war band moves itself (WarbandService)
+			walk(colony, v, now)
+		end
 	end
 end
 

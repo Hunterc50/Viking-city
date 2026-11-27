@@ -243,6 +243,15 @@ end
 -- Combat --------------------------------------------------------------------
 
 -- An arrow from a player's bow landed on `inst`: if it's part of an enemy ship, hurt it.
+-- The player's own ship while they are at its helm (nil otherwise).
+function BoatService:ShipOf(player: Player)
+	local ship = boats[player]
+	if ship and ships[ship] and not ship.sinking and ship.seat and ship.seat.Occupant and ship.seat.Occupant.Parent == player.Character then
+		return ship
+	end
+	return nil
+end
+
 function BoatService:ArrowHit(inst: Instance, player: Player)
 	for ship in ships do
 		if ship.owner ~= player and inst:IsDescendantOf(ship.model) then
@@ -303,8 +312,10 @@ local function volley(ship)
 	if attacker and services.ColonyService:Has(services.ColonyService:Get(attacker), "Longbows") then
 		accuracy = 0.9
 	end
-	for i = 1, N.VolleyArrows do
-		local from = ship.cf * CFrame.new(rng:NextNumber(-2, 2), 4, (i - N.VolleyArrows / 2) * ship.length / (N.VolleyArrows + 1))
+	-- every warrior aboard looses one more arrow
+	local arrows = N.VolleyArrows + (attacker and services.WarbandService and services.WarbandService:CrewCount(attacker) or 0)
+	for i = 1, arrows do
+		local from = ship.cf * CFrame.new(rng:NextNumber(-2, 2), 4, (i - arrows / 2) * ship.length / (arrows + 1))
 		local hit = rng:NextNumber() < accuracy
 		local aim = target.cf * CFrame.new(rng:NextNumber(-2, 2), 3, rng:NextNumber(-target.length / 2.5, target.length / 2.5))
 		local to = hit and aim.Position or (aim.Position + Vector3.new(rng:NextNumber(-10, 10), -3, rng:NextNumber(-10, 10)))
@@ -358,7 +369,9 @@ end
 -- Movement shared by every ship. Returns the turn rate used (for the roll).
 local function steerShip(ship, throttle: number, steerInput: number, step: number): number
 	local weather = services.WeatherService
-	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1) * (weather and weather:ShipSpeed() or 1)
+	-- warriors at the oars row faster (WarbandService)
+	local crew = ship.owner and services.WarbandService and services.WarbandService:CrewBonus(ship.owner) or 0
+	local target = throttle * ship.maxSpeed * (throttle < 0 and 0.4 or 1) * (weather and weather:ShipSpeed() or 1) * (1 + crew)
 	ship.speed += (target - ship.speed) * math.min(1, step * 0.8)
 	local turnRate = steerInput * ship.turn * math.clamp(math.abs(ship.speed) / 10, 0.25, 1)
 	local heading = ship.cf * CFrame.Angles(0, -turnRate * step, 0)

@@ -127,7 +127,7 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 		return false, "Research " .. Config.Tech[def.Requires].Name .. " first (press T)"
 	end
 	local sx, sz = Grid.footprint(buildingType, rot)
-	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz)
+	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz, colony.land)
 	if not ok then
 		return false, reason
 	end

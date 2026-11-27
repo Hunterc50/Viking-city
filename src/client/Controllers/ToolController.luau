@@ -8,12 +8,12 @@
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
 local Config = require(Shared.Config)
+local Pointer = require(Shared.Pointer)
 
 local ToolController = {}
 
@@ -22,7 +22,7 @@ local lastShot = 0
 
 local function aimPoint(): Vector3
 	local camera = workspace.CurrentCamera
-	local pos = UserInputService:GetMouseLocation()
+	local pos = Pointer.location()
 	local ray = camera:ViewportPointToRay(pos.X, pos.Y)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude

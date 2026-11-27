@@ -90,12 +90,12 @@ function TechController:Start()
 	local openButton = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -12, 0, 170),
-		Size = UDim2.fromOffset(230, 36),
+		Size = UDim2.fromOffset(113, 36),
 		BackgroundColor3 = Color3.fromRGB(70, 54, 34),
 		Font = Enum.Font.GothamBold,
-		TextSize = 16,
+		TextSize = 14,
 		TextColor3 = THEME.Accent,
-		Text = "Research  (T)",
+		Text = "Research (T)",
 		Parent = gui,
 	})
 	corner(openButton)
@@ -299,6 +299,7 @@ function TechController:Start()
 			refresh(controllers.StateController.State)
 		end
 	end
+	TechController.Toggle = toggle
 	openButton.Activated:Connect(toggle)
 	close.Activated:Connect(toggle)
 	UserInputService.InputBegan:Connect(function(input, processed)

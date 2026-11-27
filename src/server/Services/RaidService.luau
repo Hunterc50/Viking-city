@@ -225,6 +225,9 @@ local function newHold(R)
 			chest.looted = true
 			chest.prompt.Enabled = false
 			services.QuestService:Count(colony, "plunder")
+			if services.DiplomacyService then
+				services.DiplomacyService:OnHostile(colony, R.Name)
+			end
 			markRaid()
 			-- swing the lid open
 			lid.CFrame = chest.hinge * CFrame.Angles(math.rad(-100), 0, 0) * chest.hinge:Inverse() * chest.lidClosed
@@ -383,6 +386,10 @@ local function newHold(R)
 			return
 		end
 		humanoid:TakeDamage(amount)
+		local colony = attacker and services.ColonyService:Get(attacker)
+		if colony and services.DiplomacyService then
+			services.DiplomacyService:OnHostile(colony, R.Name)
+		end
 		if not state.alarm then
 			state.alarm = true
 			notifyAll(attacker.DisplayName .. " is raiding " .. R.Name .. "!", "raid")
@@ -414,13 +421,29 @@ local function newHold(R)
 		return found
 	end
 
+	-- The closest living guard to `position` (for the war band).
+	function hold:NearestDefender(position: Vector3, range: number): (Model?, BasePart?)
+		local best, bestRoot, bestD = nil, nil, range
+		for _, g in state.defenders do
+			if not g.dead and g.root and g.root.Parent then
+				local d = (g.root.Position - position).Magnitude
+				if d < bestD then
+					best, bestRoot, bestD = g.model, g.root, d
+				end
+			end
+		end
+		return best, bestRoot
+	end
+
 	local function nearestTarget(from: Vector3, maxDist: number): (Model?, number)
 		local best, bestDist = nil, maxDist
 		for _, player in Players:GetPlayers() do
 			local character = player.Character
 			local root = character and character:FindFirstChild("HumanoidRootPart")
 			local hum = character and character:FindFirstChildOfClass("Humanoid")
-			if root and hum and hum.Health > 0 then
+			-- allies of this hold are left alone (DiplomacyService)
+			local allied = services.DiplomacyService and services.DiplomacyService:IsAlliedPlayer(player, R.Name)
+			if root and hum and hum.Health > 0 and not allied then
 				local inTerritory = flat(root.Position - CENTER).Magnitude < R.DefenderAggro
 				local d = (root.Position - from).Magnitude
 				if (inTerritory or state.alarm) and d < bestDist then
@@ -835,6 +858,18 @@ function RaidService:DefendersNear(position: Vector3, look: Vector3, range: numb
 		end
 	end
 	return found
+end
+
+-- The closest living guard of any hold (for the war band), and its damage.
+function RaidService:NearestDefender(position: Vector3, range: number): (Model?, BasePart?, number?)
+	local best, bestRoot, bestDmg, bestD = nil, nil, nil, range
+	for _, h in holds do
+		local m, root = h:NearestDefender(position, bestD)
+		if m and root then
+			best, bestRoot, bestDmg, bestD = m, root, h.def.DefenderDamage, (root.Position - position).Magnitude
+		end
+	end
+	return best, bestRoot, bestDmg
 end
 
 function RaidService:Start()

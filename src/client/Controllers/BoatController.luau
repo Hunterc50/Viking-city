@@ -15,6 +15,10 @@ local BoatController = {}
 
 local player = Players.LocalPlayer
 
+-- set by the on-screen buttons on phones and tablets (TouchController)
+BoatController.TouchThrottle = 0
+BoatController.TouchSteer = 0
+
 local function down(...)
 	for _, key in { ... } do
 		if UserInputService:IsKeyDown(key) then
@@ -24,12 +28,18 @@ local function down(...)
 	return false
 end
 
+function BoatController:Volley()
+	Remotes.BoatFire:FireServer()
+end
+
 local function atHelm(): boolean
 	local character = player.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local seat = humanoid and humanoid.SeatPart
 	return seat ~= nil and seat:GetAttribute("Boat") == true
 end
+
+BoatController.AtHelm = atHelm
 
 function BoatController:Start()
 	UserInputService.InputBegan:Connect(function(input, processed)
@@ -51,8 +61,8 @@ function BoatController:Start()
 			return
 		end
 		local K = Enum.KeyCode
-		local throttle = (down(K.W, K.Up) and 1 or 0) - (down(K.S, K.Down) and 1 or 0)
-		local steer = (down(K.D, K.Right) and 1 or 0) - (down(K.A, K.Left) and 1 or 0)
+		local throttle = math.clamp((down(K.W, K.Up) and 1 or 0) - (down(K.S, K.Down) and 1 or 0) + BoatController.TouchThrottle, -1, 1)
+		local steer = math.clamp((down(K.D, K.Right) and 1 or 0) - (down(K.A, K.Left) and 1 or 0) + BoatController.TouchSteer, -1, 1)
 		timer += dt
 		if throttle ~= last[1] or steer ~= last[2] or timer > 0.5 then
 			timer = 0

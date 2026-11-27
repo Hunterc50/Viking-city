@@ -253,7 +253,8 @@ local function startRaid(colony, hold)
 	-- they come from the side of the plot nearest their hold
 	local o = colony.origin
 	local fromWest = hold.Center.X < o.X
-	local x = fromWest and (o.X - 14) or (o.X + Grid.PLOT_SIZE + 14)
+	-- the middle of the gap beside the plot, clear of even the biggest land
+	local x = fromWest and (o.X - Config.PLOT_GAP / 2) or (o.X + Grid.PLOT_SIZE + Config.PLOT_GAP / 2)
 	for i = 1, count do
 		local z = o.Z + Grid.PLOT_SIZE * 0.3 + i * 6
 		local y = services.WorldService:GroundHeight(x, z)
@@ -272,7 +273,18 @@ for _, r in Config.Rivals do
 end
 
 local function warnOf(colony)
-	local hold = landHolds[rng:NextInteger(1, #landHolds)]
+	-- allies and holds paying you tribute don't raid you (DiplomacyService)
+	local hostile = {}
+	for _, r in landHolds do
+		if not services.DiplomacyService or services.DiplomacyService:WillRaid(colony, r.Name) then
+			table.insert(hostile, r)
+		end
+	end
+	if #hostile == 0 then
+		colony.nextRaidDay = colony.day + rng:NextInteger(VR.EveryDays[1], VR.EveryDays[2])
+		return
+	end
+	local hold = hostile[rng:NextInteger(1, #hostile)]
 	colony.raidWarned = true
 	notify(colony, "Scouts report a " .. hold.Name .. " warband marching on your village! They arrive in " .. VR.WarningSeconds .. " seconds.", "raid")
 	task.delay(VR.WarningSeconds, function()
@@ -401,6 +413,24 @@ function VillageDefenseService:RaidersNear(position: Vector3, look: Vector3, ran
 		end
 	end
 	return found
+end
+
+-- The closest raider attacking `colony` (for the war band).
+function VillageDefenseService:NearestRaider(colony, position: Vector3, range: number): (Model?, BasePart?)
+	local raid = raids[colony]
+	if not raid then
+		return nil, nil
+	end
+	local best, bestRoot, bestD = nil, nil, range
+	for _, r in raid.raiders do
+		if not r.dead and not r.fled and r.root and r.root.Parent then
+			local d = (r.root.Position - position).Magnitude
+			if d < bestD then
+				best, bestRoot, bestD = r.model, r.root, d
+			end
+		end
+	end
+	return best, bestRoot
 end
 
 function VillageDefenseService:DamageRaider(model: Model, amount: number)

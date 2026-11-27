@@ -164,6 +164,11 @@ function ColonyService:Sync(colony)
 		dayProgress = colony.dayTimer / Config.DAY_LENGTH,
 		quest = services.QuestService:State(colony),
 		rank = services.RankService:State(colony),
+		land = colony.land or 1,
+		council = (function()
+			local ok, council = pcall(services.CouncilService.State, services.CouncilService, colony)
+			return ok and council or nil
+		end)(),
 	}
 
 	if colony.gridDirty then

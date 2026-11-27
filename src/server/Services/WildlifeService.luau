@@ -22,7 +22,8 @@ local folder: Folder
 local herd = {} -- [model] = deer record
 local nextId = 0
 
-local MEADOW_MIN_Z, MEADOW_MAX_Z = Grid.PLOT_SIZE + 18, Grid.PLOT_SIZE + 105
+local _, _, _, LAND_MAX_Z = Grid.maxBounds()
+local MEADOW_MIN_Z, MEADOW_MAX_Z = LAND_MAX_Z * Config.CELL + 16, Grid.PLOT_SIZE + 105
 
 function WildlifeService:Init(allServices)
 	services = allServices

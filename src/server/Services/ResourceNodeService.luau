@@ -26,9 +26,10 @@ function ResourceNodeService:Init(allServices)
 end
 
 local function randomFreeCell(colony)
+	local minX, minZ, maxX, maxZ = Grid.bounds(colony.land)
 	for _ = 1, 60 do
-		local x = rng:NextInteger(0, Config.PLOT_CELLS - 1)
-		local z = rng:NextInteger(0, Config.PLOT_CELLS - 1)
+		local x = rng:NextInteger(minX, maxX - 1)
+		local z = rng:NextInteger(minZ, maxZ - 1)
 		if not colony.blocked[Grid.key(x, z)] then
 			return x, z
 		end

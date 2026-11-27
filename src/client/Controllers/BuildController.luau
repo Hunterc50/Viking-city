@@ -14,6 +14,7 @@ local UserInputService = game:GetService("UserInputService")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Grid = require(Shared.Grid)
+local Pointer = require(Shared.Pointer)
 local Remotes = require(Shared.Remotes)
 local ModelFactory = require(Shared.ModelFactory)
 
@@ -44,7 +45,7 @@ end
 
 local function mouseRay(): (Vector3, Vector3)
 	local camera = workspace.CurrentCamera
-	local pos = UserInputService:GetMouseLocation()
+	local pos = Pointer.location()
 	local ray = camera:ViewportPointToRay(pos.X, pos.Y)
 	return ray.Origin, ray.Direction * 1000
 end
@@ -71,9 +72,12 @@ local function showGrid(visible: boolean)
 	end
 	gridLines = Instance.new("Folder")
 	gridLines.Name = "BuildGrid"
-	local size = Grid.PLOT_SIZE
-	for i = 0, Config.PLOT_CELLS do
-		for axis = 1, 2 do
+	local state = controllers.StateController.State
+	local minX, minZ, maxX, maxZ = Grid.bounds(state and state.land)
+	local corner = origin + Vector3.new(minX * Config.CELL, 0, minZ * Config.CELL)
+	local sizeX, sizeZ = (maxX - minX) * Config.CELL, (maxZ - minZ) * Config.CELL
+	for axis = 1, 2 do
+		for i = 0, (axis == 1 and (maxX - minX) or (maxZ - minZ)) do
 			local line = Instance.new("Part")
 			line.Anchored = true
 			line.CanCollide = false
@@ -84,11 +88,11 @@ local function showGrid(visible: boolean)
 			line.Transparency = 0.82
 			local offset = i * Config.CELL
 			if axis == 1 then
-				line.Size = Vector3.new(0.12, 0.05, size)
-				line.Position = origin + Vector3.new(offset, 0.08, size / 2)
+				line.Size = Vector3.new(0.12, 0.05, sizeZ)
+				line.Position = corner + Vector3.new(offset, 0.08, sizeZ / 2)
 			else
-				line.Size = Vector3.new(size, 0.05, 0.12)
-				line.Position = origin + Vector3.new(size / 2, 0.08, offset)
+				line.Size = Vector3.new(sizeX, 0.05, 0.12)
+				line.Position = corner + Vector3.new(sizeX / 2, 0.08, offset)
 			end
 			line.Parent = gridLines
 		end
@@ -150,11 +154,13 @@ local function updatePlacement()
 	local sx, sz = Grid.footprint(mode.type, rot)
 	local cx, cz = Grid.worldToCell(origin, hit.Position, sx, sz)
 	-- keep the preview inside the plot so it doesn't jump off the edge
-	cx = math.clamp(cx, 0, Config.PLOT_CELLS - sx)
-	cz = math.clamp(cz, 0, Config.PLOT_CELLS - sz)
-
 	local state = controllers.StateController.State
-	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz)
+	local land = state and state.land
+	local minX, minZ, maxX, maxZ = Grid.bounds(land)
+	cx = math.clamp(cx, minX, maxX - sx)
+	cz = math.clamp(cz, minZ, maxZ - sz)
+
+	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz, land)
 	local affordable = state ~= nil and Grid.canAfford(state.resources, Config.Buildings[mode.type].Cost)
 	local ok = free and affordable
 
@@ -223,6 +229,21 @@ local function confirm()
 	end
 end
 
+-- For the touch buttons (TouchController).
+function BuildController:Confirm()
+	confirm()
+end
+
+function BuildController:Rotate()
+	if mode and mode.kind == "place" then
+		rot = (rot + 1) % 4
+	end
+end
+
+function BuildController:Mode()
+	return mode
+end
+
 function BuildController:Init(allControllers)
 	controllers = allControllers
 end
@@ -259,8 +280,12 @@ function BuildController:Start()
 		if processed then
 			return
 		end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			confirm()
+		elseif input.UserInputType == Enum.UserInputType.Touch then
+			-- on a touch screen a tap moves the preview; the Place button builds
+			-- (TouchController), so a stray tap never spends your wood
+			return
 		elseif input.KeyCode == Enum.KeyCode.R and mode and mode.kind == "place" then
 			rot = (rot + 1) % 4
 		elseif input.KeyCode == Enum.KeyCode.Q and mode then
