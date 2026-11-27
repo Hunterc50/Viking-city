@@ -412,6 +412,9 @@ Config.Quests = {
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
 	{ Title = "Hold the line", Text = "Build a Watchtower, then beat off a raid on your village.", Kind = "stat", Stat = "defend", Goal = 1, Reward = { Silver = 15, Wood = 40 } },
 	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+	{ Title = "Fishers of the fjord", Text = "Build a Fishery (Production tab). It feeds your people even in winter.", Kind = "building", Building = "Fishery", Goal = 1, Reward = { Wood = 30 } },
+	{ Title = "Shield wall!", Text = "Hire warriors (J), have them follow you, then press G to form a shield wall.", Kind = "stat", Stat = "formation", Goal = 1, Reward = { Silver = 15 } },
+	{ Title = "Storm the gate", Text = "Lead your war band in a wedge (G) and break down a rival hold's gate.", Kind = "stat", Stat = "gate", Goal = 1, Reward = { Silver = 40, Lore = 20 } },
 }
 
 -- Ranks: your title grows with your village. Each rank raises how many
@@ -10648,6 +10651,9 @@ function WarbandService:SetFormation(colony, formation: string?): (boolean, stri
 		return false, "Unknown formation."
 	end
 	b.formation = formation
+	if formation ~= "loose" then
+		services.QuestService:Count(colony, "formation")
+	end
 	if b.mode ~= "follow" then
 		b.mode = "follow"
 	end
@@ -13857,7 +13863,7 @@ local function target(from: Vector3): (Vector3?, string?)
 		return nearestIn(workspace, from, function(m)
 			return m.Name == "TraderStall"
 		end), "Hold E at Ottar's stall"
-	elseif quest.Stat == "plunder" then
+	elseif quest.Stat == "plunder" or quest.Stat == "gate" then
 		local rival = Config.Rivals[1]
 		local a = rival.GateAngle or 0
 		return rival.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (rival.Radius + 6), "Chop down the gate, then plunder a chest"

@@ -101,7 +101,7 @@ local function target(from: Vector3): (Vector3?, string?)
 		return nearestIn(workspace, from, function(m)
 			return m.Name == "TraderStall"
 		end), "Hold E at Ottar's stall"
-	elseif quest.Stat == "plunder" then
+	elseif quest.Stat == "plunder" or quest.Stat == "gate" then
 		local rival = Config.Rivals[1]
 		local a = rival.GateAngle or 0
 		return rival.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (rival.Radius + 6), "Chop down the gate, then plunder a chest"

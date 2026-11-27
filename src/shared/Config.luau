@@ -383,6 +383,9 @@ Config.Quests = {
 	{ Title = "Master of the fjord", Text = "Sink the Greywater Raider ship: F for volleys, or ram it at full speed.", Kind = "stat", Stat = "sunk", Goal = 1, Reward = { Silver = 20 } },
 	{ Title = "Hold the line", Text = "Build a Watchtower, then beat off a raid on your village.", Kind = "stat", Stat = "defend", Goal = 1, Reward = { Silver = 15, Wood = 40 } },
 	{ Title = "A chieftain's hall", Text = "Research Chieftainship and build a Great Hall.", Kind = "building", Building = "GreatHall", Goal = 1, Reward = { Silver = 30, Lore = 20 } },
+	{ Title = "Fishers of the fjord", Text = "Build a Fishery (Production tab). It feeds your people even in winter.", Kind = "building", Building = "Fishery", Goal = 1, Reward = { Wood = 30 } },
+	{ Title = "Shield wall!", Text = "Hire warriors (J), have them follow you, then press G to form a shield wall.", Kind = "stat", Stat = "formation", Goal = 1, Reward = { Silver = 15 } },
+	{ Title = "Storm the gate", Text = "Lead your war band in a wedge (G) and break down a rival hold's gate.", Kind = "stat", Stat = "gate", Goal = 1, Reward = { Silver = 40, Lore = 20 } },
 }
 
 -- Ranks: your title grows with your village. Each rank raises how many

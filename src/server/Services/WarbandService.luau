@@ -208,6 +208,9 @@ function WarbandService:SetFormation(colony, formation: string?): (boolean, stri
 		return false, "Unknown formation."
 	end
 	b.formation = formation
+	if formation ~= "loose" then
+		services.QuestService:Count(colony, "formation")
+	end
 	if b.mode ~= "follow" then
 		b.mode = "follow"
 	end
