@@ -8,21 +8,29 @@ original and yours to use.
 The game plays it on the title screen, then again every few minutes. Until
 you add it, the game is silent apart from its sound effects.
 
-## Add it to the game (one time, about 2 minutes)
+## Add it to the game (one time, about 3 minutes)
 
 1. **Download it.** Open
    [VikingTheme.ogg](https://github.com/hunterc50/viking-city/raw/claude/project-thread-ifpez8/music/VikingTheme.ogg).
    It downloads to your Downloads folder.
-2. **Open VikingCity in Roblox Studio.**
-3. **Upload it.** Click **View**, then **Asset Manager**. In the Asset Manager,
-   click the **Import** button (the box with an up arrow), pick
-   `VikingTheme.ogg` and click **Open**. Studio uploads it to your account.
-   This can take a minute. Roblox may ask you to verify your account first.
-4. **Put it in the game.** In the Asset Manager, open **Audio**, then
-   double-click **VikingTheme**. A sound called VikingTheme appears in the
-   Explorer under Workspace. Leave it there and don't rename it.
-5. **Press Play.** The theme plays on the title screen.
-6. **Save** the place (File > Save).
+2. **Upload it on the Roblox website.** Go to
+   [create.roblox.com/dashboard/creations](https://create.roblox.com/dashboard/creations).
+   Click **Development Items** along the top, then **Audio**, then **Upload Asset**.
+   Pick `VikingTheme.ogg`, type the name **VikingTheme**, and click **Upload**.
+   Roblox checks it first, so it may take a few minutes before it plays.
+3. **Get its number.** Click the uploaded VikingTheme. The web address now has
+   a long number in it, like `.../audio/1234567890/...`. That number is the ID.
+   (Or open the **...** menu on the audio and pick **Copy Asset ID**.)
+4. **Send the number to Claude.** It gets put into the game for you. The next
+   time you click **Start Viking City** and Connect, the theme plays on the
+   title screen.
+
+You can also upload it from inside Studio: press **Ctrl+M** (or File > Import),
+pick the file, and confirm. Then open the **Toolbox**, go to **Inventory**, pick
+**Audio**, and click VikingTheme. A sound named VikingTheme appears in the
+Explorer; leave it there and save. The game finds it by that name.
+
+The music is uploaded under your account, so it can only play in your own games.
 
 To change the music, edit `tools/music/compose.py` and run
 `python3 tools/music/compose.py`.
