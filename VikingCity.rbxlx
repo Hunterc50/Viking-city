@@ -2129,6 +2129,24 @@ function Props.Banner(model)
 	end
 end
 
+function Props.TorchPost(model)
+	-- a waist-high post with an iron cup of burning pitch, lighting the paths
+	post(model, V3(0, 0, 0), 4.6, 0.4, Colors.DarkWood)
+	noShadow(addPart(model, { Name = "Cup", Shape = Enum.PartType.Cylinder, Size = V3(0.5, 0.9, 0.9), CFrame = CFrame.new(0, 4.8, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	local flame = noShadow(addPart(model, { Name = "Pitch", Size = V3(0.5, 0.2, 0.5), Position = V3(0, 5.1, 0), Color = Color3.fromRGB(255, 120, 40), Material = Enum.Material.Neon, CanCollide = false }))
+	local fire = Instance.new("Fire")
+	fire.Size = 1.6
+	fire.Heat = 5
+	fire.Color = Color3.fromRGB(255, 140, 50)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fire.Parent = flame
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 70)
+	light.Range = 16
+	light.Brightness = 1.4
+	light.Parent = flame
+end
+
 function Props.BoatUpturned(model)
 	-- a small boat pulled up the beach, upside down on two trestles
 	for _, z in { -2, 2 } do
@@ -11817,6 +11835,10 @@ local function scatterScenery()
 			prop:PivotTo(CFrame.new(x, y, z) * CFrame.Angles(0, turn, 0))
 			prop.Parent = folder
 		end
+		-- torch posts down the path to the jetty, warm against the cold
+		for k, z in { -6, -17, -28 } do
+			placeProp("TorchPost", dockX + ((k % 2 == 0) and 4.6 or -4.6), z, 0)
+		end
 		placeProp("FishRack", dockX - 14, -24, rng:NextNumber(-0.3, 0.3))
 		placeProp("Barrels", dockX + 7, -30, rng:NextNumber(0, 6))
 		placeProp("BoatUpturned", dockX + 22, -30, math.rad(80) + rng:NextNumber(-0.2, 0.2))
@@ -12398,6 +12420,109 @@ return AudioController
           </Item>
           <Item class="ModuleScript" referent="47">
             <Properties>
+              <string name="Name">AuroraController</string>
+              <string name="Source"><![CDATA[--[[
+	AuroraController
+	Northern lights over the mountains on clear nights in autumn and winter:
+	tall green and violet curtains that ripple slowly across the sky.
+	Drawn only on your own screen.
+]]
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+local AuroraController = {}
+
+local BANDS = 3
+local STRIPS = 46 -- narrow upright strips per band: together they ripple
+
+local function strength(): number
+	local clock = Lighting.ClockTime
+	local night = 0
+	if clock >= 20 or clock < 5 then
+		local h = clock >= 20 and clock - 20 or clock + 4
+		night = math.clamp(math.min(h, 9 - h) / 1.2, 0, 1)
+	end
+	local season = workspace:GetAttribute("Season")
+	local seasonal = (season == "Winter" and 1) or (season == "Autumn" and 0.6) or (season == "Spring" and 0.25) or 0
+	-- clouds and storms hide it
+	local fog = workspace:GetAttribute("FogLevel") or 0
+	local storm = workspace:GetAttribute("StormLevel") or 0
+	return night * seasonal * (1 - math.max(fog, storm))
+end
+
+function AuroraController:Start()
+	local folder = Instance.new("Folder")
+	folder.Name = "Aurora"
+	local strips = {}
+	for b = 1, BANDS do
+		local band = {
+			z = 820 + b * 120, -- just behind the mountains
+			x0 = -700 + b * 200,
+			width = 3000 - b * 300,
+			height = 220 + b * 50,
+			base = 330 + b * 50,
+			phase = b * 1.7,
+			color = (b == 2) and Color3.fromRGB(150, 110, 255) or Color3.fromRGB(90, 255, 160),
+			strips = {},
+		}
+		for s = 1, STRIPS do
+			local p = Instance.new("Part")
+			p.Name = "AuroraStrip"
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.CastShadow = false
+			p.Material = Enum.Material.Neon
+			p.Color = band.color
+			p.Transparency = 1
+			p.Size = Vector3.new(band.width / STRIPS + 6, band.height, 0.4)
+			p.Parent = folder
+			table.insert(band.strips, { part = p, u = (s - 0.5) / STRIPS })
+		end
+		table.insert(strips, band)
+	end
+	folder.Parent = workspace.CurrentCamera
+
+	local shown = 0
+	local acc = 0
+	RunService.RenderStepped:Connect(function(dt)
+		acc += dt
+		if acc < 1 / 20 then
+			return
+		end
+		acc = 0
+		local target = strength()
+		shown += (target - shown) * 0.02
+		local t = os.clock()
+		for _, band in strips do
+			for _, s in band.strips do
+				local p = s.part
+				if shown < 0.02 then
+					if p.Transparency < 1 then
+						p.Transparency = 1
+					end
+				else
+					local u = s.u
+					local x = band.x0 + u * band.width
+					local wave = math.sin(u * 7 + t * 0.15 + band.phase) * 140 + math.sin(u * 17 - t * 0.27) * 40
+					local glow = (0.5 + 0.5 * math.sin(u * 11 + t * 0.4 + band.phase)) * (0.6 + 0.4 * math.sin(u * 3.1 - t * 0.2))
+					local y = band.base + math.sin(u * 5 + t * 0.2) * 30
+					p.CFrame = CFrame.new(x, y, band.z + wave) * CFrame.Angles(0, math.sin(u * 9 + t * 0.1) * 0.35, 0)
+					p.Transparency = 1 - math.clamp(shown * glow * 0.55, 0, 0.55)
+				end
+			end
+		end
+	end)
+end
+
+return AuroraController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="48">
+            <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
 	BoatController
@@ -12477,7 +12602,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -12780,7 +12905,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -12908,7 +13033,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="50">
+          <Item class="ModuleScript" referent="51">
             <Properties>
               <string name="Name">CouncilController</string>
               <string name="Source"><![CDATA[--[[
@@ -13377,7 +13502,7 @@ return CouncilController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="51">
+          <Item class="ModuleScript" referent="52">
             <Properties>
               <string name="Name">GuideController</string>
               <string name="Source"><![CDATA[--[[
@@ -13620,7 +13745,7 @@ return GuideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="52">
+          <Item class="ModuleScript" referent="53">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -14326,7 +14451,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="53">
+          <Item class="ModuleScript" referent="54">
             <Properties>
               <string name="Name">IntroController</string>
               <string name="Source"><![CDATA[--[[
@@ -14663,7 +14788,7 @@ return IntroController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="54">
+          <Item class="ModuleScript" referent="55">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -14744,7 +14869,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="55">
+          <Item class="ModuleScript" referent="56">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -14958,7 +15083,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="56">
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -15051,7 +15176,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="57">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -15103,7 +15228,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="58">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -15426,7 +15551,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -15514,7 +15639,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -15699,7 +15824,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="61">
+          <Item class="ModuleScript" referent="62">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -15897,7 +16022,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="62">
+          <Item class="ModuleScript" referent="63">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -15950,7 +16075,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="63">
+          <Item class="ModuleScript" referent="64">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -16176,7 +16301,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="64">
+          <Item class="ModuleScript" referent="65">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -16322,12 +16447,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="65">
+  <Item class="Workspace" referent="66">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="66">
+    <Item class="Part" referent="67">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -16348,13 +16473,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="67">
+    <Item class="BoolValue" referent="68">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="68">
+    <Item class="SpawnLocation" referent="69">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -16374,7 +16499,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="69">
+    <Item class="Part" referent="70">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -16391,13 +16516,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="70">
+      <Item class="SurfaceGui" referent="71">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="71">
+        <Item class="TextLabel" referent="72">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -16429,13 +16554,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="72">
+      <Item class="SurfaceGui" referent="73">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="73">
+        <Item class="TextLabel" referent="74">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

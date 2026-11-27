@@ -656,6 +656,10 @@ local function scatterScenery()
 			prop:PivotTo(CFrame.new(x, y, z) * CFrame.Angles(0, turn, 0))
 			prop.Parent = folder
 		end
+		-- torch posts down the path to the jetty, warm against the cold
+		for k, z in { -6, -17, -28 } do
+			placeProp("TorchPost", dockX + ((k % 2 == 0) and 4.6 or -4.6), z, 0)
+		end
 		placeProp("FishRack", dockX - 14, -24, rng:NextNumber(-0.3, 0.3))
 		placeProp("Barrels", dockX + 7, -30, rng:NextNumber(0, 6))
 		placeProp("BoatUpturned", dockX + 22, -30, math.rad(80) + rng:NextNumber(-0.2, 0.2))

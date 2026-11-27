@@ -1384,6 +1384,24 @@ function Props.Banner(model)
 	end
 end
 
+function Props.TorchPost(model)
+	-- a waist-high post with an iron cup of burning pitch, lighting the paths
+	post(model, V3(0, 0, 0), 4.6, 0.4, Colors.DarkWood)
+	noShadow(addPart(model, { Name = "Cup", Shape = Enum.PartType.Cylinder, Size = V3(0.5, 0.9, 0.9), CFrame = CFrame.new(0, 4.8, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	local flame = noShadow(addPart(model, { Name = "Pitch", Size = V3(0.5, 0.2, 0.5), Position = V3(0, 5.1, 0), Color = Color3.fromRGB(255, 120, 40), Material = Enum.Material.Neon, CanCollide = false }))
+	local fire = Instance.new("Fire")
+	fire.Size = 1.6
+	fire.Heat = 5
+	fire.Color = Color3.fromRGB(255, 140, 50)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fire.Parent = flame
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 70)
+	light.Range = 16
+	light.Brightness = 1.4
+	light.Parent = flame
+end
+
 function Props.BoatUpturned(model)
 	-- a small boat pulled up the beach, upside down on two trestles
 	for _, z in { -2, 2 } do
