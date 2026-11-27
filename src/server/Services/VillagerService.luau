@@ -134,7 +134,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 		v.model:Destroy()
 	end
 	v.stage = stageOf(v)
-	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage)
+	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage, services.RankService:Rank(colony))
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))

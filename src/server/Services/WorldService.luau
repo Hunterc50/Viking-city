@@ -584,6 +584,7 @@ end
 local function sailingShip()
 	local ship = ModelFactory.longship(48, Color3.fromRGB(150, 40, 36))
 	ship.Name = "TradingShip"
+	ModelFactory.addCrew(ship, 6, Random.new(48), 2)
 	ship.Parent = workspace:FindFirstChild("Scenery") or workspace
 	local z = -300
 	local x0, x1 = MIN_X + 200, MAX_X - 200

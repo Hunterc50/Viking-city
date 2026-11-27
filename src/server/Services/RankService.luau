@@ -87,6 +87,13 @@ function RankService:Check(colony)
 	end
 	local extra = #unlocked > 0 and (" Unlocked: " .. table.concat(unlocked, ", ") .. ".") or ""
 	services.ColonyService:Notify(colony, "You are now " .. nextRank.Name .. "!", "raid")
+	-- everyone dresses up for the new rank
+	for _, v in colony.villagers do
+		if v.model and not v.away then
+			services.VillagerService:Rebuild(colony, v)
+		end
+	end
+	services.ColonyService:Notify(colony, "Your people put on finer gear to honour their " .. nextRank.Name .. ".", "good")
 	services.ColonyService:Notify(colony, "Room for " .. nextRank.PopCap .. " people. +" .. Grid.costText(nextRank.Reward or {}) .. "." .. extra, "good")
 	self:Check(colony)
 end

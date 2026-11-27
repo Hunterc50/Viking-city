@@ -109,6 +109,10 @@ local function newShip(kindName: string, start: CFrame, owner: Player?, title: s
 	model.Name = title
 	model:SetAttribute("Ship", true)
 	model:SetAttribute("OwnerUserId", owner and owner.UserId or 0)
+	if not owner then
+		-- raiders crew their own ship, in war gear
+		ModelFactory.addCrew(model, 8, rng, 4)
+	end
 	model:PivotTo(start)
 	model.Parent = workspace
 	local ship = {

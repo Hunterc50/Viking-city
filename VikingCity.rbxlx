@@ -770,14 +770,6 @@ local Colors = {
 }
 ModelFactory.Colors = Colors
 
-local Tunics = {
-	Color3.fromRGB(150, 60, 50),
-	Color3.fromRGB(60, 86, 130),
-	Color3.fromRGB(86, 110, 66),
-	Color3.fromRGB(168, 138, 82),
-	Color3.fromRGB(108, 78, 112),
-	Color3.fromRGB(122, 112, 100),
-}
 local Hair = {
 	Color3.fromRGB(196, 150, 80),
 	Color3.fromRGB(150, 74, 40),
@@ -2208,27 +2200,77 @@ end
 -- stage: "baby", "child", "adult" or "elder" (defaults from isChild).
 -- Arms and legs hang from Welds whose C0 the client swings while walking
 -- (attributes Hip = joint CFrame, HalfLen = half the limb length).
-function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stage: string?): Model
+--[[
+	Villagers are blocky Roblox-style figures (head, torso, two arms, two
+	legs). `gear` (1-5, the village's rank) dresses the grown-ups:
+	  1 Settler    wool tunic, leather belt and shoes
+	  2 Chieftain  + fur mantle and leather boots
+	  3 Hersir     + leather jerkin with straps, iron cap, bracers
+	  4 Jarl       + mail shirt, helmet with nose guard, cloak, shield on the back
+	  5 King       + gold-trimmed mail, crested helmet, red cloak, arm rings
+	Children wear plain tunics; babies are swaddled.
+]]
+local Skins = {
+	Color3.fromRGB(234, 196, 160),
+	Color3.fromRGB(224, 180, 142),
+	Color3.fromRGB(240, 206, 176),
+	Color3.fromRGB(204, 160, 122),
+}
+local Wool = {
+	Color3.fromRGB(150, 60, 50),
+	Color3.fromRGB(60, 86, 130),
+	Color3.fromRGB(86, 110, 66),
+	Color3.fromRGB(168, 138, 82),
+	Color3.fromRGB(122, 112, 100),
+	Color3.fromRGB(196, 184, 160),
+}
+local LEATHER = Color3.fromRGB(110, 74, 46)
+local DARK_LEATHER = Color3.fromRGB(72, 50, 34)
+local FUR = Color3.fromRGB(128, 104, 80)
+local MAIL = Color3.fromRGB(128, 132, 138)
+local STEEL = Color3.fromRGB(162, 166, 172)
+local GOLD = Color3.fromRGB(214, 172, 84)
+
+function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stage: string?, gear: number?): Model
 	stage = stage or (isChild and "child" or "adult")
-	local s = ({ baby = 0.45, child = 0.65, adult = 1, elder = 0.95 })[stage] or 1
+	gear = (stage == "adult" or stage == "elder") and math.clamp(gear or 1, 1, 5) or 0
+	local s = ({ baby = 0.45, child = 0.65, adult = 0.85, elder = 0.82 })[stage] or 0.85
 	local model = Instance.new("Model")
 	model.Name = name
 	model:SetAttribute("Villager", true)
 	model:SetAttribute("Stage", stage)
+	model:SetAttribute("Gear", gear)
 
-	local legH = 1.1 * s
-	local bodyH = 1.8 * s
+	local skin = Skins[rng:NextInteger(1, #Skins)]
+	local tunic = stage == "baby" and Color3.fromRGB(226, 216, 196) or Wool[rng:NextInteger(1, #Wool)]
+	local trousers = Color3.fromRGB(70, 62, 54):Lerp(tunic, 0.15)
+	local torsoColor, torsoMat = tunic, Enum.Material.Fabric
+	if gear >= 4 then
+		torsoColor, torsoMat = MAIL, Enum.Material.DiamondPlate
+	elseif gear == 3 then
+		torsoColor, torsoMat = LEATHER, Enum.Material.Leather
+	end
+
+	local legH = 2 * s
+	local bodyH = 2 * s
 	local body = Instance.new("Part")
 	body.Name = "Body"
 	body.Anchored = true
 	body.CanCollide = false
-	body.Size = V3(1.5, bodyH, 0.95) * V3(s, 1, s)
-	body.Color = stage == "baby" and Color3.fromRGB(226, 216, 196) or Tunics[rng:NextInteger(1, #Tunics)]
-	body.Material = Enum.Material.Fabric
+	body.Size = V3(2 * s, bodyH, 1 * s)
+	body.Color = torsoColor
+	body.Material = torsoMat
 	body.CFrame = CFrame.new(0, legH + bodyH / 2, 0)
 	body.Parent = model
 
-	local function attach(partName, size, offset: CFrame, color, material, shape)
+	local function weldTo(p: BasePart, to: BasePart)
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = to
+		weld.Part1 = p
+		weld.Parent = p
+	end
+
+	local function piece(partName, size, cf: CFrame, color, material, shape, to: BasePart?)
 		local p = Instance.new("Part")
 		p.Name = partName
 		if shape then
@@ -2237,17 +2279,18 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 		p.Anchored = false
 		p.CanCollide = false
 		p.CanQuery = false
+		p.CastShadow = false
 		p.Massless = true
 		p.Size = size
 		p.Color = color
-		p.Material = material
-		p.CFrame = body.CFrame * offset
+		p.Material = material or Enum.Material.Fabric
+		p.CFrame = cf
 		p.Parent = model
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = body
-		weld.Part1 = p
-		weld.Parent = p
+		weldTo(p, to or body)
 		return p
+	end
+	local function attach(partName, size, offset: CFrame, color, material, shape)
+		return piece(partName, size, body.CFrame * offset, color, material, shape)
 	end
 
 	-- a limb hanging from `hip` (in body space), swung by its Weld
@@ -2275,26 +2318,121 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 		return p
 	end
 
+	-- head: the classic Roblox head shape with a face
+	local head = attach("Head", V3(2, 1, 1) * s * (stage == "baby" and 1.2 or 1), CFrame.new(0, bodyH / 2 + 0.5 * s, 0), skin, Enum.Material.SmoothPlastic)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Head
+	mesh.Scale = V3(1.25, 1.25, 1.25)
+	mesh.Parent = head
+	local face = Instance.new("Decal")
+	face.Name = "face"
+	face.Face = Enum.NormalId.Front
+	face.Texture = "rbxasset://textures/face.png"
+	face.Parent = head
+	local hs = 1.25 * s -- how big the head looks
+	model:SetAttribute("HeadSize", hs)
+
 	local hairColor = stage == "elder" and Color3.fromRGB(210, 210, 214) or Hair[rng:NextInteger(1, #Hair)]
-	attach("Head", Vector3.one * 1.1 * s * (stage == "baby" and 1.25 or 1), CFrame.new(0, bodyH / 2 + 0.55 * s, 0), Colors.Skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	local helmet = gear >= 3 and stage == "adult"
+	if stage ~= "baby" and not helmet then
+		piece("Hair", V3(hs * 1.02, hs * 0.32, hs * 1.02), head.CFrame * CFrame.new(0, hs * 0.38, hs * 0.04), hairColor, Enum.Material.Fabric, nil, head)
+		piece("Hair", V3(hs * 1.0, hs * 0.75, hs * 0.22), head.CFrame * CFrame.new(0, hs * 0.05, hs * 0.44), hairColor, Enum.Material.Fabric, nil, head)
+	elseif helmet then
+		-- hair showing under the helmet at the back
+		piece("Hair", V3(hs * 0.9, hs * 0.5, hs * 0.2), head.CFrame * CFrame.new(0, -hs * 0.05, hs * 0.46), hairColor, Enum.Material.Fabric, nil, head)
+	end
+	if stage == "elder" or (stage == "adult" and gear >= 2 and rng:NextNumber() < 0.5) then
+		piece("Beard", V3(hs * 0.8, hs * 0.5, hs * 0.3), head.CFrame * CFrame.new(0, -hs * 0.35, -hs * 0.42), hairColor, Enum.Material.Fabric, nil, head)
+	end
+
+	-- arms and legs
+	local sleeve = gear >= 4 and MAIL or (gear == 3 and LEATHER or tunic:Lerp(Color3.new(0, 0, 0), 0.12))
+	local legs = {}
+	for i, x in { -0.5, 0.5 } do
+		legs[i] = limb("Leg", V3(1 * s, legH, 1 * s), CFrame.new(x * s, -bodyH / 2, 0), trousers, i == 1 and 1 or -1)
+	end
+	local arms = {}
+	for i, x in { -1.5, 1.5 } do
+		arms[i] = limb("Arm", V3(1 * s, bodyH, 1 * s), CFrame.new(x * s, bodyH / 2, 0), sleeve, i == 1 and -1 or 1)
+		-- bare hands
+		piece("Hand", V3(1.02 * s, 0.45 * s, 1.02 * s), arms[i].CFrame * CFrame.new(0, -bodyH / 2 + 0.22 * s, 0), skin, Enum.Material.SmoothPlastic, nil, arms[i])
+	end
+	if stage == "baby" then
+		attach("Swaddle", V3(2.1 * s, bodyH * 0.9, 1.1 * s), CFrame.new(0, -0.1 * s, 0), Color3.fromRGB(226, 216, 196))
+	end
+
+	-- shoes and boots
+	for _, leg in legs do
+		local h = gear >= 2 and 0.9 or 0.4
+		piece("Boot", V3(1.04 * s, h * s, 1.1 * s), leg.CFrame * CFrame.new(0, -legH / 2 + h * s / 2, -0.03 * s), gear >= 2 and DARK_LEATHER or LEATHER, Enum.Material.Leather, nil, leg)
+		if gear >= 2 then
+			piece("BootFur", V3(1.12 * s, 0.22 * s, 1.16 * s), leg.CFrame * CFrame.new(0, -legH / 2 + h * s, 0), FUR, Enum.Material.Fabric, nil, leg)
+		end
+	end
+
+	-- the tunic skirt below the belt
 	if stage ~= "baby" then
-		attach("Hair", V3(1.15, 0.5, 1.15) * s, CFrame.new(0, bodyH / 2 + 0.95 * s, 0.1 * s), hairColor, Enum.Material.Fabric)
+		attach("Hem", V3(2.04 * s, 0.6 * s, 1.04 * s), CFrame.new(0, -bodyH / 2 - 0.2 * s, 0), gear >= 3 and tunic or tunic:Lerp(Color3.new(0, 0, 0), 0.1), Enum.Material.Fabric)
+		attach("Belt", V3(2.08 * s, 0.28 * s, 1.08 * s), CFrame.new(0, -bodyH * 0.3, 0), DARK_LEATHER, Enum.Material.Leather)
+		attach("Buckle", V3(0.36 * s, 0.32 * s, 0.1 * s), CFrame.new(0, -bodyH * 0.3, -0.56 * s), gear >= 5 and GOLD or STEEL, Enum.Material.Metal)
 	end
-	if stage == "elder" then
-		attach("Beard", V3(0.8, 0.7, 0.3) * s, CFrame.new(0, bodyH / 2 + 0.2 * s, -0.5 * s), hairColor, Enum.Material.Fabric)
+
+	if gear >= 2 then
+		-- fur mantle over the shoulders
+		attach("Mantle", V3(2.3 * s, 0.45 * s, 1.25 * s), CFrame.new(0, bodyH / 2 - 0.1 * s, 0), FUR, Enum.Material.Fabric)
 	end
-	attach("Belt", V3(1.55 * s, 0.25 * s, 1 * s), CFrame.new(0, -bodyH * 0.15, 0), Colors.DarkWood, Enum.Material.Fabric)
-	for i, x in { -0.35, 0.35 } do
-		limb("Leg", V3(0.5 * s, legH, 0.6 * s), CFrame.new(x * s, -bodyH / 2, 0), Color3.fromRGB(70, 62, 54), i == 1 and 1 or -1)
+	if gear == 3 then
+		-- leather jerkin: crossed straps and stitched panels
+		attach("Strap", V3(0.25 * s, bodyH * 1.1, 0.06 * s), CFrame.new(0, 0, -0.52 * s) * CFrame.Angles(0, 0, math.rad(35)), DARK_LEATHER, Enum.Material.Leather)
+		attach("Strap", V3(0.25 * s, bodyH * 1.1, 0.06 * s), CFrame.new(0, 0, -0.52 * s) * CFrame.Angles(0, 0, math.rad(-35)), DARK_LEATHER, Enum.Material.Leather)
 	end
-	for i, x in { -0.95, 0.95 } do
-		limb("Arm", V3(0.4 * s, bodyH * 0.8, 0.45 * s), CFrame.new(x * s, bodyH / 2 - 0.1 * s, 0), body.Color:Lerp(Color3.new(0, 0, 0), 0.15), i == 1 and -1 or 1)
+	if gear >= 3 then
+		for _, arm in arms do
+			piece("Bracer", V3(1.06 * s, 0.7 * s, 1.06 * s), arm.CFrame * CFrame.new(0, -bodyH / 2 + 0.85 * s, 0), gear >= 5 and GOLD or DARK_LEATHER, gear >= 5 and Enum.Material.Metal or Enum.Material.Leather, nil, arm)
+		end
+	end
+	if gear >= 4 then
+		-- a cloak down the back, pinned at the shoulder
+		local cloak = gear >= 5 and Color3.fromRGB(150, 36, 34) or Color3.fromRGB(52, 70, 104)
+		attach("Cloak", V3(2.1 * s, bodyH * 1.35, 0.14 * s), CFrame.new(0, -0.3 * s, 0.6 * s), cloak, Enum.Material.Fabric)
+		attach("Brooch", V3(0.35 * s, 0.35 * s, 0.12 * s), CFrame.new(0.7 * s, bodyH / 2 - 0.25 * s, -0.56 * s), gear >= 5 and GOLD or STEEL, Enum.Material.Metal)
+		if stage == "adult" then
+			local paint = ({ Color3.fromRGB(168, 44, 38), Color3.fromRGB(214, 176, 96), Color3.fromRGB(46, 74, 120) })[rng:NextInteger(1, 3)]
+			attach("BackShield", V3(0.2 * s, 2.2 * s, 2.2 * s), CFrame.new(0, 0.1 * s, 0.8 * s) * CFrame.Angles(0, math.pi / 2, 0), paint, Enum.Material.Wood, Enum.PartType.Cylinder)
+			attach("BackBoss", V3(0.3 * s, 0.5 * s, 0.5 * s), CFrame.new(0, 0.1 * s, 0.92 * s) * CFrame.Angles(0, math.pi / 2, 0), STEEL, Enum.Material.Metal, Enum.PartType.Cylinder)
+		end
+	end
+	if gear >= 5 then
+		attach("Trim", V3(2.06 * s, 0.14 * s, 1.06 * s), CFrame.new(0, -bodyH / 2 + 0.07 * s, 0), GOLD, Enum.Material.Metal)
+		attach("Trim", V3(2.06 * s, 0.14 * s, 1.06 * s), CFrame.new(0, bodyH / 2 - 0.4 * s, 0), GOLD, Enum.Material.Metal)
+	end
+	if helmet then
+		local steel = gear >= 5 and STEEL or Color3.fromRGB(118, 122, 128)
+		piece("Helmet", V3(hs * 1.08, hs * 0.7, hs * 1.08), head.CFrame * CFrame.new(0, hs * 0.3, 0), steel, Enum.Material.Metal, Enum.PartType.Ball, head)
+		piece("HelmetRim", V3(hs * 1.1, hs * 0.12, hs * 1.1), head.CFrame * CFrame.new(0, hs * 0.2, 0), gear >= 5 and GOLD or DARK_LEATHER, Enum.Material.Metal, nil, head)
+		if gear >= 4 then
+			piece("Nasal", V3(hs * 0.12, hs * 0.45, hs * 0.1), head.CFrame * CFrame.new(0, hs * 0.02, -hs * 0.55), steel, Enum.Material.Metal, nil, head)
+		end
+		if gear >= 5 then
+			-- spectacle guard and a crest
+			for _, x in { -0.22, 0.22 } do
+				piece("Spectacle", V3(hs * 0.3, hs * 0.08, hs * 0.08), head.CFrame * CFrame.new(x * hs, hs * 0.12, -hs * 0.55), GOLD, Enum.Material.Metal, nil, head)
+			end
+			piece("Crest", V3(hs * 0.12, hs * 0.3, hs * 0.8), head.CFrame * CFrame.new(0, hs * 0.68, 0), GOLD, Enum.Material.Metal, nil, head)
+			for _, arm in arms do
+				piece("ArmRing", V3(1.12 * s, 0.16 * s, 1.12 * s), arm.CFrame * CFrame.new(0, bodyH * 0.15, 0), GOLD, Enum.Material.Metal, nil, arm)
+			end
+		end
+	elseif gear >= 2 and stage == "adult" then
+		-- a fur-lined leather cap
+		piece("Cap", V3(hs * 1.06, hs * 0.4, hs * 1.06), head.CFrame * CFrame.new(0, hs * 0.42, 0), LEATHER, Enum.Material.Leather, nil, head)
+		piece("CapFur", V3(hs * 1.12, hs * 0.16, hs * 1.12), head.CFrame * CFrame.new(0, hs * 0.24, 0), FUR, Enum.Material.Fabric, nil, head)
 	end
 
 	local tag = Instance.new("BillboardGui")
 	tag.Name = "NameTag"
 	tag.Size = UDim2.fromOffset(140, 22)
-	tag.StudsOffset = V3(0, bodyH / 2 + 1.8 * s, 0)
+	tag.StudsOffset = V3(0, bodyH / 2 + 1.9 * s, 0)
 	tag.MaxDistance = 60
 	tag.Adornee = body
 	local label = Instance.new("TextLabel")
@@ -2311,6 +2449,68 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random, stag
 
 	model.PrimaryPart = body
 	model:SetAttribute("GroundOffset", legH + bodyH / 2)
+	return model
+end
+
+-- Puts a crew on a longship: rowers on both sides facing the stern, a
+-- helmsman at the steering oar and a lookout at the bow. Works for the
+-- built-in ship and for an imported mesh (it reads the ship's size).
+function ModelFactory.addCrew(ship: Model, rowers: number, rng: Random, gear: number?)
+	local pivot = ship:GetPivot()
+	local cf, size = ship:GetBoundingBox()
+	local centre = pivot:PointToObjectSpace(cf.Position)
+	local bottom = centre.Y - size.Y / 2
+	local L = math.max(size.Z, 20) * 0.9
+	local beam = L * 0.2
+	local seat = bottom + 1.55 -- hips on the rowing benches
+	local crew = Instance.new("Model")
+	crew.Name = "Crew"
+	local function place(fig: Model, local_: CFrame)
+		local body = fig.PrimaryPart
+		local half = body and body.Size.Y / 2 or 1
+		fig:PivotTo(pivot * local_ * CFrame.new(0, half, 0))
+		fig.Parent = crew
+	end
+	local pairs_ = math.max(1, math.floor(rowers / 2))
+	for i = 1, pairs_ do
+		local z = -L * 0.28 + (i - 1) * (L * 0.56 / math.max(1, pairs_ - 1))
+		for _, side in { -1, 1 } do
+			place(ModelFactory.figure(rng, gear, true), CFrame.new(side * beam * 0.24, seat, z) * CFrame.Angles(0, math.pi, 0))
+		end
+	end
+	-- helmsman (standing) and lookout
+	local legs = 1.7
+	place(ModelFactory.figure(rng, gear), CFrame.new(beam * 0.15, seat - 0.4 + legs, L * 0.4))
+	place(ModelFactory.figure(rng, gear), CFrame.new(0, seat - 0.4 + legs, -L * 0.38))
+	crew.Parent = ship
+	return crew
+end
+
+-- A still figure for decoration (ship crews): everything anchored, no name tag.
+function ModelFactory.figure(rng: Random, gear: number?, seated: boolean?): Model
+	local model = ModelFactory.villager("Crew", false, rng, "adult", gear)
+	model:SetAttribute("Villager", nil) -- not walked or swung by the villager animator
+	local tag = model.PrimaryPart and model.PrimaryPart:FindFirstChild("NameTag")
+	if tag then
+		tag:Destroy()
+	end
+	if seated then
+		for _, leg in model:GetChildren() do
+			if leg.Name == "Leg" and leg:IsA("BasePart") then
+				local joint = leg:FindFirstChild("Joint") :: Weld
+				if joint then
+					joint.C0 = leg:GetAttribute("Hip") * CFrame.Angles(math.rad(90), 0, 0) * CFrame.new(0, -leg:GetAttribute("HalfLen"), 0)
+				end
+			end
+		end
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CastShadow = false
+		end
+	end
 	return model
 end
 
@@ -2347,8 +2547,8 @@ function ModelFactory.armWarrior(model: Model)
 		return p
 	end
 	local head = model:FindFirstChild("Head")
-	if head and head:IsA("BasePart") then
-		local r = head.Size.X
+	if head and head:IsA("BasePart") and not model:FindFirstChild("Helmet") then
+		local r = model:GetAttribute("HeadSize") or head.Size.X
 		piece("Helmet", Vector3.new(r * 1.08, r * 0.6, r * 1.08), head.CFrame * CFrame.new(0, r * 0.22, 0), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, Enum.PartType.Ball, head)
 		piece("Nasal", Vector3.new(r * 0.12, r * 0.45, r * 0.12), head.CFrame * CFrame.new(0, 0, -r * 0.5), Color3.fromRGB(120, 124, 130), Enum.Material.Metal, nil, head)
 	end
@@ -3542,6 +3742,10 @@ local function newShip(kindName: string, start: CFrame, owner: Player?, title: s
 	model.Name = title
 	model:SetAttribute("Ship", true)
 	model:SetAttribute("OwnerUserId", owner and owner.UserId or 0)
+	if not owner then
+		-- raiders crew their own ship, in war gear
+		ModelFactory.addCrew(model, 8, rng, 4)
+	end
 	model:PivotTo(start)
 	model.Parent = workspace
 	local ship = {
@@ -5785,7 +5989,7 @@ local function newHold(R)
 	-- Folk (the hold's villagers) ---------------------------------------------------
 
 	local function spawnFolk()
-		local model = ModelFactory.villager(Config.Names[rng:NextInteger(1, #Config.Names)], false, rng)
+		local model = ModelFactory.villager(Config.Names[rng:NextInteger(1, #Config.Names)], false, rng, nil, rng:NextInteger(1, 2))
 		local offset = model:GetAttribute("GroundOffset")
 		local pos = CENTER + Vector3.new(rng:NextNumber(-25, 25), 0, rng:NextNumber(-25, 25))
 		model:PivotTo(CFrame.new(pos + Vector3.new(0, offset, 0)))
@@ -6219,6 +6423,13 @@ function RankService:Check(colony)
 	end
 	local extra = #unlocked > 0 and (" Unlocked: " .. table.concat(unlocked, ", ") .. ".") or ""
 	services.ColonyService:Notify(colony, "You are now " .. nextRank.Name .. "!", "raid")
+	-- everyone dresses up for the new rank
+	for _, v in colony.villagers do
+		if v.model and not v.away then
+			services.VillagerService:Rebuild(colony, v)
+		end
+	end
+	services.ColonyService:Notify(colony, "Your people put on finer gear to honour their " .. nextRank.Name .. ".", "good")
 	services.ColonyService:Notify(colony, "Room for " .. nextRank.PopCap .. " people. +" .. Grid.costText(nextRank.Reward or {}) .. "." .. extra, "good")
 	self:Check(colony)
 end
@@ -8138,7 +8349,7 @@ local function buildStall(index: number)
 	add(model, { Name = "Crate", Size = Vector3.new(1.6, 1.4, 1.4), CFrame = base * CFrame.new(-3, 3.7, -2.2), Color = Color3.fromRGB(150, 110, 70) })
 	add(model, { Name = "Pelts", Size = Vector3.new(2.4, 0.4, 1.4), CFrame = base * CFrame.new(0, 3.2, -2.2), Color = Color3.fromRGB(140, 96, 60), Material = Enum.Material.Fabric })
 	add(model, { Name = "Silver", Size = Vector3.new(1.2, 0.5, 1.2), CFrame = base * CFrame.new(3, 3.25, -2.2), Color = Color3.fromRGB(220, 220, 230), Material = Enum.Material.Foil })
-	local trader = ModelFactory.villager("Ottar the Trader", false, Random.new(index), "elder")
+	local trader = ModelFactory.villager("Ottar the Trader", false, Random.new(index), "elder", 2)
 	local offset = trader:GetAttribute("GroundOffset") or 2
 	trader:PivotTo(base * CFrame.new(0, offset, 0.5) * CFrame.Angles(0, math.pi, 0))
 	trader.Parent = model
@@ -8781,7 +8992,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 		v.model:Destroy()
 	end
 	v.stage = stageOf(v)
-	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage)
+	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage, services.RankService:Rank(colony))
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
@@ -10659,6 +10870,7 @@ end
 local function sailingShip()
 	local ship = ModelFactory.longship(48, Color3.fromRGB(150, 40, 36))
 	ship.Name = "TradingShip"
+	ModelFactory.addCrew(ship, 6, Random.new(48), 2)
 	ship.Parent = workspace:FindFirstChild("Scenery") or workspace
 	local z = -300
 	local x0, x1 = MIN_X + 200, MAX_X - 200

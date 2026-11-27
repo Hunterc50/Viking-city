@@ -544,7 +544,7 @@ local function newHold(R)
 	-- Folk (the hold's villagers) ---------------------------------------------------
 
 	local function spawnFolk()
-		local model = ModelFactory.villager(Config.Names[rng:NextInteger(1, #Config.Names)], false, rng)
+		local model = ModelFactory.villager(Config.Names[rng:NextInteger(1, #Config.Names)], false, rng, nil, rng:NextInteger(1, 2))
 		local offset = model:GetAttribute("GroundOffset")
 		local pos = CENTER + Vector3.new(rng:NextNumber(-25, 25), 0, rng:NextNumber(-25, 25))
 		model:PivotTo(CFrame.new(pos + Vector3.new(0, offset, 0)))

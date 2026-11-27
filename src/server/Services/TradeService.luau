@@ -102,7 +102,7 @@ local function buildStall(index: number)
 	add(model, { Name = "Crate", Size = Vector3.new(1.6, 1.4, 1.4), CFrame = base * CFrame.new(-3, 3.7, -2.2), Color = Color3.fromRGB(150, 110, 70) })
 	add(model, { Name = "Pelts", Size = Vector3.new(2.4, 0.4, 1.4), CFrame = base * CFrame.new(0, 3.2, -2.2), Color = Color3.fromRGB(140, 96, 60), Material = Enum.Material.Fabric })
 	add(model, { Name = "Silver", Size = Vector3.new(1.2, 0.5, 1.2), CFrame = base * CFrame.new(3, 3.25, -2.2), Color = Color3.fromRGB(220, 220, 230), Material = Enum.Material.Foil })
-	local trader = ModelFactory.villager("Ottar the Trader", false, Random.new(index), "elder")
+	local trader = ModelFactory.villager("Ottar the Trader", false, Random.new(index), "elder", 2)
 	local offset = trader:GetAttribute("GroundOffset") or 2
 	trader:PivotTo(base * CFrame.new(0, offset, 0.5) * CFrame.Angles(0, math.pi, 0))
 	trader.Parent = model
