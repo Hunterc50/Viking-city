@@ -14,16 +14,61 @@ local Sounds = require(Shared.Sounds)
 
 local AudioController = {}
 
+-- The game's theme, "Over the Fjord" (music/VikingTheme.ogg in the project).
+-- Once it's imported into Studio it shows up as a Sound named VikingTheme;
+-- otherwise the Music slot in Sounds is used, if it has an ID.
+local function themeId(): string?
+	for _, root in { workspace, game:GetService("ReplicatedStorage"), SoundService } do
+		for _, d in root:GetDescendants() do
+			if d:IsA("Sound") and string.find(d.Name, "VikingTheme") and d.SoundId ~= "" then
+				return d.SoundId
+			end
+		end
+	end
+	local slot = Sounds.Slots.Music
+	return slot and slot.Id ~= "" and slot.Id or nil
+end
+
+local theme: Sound?
+local themeStarted = false
+
+-- Plays the theme now (the title screen), then again now and then: a quiet
+-- stretch of wind and birds between plays keeps it from wearing thin.
+function AudioController:PlayTheme()
+	if themeStarted then
+		return
+	end
+	local id = themeId()
+	if not id then
+		return
+	end
+	themeStarted = true
+	theme = Instance.new("Sound")
+	theme.Name = "Theme"
+	theme.SoundId = id
+	theme.Volume = (Sounds.Slots.Music and Sounds.Slots.Music.Volume) or 0.3
+	theme.Parent = SoundService
+	task.spawn(function()
+		while theme and theme.Parent do
+			theme:Play()
+			theme.Ended:Wait()
+			task.wait(math.random(70, 150))
+		end
+	end)
+end
+
 function AudioController:Start()
 	local folder = Instance.new("Folder")
 	folder.Name = "Ambience"
 	folder.Parent = SoundService
-	local music = Sounds.loop("Music", folder)
+	task.delay(8, function()
+		AudioController:PlayTheme() -- in case the title screen didn't start it
+	end)
 	local wind = Sounds.loop("Wind", folder)
 	local birds = Sounds.loop("Birds", folder)
 	local waves = Sounds.loop("Waves", folder)
 	local base = {}
-	for _, s in { music, wind, birds, waves } do
+	for _, s in { wind, birds, waves } do
 		if s then
 			base[s] = s.Volume
 		end

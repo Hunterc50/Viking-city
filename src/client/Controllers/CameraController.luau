@@ -13,6 +13,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local CameraController = {}
+CameraController.Suspended = false -- the title screen and intro drive the camera
 
 local player = Players.LocalPlayer
 
@@ -101,7 +102,7 @@ function CameraController:Start()
 	end)
 
 	RunService:BindToRenderStep("VikingCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
-		if not enabled then
+		if not enabled or CameraController.Suspended then
 			return
 		end
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")

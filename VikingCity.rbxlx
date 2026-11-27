@@ -7120,6 +7120,7 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 	local jitter = Vector3.new(rng:NextNumber(-1.5, 1.5), 0, rng:NextNumber(-1.5, 1.5))
 	model:PivotTo(CFrame.new(Grid.rectCenter(colony.origin, x, z, 1, 1) + jitter) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
 	services.SeasonService:ApplyTo(model)
+	model:SetAttribute("NodeKind", kind) -- the saga's gold marker finds trees and rocks by this
 	model.Parent = colony.plot.Nodes
 
 	local node = { kind = kind, x = x, z = z, model = model, main = main, key = key, hp = def.Hits, maxHp = def.Hits }
@@ -12250,16 +12251,61 @@ local Sounds = require(Shared.Sounds)
 
 local AudioController = {}
 
+-- The game's theme, "Over the Fjord" (music/VikingTheme.ogg in the project).
+-- Once it's imported into Studio it shows up as a Sound named VikingTheme;
+-- otherwise the Music slot in Sounds is used, if it has an ID.
+local function themeId(): string?
+	for _, root in { workspace, game:GetService("ReplicatedStorage"), SoundService } do
+		for _, d in root:GetDescendants() do
+			if d:IsA("Sound") and string.find(d.Name, "VikingTheme") and d.SoundId ~= "" then
+				return d.SoundId
+			end
+		end
+	end
+	local slot = Sounds.Slots.Music
+	return slot and slot.Id ~= "" and slot.Id or nil
+end
+
+local theme: Sound?
+local themeStarted = false
+
+-- Plays the theme now (the title screen), then again now and then: a quiet
+-- stretch of wind and birds between plays keeps it from wearing thin.
+function AudioController:PlayTheme()
+	if themeStarted then
+		return
+	end
+	local id = themeId()
+	if not id then
+		return
+	end
+	themeStarted = true
+	theme = Instance.new("Sound")
+	theme.Name = "Theme"
+	theme.SoundId = id
+	theme.Volume = (Sounds.Slots.Music and Sounds.Slots.Music.Volume) or 0.3
+	theme.Parent = SoundService
+	task.spawn(function()
+		while theme and theme.Parent do
+			theme:Play()
+			theme.Ended:Wait()
+			task.wait(math.random(70, 150))
+		end
+	end)
+end
+
 function AudioController:Start()
 	local folder = Instance.new("Folder")
 	folder.Name = "Ambience"
 	folder.Parent = SoundService
-	local music = Sounds.loop("Music", folder)
+	task.delay(8, function()
+		AudioController:PlayTheme() -- in case the title screen didn't start it
+	end)
 	local wind = Sounds.loop("Wind", folder)
 	local birds = Sounds.loop("Birds", folder)
 	local waves = Sounds.loop("Waves", folder)
 	local base = {}
-	for _, s in { music, wind, birds, waves } do
+	for _, s in { wind, birds, waves } do
 		if s then
 			base[s] = s.Volume
 		end
@@ -12695,6 +12741,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local CameraController = {}
+CameraController.Suspended = false -- the title screen and intro drive the camera
 
 local player = Players.LocalPlayer
 
@@ -12783,7 +12830,7 @@ function CameraController:Start()
 	end)
 
 	RunService:BindToRenderStep("VikingCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
-		if not enabled then
+		if not enabled or CameraController.Suspended then
 			return
 		end
 		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -13274,6 +13321,215 @@ return CouncilController
             </Properties>
           </Item>
           <Item class="ModuleScript" referent="51">
+            <Properties>
+              <string name="Name">GuideController</string>
+              <string name="Source"><![CDATA[--[[
+	GuideController
+	The tutorial's gold marker. It points at the thing your current saga goal
+	needs: the nearest tree to chop, rock to break, deer to hunt, Ottar's
+	stall, Greywater's gate or your jetty. For a building goal it points home
+	and says which tab to open. It fades once you are close.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local GuideController = {}
+
+local controllers
+local player = Players.LocalPlayer
+local GOLD = Color3.fromRGB(240, 196, 92)
+
+function GuideController:Init(all)
+	controllers = all
+end
+
+-- Which build-menu tab holds a building.
+local function tabOf(building: string): string?
+	for _, cat in Config.BuildCategories or {} do
+		for _, b in cat.Buildings do
+			if b == building then
+				return cat.Name
+			end
+		end
+	end
+	return nil
+end
+
+local function myPlot(): Instance?
+	local index = player:GetAttribute("PlotIndex")
+	local plots = workspace:FindFirstChild("Plots")
+	return index and plots and plots:FindFirstChild("Plot_" .. index)
+end
+
+local function nearestIn(container: Instance?, from: Vector3, accept): Vector3?
+	if not container then
+		return nil
+	end
+	local best, bestD = nil, math.huge
+	for _, m in container:GetChildren() do
+		if m:IsA("Model") and accept(m) then
+			local p = m:GetPivot().Position
+			local d = (p - from).Magnitude
+			if d < bestD then
+				best, bestD = p, d
+			end
+		end
+	end
+	return best
+end
+
+local function home(): Vector3
+	local origin = player:GetAttribute("PlotOrigin")
+	if typeof(origin) ~= "Vector3" then
+		return Vector3.zero
+	end
+	return origin + Vector3.new(Grid.PLOT_SIZE / 2, 0, Grid.PLOT_SIZE / 2)
+end
+
+-- Where the current goal is, and a short line on what to do there.
+local function target(from: Vector3): (Vector3?, string?)
+	local state = controllers.StateController.State
+	local q = state and state.quest
+	if not q or q.done then
+		return nil
+	end
+	local quest = Config.Quests[q.index]
+	if not quest then
+		return nil
+	end
+	if quest.Kind == "building" then
+		local tab = tabOf(quest.Building)
+		local def = Config.Buildings[quest.Building]
+		local name = def and def.Display or quest.Building
+		local line = "Build a " .. name .. (tab and (" (" .. tab .. " tab)") or "")
+		if (from - home()).Magnitude < Grid.PLOT_SIZE * 0.8 then
+			return nil, line -- already home: the tip is enough
+		end
+		return home(), line
+	elseif quest.Stat == "chop" or quest.Stat == "mine" then
+		local kind = quest.Stat == "chop" and "Tree" or "Rock"
+		local plot = myPlot()
+		local p = nearestIn(plot and plot:FindFirstChild("Nodes"), from, function(m)
+			return m:GetAttribute("NodeKind") == kind
+		end)
+		return p, quest.Stat == "chop" and "Press 1, then click the tree" or "Press 2, then click the rock"
+	elseif quest.Stat == "deer" then
+		return nearestIn(workspace:FindFirstChild("Wildlife"), from, function()
+			return true
+		end), "Press 3, aim and click to shoot"
+	elseif quest.Stat == "trade" then
+		return nearestIn(workspace, from, function(m)
+			return m.Name == "TraderStall"
+		end), "Hold E at Ottar's stall"
+	elseif quest.Stat == "plunder" then
+		local rival = Config.Rivals[1]
+		local a = rival.GateAngle or 0
+		return rival.Center + Vector3.new(math.cos(a), 0, math.sin(a)) * (rival.Radius + 6), "Chop down the gate, then plunder a chest"
+	elseif quest.Stat == "launch" then
+		local origin = player:GetAttribute("PlotOrigin")
+		if typeof(origin) == "Vector3" then
+			return Vector3.new(origin.X + Grid.PLOT_SIZE * 0.25, 2, -76), "Hold E at the end of your jetty"
+		end
+	elseif quest.Kind == "tech" then
+		return nil, "Press T to research"
+	end
+	return nil
+end
+
+function GuideController:Start()
+	-- the marker: a soft pillar of light and a sign above it
+	local beam = Instance.new("Part")
+	beam.Name = "GuideBeam"
+	beam.Anchored = true
+	beam.CanCollide = false
+	beam.CanQuery = false
+	beam.CanTouch = false
+	beam.CastShadow = false
+	beam.Material = Enum.Material.Neon
+	beam.Color = GOLD
+	beam.Transparency = 0.75
+	beam.Shape = Enum.PartType.Cylinder
+	beam.Size = Vector3.new(60, 1.2, 1.2)
+	local light = Instance.new("PointLight")
+	light.Color = GOLD
+	light.Range = 14
+	light.Brightness = 1.2
+	light.Parent = beam
+
+	local sign = Instance.new("BillboardGui")
+	sign.Size = UDim2.fromOffset(260, 70)
+	sign.StudsOffsetWorldSpace = Vector3.new(0, 34, 0)
+	sign.AlwaysOnTop = true
+	sign.LightInfluence = 0
+	sign.Adornee = beam
+	local arrow = Instance.new("TextLabel")
+	arrow.Size = UDim2.new(1, 0, 0, 30)
+	arrow.BackgroundTransparency = 1
+	arrow.Font = Enum.Font.GothamBold
+	arrow.TextSize = 28
+	arrow.TextColor3 = GOLD
+	arrow.TextStrokeTransparency = 0.3
+	arrow.Text = "▼"
+	arrow.Position = UDim2.fromOffset(0, 38)
+	arrow.Parent = sign
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 38)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.Garamond
+	label.TextSize = 20
+	label.TextWrapped = true
+	label.TextColor3 = Color3.fromRGB(245, 235, 210)
+	label.TextStrokeTransparency = 0.35
+	label.Parent = sign
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Guide"
+	folder.Parent = workspace.CurrentCamera -- only you can see it
+	sign.Parent = player:WaitForChild("PlayerGui")
+
+	local current: Vector3? = nil
+	local acc = 0
+	RunService.RenderStepped:Connect(function(dt)
+		acc += dt
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local intro = controllers.IntroController and controllers.IntroController.Active
+		if acc > 0.5 then
+			acc = 0
+			if root and not intro then
+				local line
+				current, line = target(root.Position)
+				label.Text = line or ""
+			else
+				current = nil
+			end
+		end
+		local show = current ~= nil and root ~= nil and (current - root.Position).Magnitude > 12
+		if show then
+			local pulse = 0.72 + math.sin(os.clock() * 3) * 0.06
+			beam.Transparency = pulse
+			beam.CFrame = CFrame.new(current + Vector3.new(0, 30, 0)) * CFrame.Angles(0, 0, math.rad(90))
+			beam.Parent = folder
+			sign.Enabled = true
+			local d = math.floor((current - root.Position).Magnitude)
+			arrow.Text = "▼  " .. d .. " m"
+		else
+			beam.Parent = nil
+			sign.Enabled = false
+		end
+	end)
+end
+
+return GuideController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="52">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -13979,7 +14235,320 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="52">
+          <Item class="ModuleScript" referent="53">
+            <Properties>
+              <string name="Name">IntroController</string>
+              <string name="Source"><![CDATA[--[[
+	IntroController
+	The title screen and the short intro story.
+
+	When the valley has loaded, the camera drifts slowly over your village
+	behind the title. Play goes into the game. A new chieftain (still on the
+	first saga goal) sees the intro story first: five short scenes over the
+	fjord, the forest, your land and Greywater Hold. Click to go on, or Skip.
+	The Story button plays it again.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+
+local IntroController = {}
+
+local controllers
+local player = Players.LocalPlayer
+
+local BONE = Color3.fromRGB(226, 206, 160)
+local TEXT = Color3.fromRGB(238, 234, 226)
+local MUTED = Color3.fromRGB(156, 152, 146)
+local SERIF = Enum.Font.Garamond
+
+IntroController.Active = false
+
+function IntroController:Init(all)
+	controllers = all
+end
+
+local function new(class: string, props, children)
+	local inst = Instance.new(class)
+	for k, v in props do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	for _, c in children or {} do
+		c.Parent = inst
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+-- The middle of your plot, and handy spots around the valley.
+local function places()
+	local origin = player:GetAttribute("PlotOrigin")
+	if typeof(origin) ~= "Vector3" then
+		origin = Vector3.new(0, 1, 0)
+	end
+	local half = Grid.PLOT_SIZE / 2
+	local home = origin + Vector3.new(half, 0, half)
+	local rival = Config.Rivals[1]
+	return home, rival
+end
+
+-- Camera shots: each is a start and end CFrame the camera glides between.
+local function shots()
+	local home, rival = places()
+	local gate = rival.Center + Vector3.new(math.cos(rival.GateAngle or 0), 0, math.sin(rival.GateAngle or 0)) * rival.Radius
+	local function look(from: Vector3, at: Vector3)
+		return CFrame.lookAt(from, at)
+	end
+	return {
+		-- 1. low over the fjord, looking in at the land
+		{ look(home + Vector3.new(-160, 14, -340), home + Vector3.new(0, 30, 200)), look(home + Vector3.new(-40, 16, -260), home + Vector3.new(60, 30, 200)) },
+		-- 2. over the pine forest toward the mountains
+		{ look(home + Vector3.new(-60, 70, 160), home + Vector3.new(-20, 120, 600)), look(home + Vector3.new(40, 80, 220), home + Vector3.new(80, 130, 620)) },
+		-- 3. down onto your land
+		{ look(home + Vector3.new(90, 90, -110), home), look(home + Vector3.new(50, 55, -80), home) },
+		-- 4. the walls of Greywater Hold
+		{ look(gate + Vector3.new(60, 30, -70), rival.Center + Vector3.new(0, 10, 0)), look(gate + Vector3.new(30, 18, -30), rival.Center + Vector3.new(0, 12, 0)) },
+		-- 5. back home, rising over the village
+		{ look(home + Vector3.new(-30, 20, -60), home + Vector3.new(0, 8, 20)), look(home + Vector3.new(-60, 70, -120), home + Vector3.new(0, 0, 40)) },
+	}
+end
+
+local STORY = {
+	"The old jarl is dead, and his sons have drawn swords over his hall.",
+	"You took a longship and a handful of your kin, and sailed north up the cold fjord.",
+	"Here, between the mountains and the sea, is land no one has claimed. Here you will build.",
+	"But you are not alone. Greywater Hold watches from behind its walls, and raiders come by sea.",
+	"Feed your people. Raise your hall. Make your name one the skalds will sing.",
+}
+
+local function camera(): Camera
+	return workspace.CurrentCamera
+end
+
+-- Glides the camera along `shot` over `seconds`, until `stop()` is true.
+local function glide(shot, seconds: number, stop)
+	local cam = camera()
+	cam.CameraType = Enum.CameraType.Scriptable
+	local t0 = os.clock()
+	while not stop() do
+		local a = math.clamp((os.clock() - t0) / seconds, 0, 1)
+		local e = a * a * (3 - 2 * a)
+		cam.CFrame = shot[1]:Lerp(shot[2], e)
+		if a >= 1 then
+			break
+		end
+		RunService.RenderStepped:Wait()
+	end
+end
+
+function IntroController:Start()
+	local state = controllers.StateController
+	while not state.State do
+		task.wait(0.2)
+	end
+	IntroController.Active = true
+	local camCtl = controllers.CameraController
+	camCtl.Suspended = true
+	-- no walking off while the title is up
+	local controls
+	pcall(function()
+		controls = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
+		controls:Disable()
+	end)
+
+	local gui = new("ScreenGui", { Name = "Title", IgnoreGuiInset = true, DisplayOrder = 90, ResetOnSpawn = false })
+
+	-- film bars and a dark vignette
+	local top = new("Frame", { Size = UDim2.new(1, 0, 0.11, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Parent = gui })
+	local bottom = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0.11, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Parent = gui })
+	local shade = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(8, 10, 14), BackgroundTransparency = 0.35, BorderSizePixel = 0, Parent = gui }, {
+		new("UIGradient", { Rotation = 0, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(0.45, 0.85), NumberSequenceKeypoint.new(1, 1) }) }),
+	})
+
+	-- the title block, left of centre
+	local block = new("Frame", { Position = UDim2.fromScale(0.07, 0.24), Size = UDim2.fromOffset(620, 400), BackgroundTransparency = 1, Parent = gui })
+	new("TextLabel", { Size = UDim2.fromOffset(620, 26), BackgroundTransparency = 1, Font = SERIF, TextSize = 22, TextColor3 = MUTED, TextXAlignment = Enum.TextXAlignment.Left, Text = "A  SAGA  OF  THE  NORTH", Parent = block })
+	local title = new("TextLabel", { Position = UDim2.fromOffset(0, 26), Size = UDim2.fromOffset(620, 110), BackgroundTransparency = 1, Font = SERIF, TextSize = 96, TextColor3 = TEXT, TextXAlignment = Enum.TextXAlignment.Left, Text = "VIKING CITY", Parent = block })
+	new("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.6, Thickness = 1.5, Parent = title })
+	new("Frame", { Position = UDim2.fromOffset(2, 142), Size = UDim2.fromOffset(420, 2), BackgroundColor3 = BONE, BorderSizePixel = 0, Parent = block }, {
+		new("UIGradient", { Transparency = NumberSequence.new(0, 1) }),
+	})
+	new("TextLabel", { Position = UDim2.fromOffset(0, 156), Size = UDim2.fromOffset(560, 50), BackgroundTransparency = 1, Font = SERIF, TextSize = 22, TextWrapped = true, TextColor3 = TEXT, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, Text = "Settle the fjord. Grow a village into a kingdom. Raid your rivals by land and sea.", Parent = block })
+
+	local buttons = new("Frame", { Position = UDim2.fromOffset(0, 230), Size = UDim2.fromOffset(300, 170), BackgroundTransparency = 1, Parent = block }, {
+		new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local function button(label: string, order: number, main: boolean?)
+		local b = new("TextButton", {
+			Size = UDim2.fromOffset(main and 260 or 200, main and 52 or 40),
+			BackgroundColor3 = main and Color3.fromRGB(60, 55, 48) or Color3.fromRGB(26, 26, 28),
+			BackgroundTransparency = 0.1,
+			AutoButtonColor = true,
+			Font = SERIF,
+			TextSize = main and 30 or 22,
+			TextColor3 = main and BONE or TEXT,
+			Text = label,
+			LayoutOrder = order,
+			Parent = buttons,
+		}, {
+			new("UICorner", { CornerRadius = UDim.new(0, 4) }),
+			new("UIStroke", { Color = BONE, Transparency = main and 0.3 or 0.7, Thickness = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }),
+		})
+		return b
+	end
+	local q = state.State.quest
+	local fresh = q and q.index == 1
+	local play = button(fresh and "BEGIN" or "CONTINUE", 1, true)
+	local story = button("THE STORY", 2)
+	local hint = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(700, 24), BackgroundTransparency = 1, Font = SERIF, TextSize = 18, TextColor3 = MUTED, Text = "In the game, press H for the controls", Parent = gui })
+
+	-- the story caption, centred low over the film bar
+	local caption = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.86, 0), Size = UDim2.new(0.7, 0, 0, 110), BackgroundTransparency = 1, Font = SERIF, TextSize = 32, TextWrapped = true, TextColor3 = TEXT, TextTransparency = 1, Text = "", Parent = gui })
+	new("UIStroke", { Color = Color3.new(0, 0, 0), Transparency = 0.4, Thickness = 1.5, Parent = caption })
+	local skip = new("TextButton", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -24, 1, -14), Size = UDim2.fromOffset(110, 34), BackgroundColor3 = Color3.fromRGB(26, 26, 28), BackgroundTransparency = 0.2, Font = SERIF, TextSize = 20, TextColor3 = TEXT, Text = "Skip  »", Visible = false, Parent = gui }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 4) }),
+	})
+	local moreHint = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -18), Size = UDim2.fromOffset(400, 22), BackgroundTransparency = 1, Font = SERIF, TextSize = 17, TextColor3 = MUTED, Text = "Click to continue", Visible = false, Parent = gui })
+
+	gui.Parent = player:WaitForChild("PlayerGui")
+	if controllers.AudioController and controllers.AudioController.PlayTheme then
+		controllers.AudioController:PlayTheme()
+	end
+
+	-- the slow drift behind the title
+	local mode = "title"
+	local home = places()
+	task.spawn(function()
+		local cam = camera()
+		local t0 = os.clock()
+		while gui.Parent do
+			if mode == "title" then
+				cam.CameraType = Enum.CameraType.Scriptable
+				local a = (os.clock() - t0) * 0.035 + math.pi * 1.15
+				local from = home + Vector3.new(math.cos(a) * 170, 70, math.sin(a) * 170 - 60)
+				cam.CFrame = CFrame.lookAt(from, home + Vector3.new(0, 6, 30))
+			end
+			RunService.RenderStepped:Wait()
+		end
+	end)
+
+	local function fadeMenu(show: boolean)
+		local info = TweenInfo.new(0.6)
+		block.Visible = true
+		for _, d in block:GetDescendants() do
+			if d:IsA("TextLabel") or d:IsA("TextButton") then
+				TweenService:Create(d, info, { TextTransparency = show and 0 or 1 }):Play()
+			end
+			if d:IsA("TextButton") then
+				TweenService:Create(d, info, { BackgroundTransparency = show and 0.1 or 1 }):Play()
+			end
+			if d:IsA("UIStroke") then
+				TweenService:Create(d, info, { Transparency = show and 0.5 or 1 }):Play()
+			end
+		end
+		TweenService:Create(shade, info, { BackgroundTransparency = show and 0.35 or 0.75 }):Play()
+		hint.Visible = show
+		task.delay(0.6, function()
+			if not show then
+				block.Visible = false
+			end
+		end)
+	end
+
+	local busy = false
+	local function runStory()
+		if busy then
+			return
+		end
+		busy = true
+		mode = "story"
+		fadeMenu(false)
+		skip.Visible = true
+		local skipped = false
+		local advance = false
+		local skipConn = skip.Activated:Connect(function()
+			skipped = true
+		end)
+		local clickConn = UserInputService.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch or input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.Return then
+				advance = true
+			end
+		end)
+		local list = shots()
+		for i, line in STORY do
+			if skipped then
+				break
+			end
+			advance = false
+			caption.Text = line
+			TweenService:Create(caption, TweenInfo.new(1.2), { TextTransparency = 0 }):Play()
+			moreHint.Visible = true
+			local t0 = os.clock()
+			glide(list[i], 9, function()
+				return skipped or advance or os.clock() - t0 > 9
+			end)
+			TweenService:Create(caption, TweenInfo.new(0.5), { TextTransparency = 1 }):Play()
+			task.wait(0.5)
+		end
+		skipConn:Disconnect()
+		clickConn:Disconnect()
+		skip.Visible = false
+		moreHint.Visible = false
+		caption.Text = ""
+		busy = false
+		return true
+	end
+
+	local function enterGame()
+		mode = "done"
+		local info = TweenInfo.new(0.9)
+		for _, f in { top, bottom } do
+			TweenService:Create(f, info, { BackgroundTransparency = 1 }):Play()
+		end
+		TweenService:Create(shade, info, { BackgroundTransparency = 1 }):Play()
+		fadeMenu(false)
+		task.wait(0.4)
+		camCtl.Suspended = false
+		IntroController.Active = false
+		if controls then
+			controls:Enable()
+		end
+		task.wait(0.6)
+		gui:Destroy()
+		state:LocalNotify("Follow the gold marker to your next goal. Press H for the controls.", "info")
+	end
+
+	play.Activated:Connect(function()
+		if busy then
+			return
+		end
+		if fresh and not IntroController.SeenStory then
+			IntroController.SeenStory = true
+			runStory()
+		end
+		enterGame()
+	end)
+	story.Activated:Connect(function()
+		IntroController.SeenStory = true
+		runStory()
+		mode = "title"
+		fadeMenu(true)
+	end)
+end
+
+return IntroController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="54">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -14060,7 +14629,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="53">
+          <Item class="ModuleScript" referent="55">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -14274,7 +14843,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="54">
+          <Item class="ModuleScript" referent="56">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -14367,7 +14936,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="55">
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -14419,7 +14988,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="56">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -14742,7 +15311,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="57">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -14830,7 +15399,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="58">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -15015,7 +15584,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -15213,7 +15782,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="62">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -15266,7 +15835,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="61">
+          <Item class="ModuleScript" referent="63">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -15492,7 +16061,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="62">
+          <Item class="ModuleScript" referent="64">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -15638,12 +16207,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="63">
+  <Item class="Workspace" referent="65">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="64">
+    <Item class="Part" referent="66">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -15664,13 +16233,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="65">
+    <Item class="BoolValue" referent="67">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="66">
+    <Item class="SpawnLocation" referent="68">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -15690,7 +16259,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="67">
+    <Item class="Part" referent="69">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -15707,13 +16276,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="68">
+      <Item class="SurfaceGui" referent="70">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="69">
+        <Item class="TextLabel" referent="71">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -15745,13 +16314,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="70">
+      <Item class="SurfaceGui" referent="72">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="71">
+        <Item class="TextLabel" referent="73">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

@@ -104,7 +104,9 @@ Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Ea
 
 Every sound lives in one place: **Explorer > ReplicatedStorage > Shared > Sounds**. Double-click it to open it. Each line is a slot, like `Wind = { Id = "", Volume = 0.3 }`.
 
-Music, wind, birds, waves, fire, rain, thunder and the war horn start out empty (silent), so you can choose the ones you like. Chopping, mining, the bow, building and splashes already use Roblox's built-in sounds.
+The game has its own theme, "Over the Fjord". To hear it, upload `music/VikingTheme.ogg` once; [music/README.md](music/README.md) has the steps. It plays on the title screen and again every few minutes.
+
+Wind, birds, waves, fire, rain, thunder and the war horn start out empty (silent), so you can choose the ones you like. Chopping, mining, the bow, building and splashes already use Roblox's built-in sounds.
 
 To fill or change a slot:
 1. Open the **Toolbox** (View or Window menu), click the **Audio** tab, and search, for example "nordic music", "wind", "forest birds", "ocean waves", "fire crackle" or "war horn".

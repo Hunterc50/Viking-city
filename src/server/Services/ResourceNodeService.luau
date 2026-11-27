@@ -56,6 +56,7 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 	local jitter = Vector3.new(rng:NextNumber(-1.5, 1.5), 0, rng:NextNumber(-1.5, 1.5))
 	model:PivotTo(CFrame.new(Grid.rectCenter(colony.origin, x, z, 1, 1) + jitter) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
 	services.SeasonService:ApplyTo(model)
+	model:SetAttribute("NodeKind", kind) -- the saga's gold marker finds trees and rocks by this
 	model.Parent = colony.plot.Nodes
 
 	local node = { kind = kind, x = x, z = z, model = model, main = main, key = key, hp = def.Hits, maxHp = def.Hits }
