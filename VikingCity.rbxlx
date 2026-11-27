@@ -228,7 +228,7 @@ for _, category in Config.BuildCategories do
 end
 
 -- Tools every player carries (built in ModelFactory.tool).
-Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch" }
+Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch", "Sword" }
 
 -- Wildlife ------------------------------------------------------------------
 Config.Wildlife = {
@@ -246,18 +246,24 @@ Config.Rival = {
 	Name = "Greywater Hold",
 	Center = Vector3.new(-170, 1, 100), -- west end of the valley, past plot 1
 	Radius = 92, -- palisade ring
-	Defenders = 6,
-	DefenderHealth = 100,
-	DefenderDamage = 10,
+	Defenders = 9, -- axemen who charge
+	Archers = 4, -- bowmen who hold the walls and shoot from range
+	DefenderHealth = 150,
+	DefenderDamage = 14,
+	ArcherDamage = 9,
+	ArcherRange = 95,
+	ArcherCooldown = 2.6,
 	DefenderAggro = 70, -- studs from the village centre they will chase you
 	Villagers = 4, -- folk you can offer a new home once the guards fall
-	ChestLoot = { Food = 50, Silver = 20, Wood = 20 },
+	ChestLoot = { Food = 120, Silver = 45, Wood = 70, Hides = 6 },
 	BurnSeconds = 25,
 	RegenSeconds = 300, -- after a raid the hold rebuilds itself in 5 minutes
 }
 
 Config.Combat = {
-	AxeDamage = 34,
+	-- melee damage per blow by what you're holding: tools barely scratch,
+	-- the Sword is the real weapon
+	MeleeDamage = { Axe = 8, Pickaxe = 8, Sword = 40 },
 	ArrowDamage = 50,
 	StrikeRange = 8,
 	StrikeCooldown = 0.6,
@@ -343,10 +349,10 @@ Config.Tech = {
 	Trapping = { Branch = "Buildings", Name = "Trapping", Description = "Unlocks the Hunting Lodge.", Cost = { Lore = 20 } },
 	Chieftainship = { Branch = "Buildings", Name = "Chieftainship", Description = "Unlocks the Great Hall.", Cost = { Lore = 60, Silver = 20 }, Requires = { "Masonry" } },
 	-- Gear (needs a Smithy)
-	IronAxes = { Branch = "Gear", Name = "Iron Axes", Description = "Chop 50% more wood and hit 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
+	IronAxes = { Branch = "Gear", Name = "Iron Blades", Description = "Chop 50% more wood, and your Sword hits 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
 	Longbows = { Branch = "Gear", Name = "Yew Longbows", Description = "Arrows hit 50% harder and fly further.", Cost = { Lore = 25, Wood = 40 }, Building = "Smithy" },
 	ChainMail = { Branch = "Gear", Name = "Ring Mail", Description = "You have 150 health instead of 100.", Cost = { Lore = 40, Silver = 25 }, Building = "Smithy", Requires = { "IronAxes" } },
-	SteelEdges = { Branch = "Gear", Name = "Steel Edges", Description = "Axe blows hit twice as hard.", Cost = { Lore = 60, Silver = 30 }, Building = "Smithy", Requires = { "IronAxes" } },
+	SteelEdges = { Branch = "Gear", Name = "Steel Edges", Description = "Sword blows hit twice as hard.", Cost = { Lore = 60, Silver = 30 }, Building = "Smithy", Requires = { "IronAxes" } },
 	-- Boats (needs a Shipyard)
 	Karve = { Branch = "Boats", Name = "Karve", Description = "Launch a small boat from your dock and sail the fjord.", Cost = { Lore = 30, Wood = 80 }, Building = "Shipyard" },
 	Longship = { Branch = "Boats", Name = "Longship", Description = "Launch a fast war longship instead.", Cost = { Lore = 70, Wood = 150, Silver = 20 }, Building = "Shipyard", Requires = { "Karve" } },
@@ -1706,7 +1712,7 @@ function ModelFactory.tool(kind: string): Tool
 	tool.Name = kind
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
-	tool.ToolTip = ({ Axe = "Chop trees, fight", Pickaxe = "Mine rocks", Bow = "Shoot deer and enemies", Torch = "Set enemy buildings alight (F)" })[kind] or kind
+	tool.ToolTip = ({ Axe = "Chop trees, fight", Pickaxe = "Mine rocks", Bow = "Shoot deer and enemies", Torch = "Set enemy buildings alight (F)", Sword = "Your weapon: click to fight" })[kind] or kind
 
 	local handle = Instance.new("Part")
 	handle.Name = "Handle"
@@ -1780,6 +1786,15 @@ function ModelFactory.tool(kind: string): Tool
 		limb(V3(0.25, 2.2, 0.25), CFrame.new(0, -1.4, 0.3) * CFrame.Angles(math.rad(15), 0, 0), Colors.DarkWood, Enum.Material.Wood)
 		limb(V3(0.06, 4.9, 0.06), CFrame.new(0, 0, 0.9), Color3.fromRGB(230, 225, 210), Enum.Material.Fabric)
 		tool.Grip = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi / 2, 0)
+		return tool
+	elseif kind == "Sword" then
+		-- a short grip, a crossguard and a long double-edged blade
+		handle.Size = V3(0.3, 1.2, 0.3)
+		handle.Color = Colors.DarkWood
+		head(V3(0.35, 0.35, 0.35), CFrame.new(0, -0.7, 0)) -- pommel
+		head(V3(0.25, 0.25, 1.6), CFrame.new(0, 0.7, 0)) -- crossguard
+		head(V3(0.12, 3.8, 0.4), CFrame.new(0, 2.7, 0)) -- blade
+		tool.Grip = CFrame.new(0, -0.2, 0)
 		return tool
 	elseif kind == "Axe" then
 		head(V3(0.25, 1, 1.3), CFrame.new(0, 1.4, -0.7))
@@ -3988,7 +4003,9 @@ end
 
 local shieldColors = { Color3.fromRGB(46, 70, 120), Color3.fromRGB(220, 214, 200), Color3.fromRGB(40, 90, 80) }
 
-local function spawnDefender(post: Vector3)
+local archerShoot -- defined below (archers use it from the guard loop)
+
+local function spawnDefender(post: Vector3, archer: boolean?)
 	local desc = Instance.new("HumanoidDescription")
 	local skin = Color3.fromRGB(226, 186, 150)
 	desc.HeadColor = skin
@@ -4004,10 +4021,11 @@ local function spawnDefender(post: Vector3)
 		warn("[RaidService] could not create guard: " .. tostring(model))
 		return
 	end
-	model.Name = "Greywater Guard"
+	local title = archer and "Greywater Archer" or "Greywater Guard"
+	model.Name = title
 	model:SetAttribute("Defender", true)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	humanoid.DisplayName = "Greywater Guard"
+	humanoid.DisplayName = title
 	humanoid.MaxHealth = R.DefenderHealth
 	humanoid.Health = R.DefenderHealth
 	humanoid.WalkSpeed = 13
@@ -4021,10 +4039,12 @@ local function spawnDefender(post: Vector3)
 		gear(model, head, "Helmet", Vector3.new(1.35, 0.7, 1.35), CFrame.new(0, 0.45, 0), Color3.fromRGB(90, 92, 98), Enum.Material.Metal, Enum.PartType.Ball)
 		gear(model, head, "NoseGuard", Vector3.new(0.15, 0.6, 0.15), CFrame.new(0, 0.1, -0.62), Color3.fromRGB(90, 92, 98))
 	end
-	if leftHand then
+	if archer and leftHand then
+		gear(model, leftHand, "BowLimb", Vector3.new(0.2, 4.2, 0.2), CFrame.new(0, 0, -0.3), Color3.fromRGB(80, 56, 36), Enum.Material.Wood)
+	elseif leftHand then
 		gear(model, leftHand, "Shield", Vector3.new(0.3, 3.4, 3.4), CFrame.new(-0.3, 0, 0), shieldColors[rng:NextInteger(1, #shieldColors)], Enum.Material.Wood, Enum.PartType.Cylinder)
 	end
-	if rightHand then
+	if rightHand and not archer then
 		gear(model, rightHand, "Haft", Vector3.new(0.25, 3.2, 0.25), CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0), Color3.fromRGB(110, 76, 46), Enum.Material.Wood)
 		gear(model, rightHand, "AxeHead", Vector3.new(0.2, 1, 1.1), CFrame.new(0, 0.1, -1.9), Color3.fromRGB(120, 122, 130))
 	end
@@ -4061,7 +4081,7 @@ local function spawnDefender(post: Vector3)
 		end
 	end)
 
-	local guard = { model = model, humanoid = humanoid, root = root, post = post, home = post, lastHit = 0, rightHand = rightHand }
+	local guard = { model = model, humanoid = humanoid, root = root, post = post, home = post, lastHit = 0, rightHand = rightHand, archer = archer }
 	humanoid.Died:Connect(function()
 		guard.dead = true
 		markRaid()
@@ -4156,12 +4176,50 @@ local function swingAxe(guard)
 	end
 end
 
+-- Archers hold their tower and loose arrows at raiders in range.
+archerShoot = function(g, now: number)
+	if now - g.lastHit < R.ArcherCooldown then
+		return
+	end
+	local target = nearestTarget(g.root.Position, R.ArcherRange)
+	local troot = target and target:FindFirstChild("HumanoidRootPart")
+	if not troot then
+		return
+	end
+	g.lastHit = now
+	local from = g.root.Position + Vector3.new(0, 1.5, 0)
+	g.root.CFrame = CFrame.lookAt(g.root.Position, Vector3.new(troot.Position.X, g.root.Position.Y, troot.Position.Z))
+	local hit = rng:NextNumber() < 0.6
+	local to = hit and troot.Position or (troot.Position + Vector3.new(rng:NextNumber(-6, 6), -2, rng:NextNumber(-6, 6)))
+	local arrow = ModelFactory.arrow()
+	arrow.CFrame = CFrame.lookAt(from, to)
+	arrow.Parent = workspace
+	Sounds.play("Bow", from)
+	local flight = (to - from).Magnitude / 140
+	TweenService:Create(arrow, TweenInfo.new(flight, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + (to - from).Unit) }):Play()
+	task.delay(flight + 2, function()
+		arrow:Destroy()
+	end)
+	if hit then
+		task.delay(flight, function()
+			local hum = target:FindFirstChildOfClass("Humanoid")
+			if hum then
+				local victim = Players:GetPlayerFromCharacter(target)
+				local colony = victim and services.ColonyService:Get(victim)
+				hum:TakeDamage(R.ArcherDamage * (services.ColonyService:Has(colony, "PathStorm") and 0.7 or 1))
+			end
+		end)
+	end
+end
+
 local function guardLoop()
 	while true do
 		task.wait(0.25)
 		local now = os.clock()
 		for _, g in state.defenders do
-			if not g.dead and g.root then
+			if g.archer and not g.dead and g.root then
+				archerShoot(g, now)
+			elseif not g.dead and g.root then
 				local target, dist = nearestTarget(g.root.Position, state.alarm and R.DefenderAggro * 1.6 or R.DefenderAggro)
 				if target then
 					local troot = target:FindFirstChild("HumanoidRootPart")
@@ -4386,6 +4444,21 @@ local function populate()
 	for i = 1, R.Defenders do
 		local a = (i / R.Defenders) * math.pi * 2
 		spawnDefender(CENTER + Vector3.new(math.cos(a) * 28, 0, math.sin(a) * 28))
+	end
+	-- archers on wooden towers just inside the palisade
+	for i = 1, R.Archers do
+		local a = (i / R.Archers) * math.pi * 2 + math.pi / R.Archers
+		local p = CENTER + Vector3.new(math.cos(a) * (R.Radius - 14), 0, math.sin(a) * (R.Radius - 14))
+		if not folder:FindFirstChild("Tower" .. i) then
+			local tower = Instance.new("Model")
+			tower.Name = "Tower" .. i
+			for _, c in { { -2, -2 }, { 2, -2 }, { -2, 2 }, { 2, 2 } } do
+				ModelFactory.addPart(tower, { Name = "Leg", Size = Vector3.new(0.8, 9, 0.8), Position = p + Vector3.new(c[1], 4.5, c[2]), Color = Color3.fromRGB(96, 70, 48) })
+			end
+			ModelFactory.addPart(tower, { Name = "Deck", Size = Vector3.new(6, 0.8, 6), Position = p + Vector3.new(0, 9, 0), Color = Color3.fromRGB(110, 80, 54), Material = Enum.Material.WoodPlanks })
+			tower.Parent = folder
+		end
+		spawnDefender(p + Vector3.new(0, 9.4, 0), true)
 	end
 	for _ = 1, R.Villagers do
 		spawnFolk()
@@ -5180,12 +5253,14 @@ function ToolService:ApplyGear(player: Player)
 	if steel or iron then
 		local containers = { player:FindFirstChild("Backpack"), character }
 		for _, c in containers do
-			local axe = c and c:FindFirstChild("Axe")
-			if axe and axe:IsA("Tool") then
-				for _, d in axe:GetChildren() do
-					if d:IsA("BasePart") and d.Name == "Head" then
-						d.Color = steel and Color3.fromRGB(210, 215, 225) or Color3.fromRGB(80, 82, 90)
-						d.Material = steel and Enum.Material.Foil or Enum.Material.Metal
+			for _, toolName in { "Axe", "Sword" } do
+				local axe = c and c:FindFirstChild(toolName) -- the axe or the sword
+				if axe and axe:IsA("Tool") then
+					for _, d in axe:GetChildren() do
+						if d:IsA("BasePart") and d.Name == "Head" then
+							d.Color = steel and Color3.fromRGB(210, 215, 225) or Color3.fromRGB(80, 82, 90)
+							d.Material = steel and Enum.Material.Foil or Enum.Material.Metal
+						end
 					end
 				end
 			end
@@ -5301,7 +5376,10 @@ local function strike(player: Player)
 	if lastStrike[player] and now - lastStrike[player] < Config.Combat.StrikeCooldown then
 		return
 	end
-	if not ToolService:IsHolding(player, "Axe") then
+	local character = player.Character
+	local held = character and character:FindFirstChildOfClass("Tool")
+	local base = held and Config.Combat.MeleeDamage[held.Name]
+	if not base then
 		return
 	end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -5311,11 +5389,13 @@ local function strike(player: Player)
 	lastStrike[player] = now
 	Sounds.play("Swing", root)
 	local colony = services.ColonyService:Get(player)
-	local damage = Config.Combat.AxeDamage
-	if services.ColonyService:Has(colony, "SteelEdges") then
-		damage *= 2
-	elseif services.ColonyService:Has(colony, "IronAxes") then
-		damage *= 1.5
+	local damage = base
+	if held.Name == "Sword" then
+		if services.ColonyService:Has(colony, "SteelEdges") then
+			damage *= 2
+		elseif services.ColonyService:Has(colony, "IronAxes") then
+			damage *= 1.5
+		end
 	end
 	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.RaidService:DamageDefender(guard, damage, player)
@@ -8294,7 +8374,7 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees, click to fight\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\nE: gather, loot, talk\nT: research\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
 	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
@@ -9064,7 +9144,7 @@ local function hookTool(tool: Instance)
 			lastShot = now
 			Remotes.ShootArrow:FireServer(aimPoint())
 		else
-			if tool.Name == "Axe" then
+			if Config.Combat.MeleeDamage[tool.Name] then
 				Remotes.Strike:FireServer()
 			end
 			swing(tool)

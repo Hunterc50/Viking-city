@@ -53,7 +53,7 @@ local function hookTool(tool: Instance)
 			lastShot = now
 			Remotes.ShootArrow:FireServer(aimPoint())
 		else
-			if tool.Name == "Axe" then
+			if Config.Combat.MeleeDamage[tool.Name] then
 				Remotes.Strike:FireServer()
 			end
 			swing(tool)

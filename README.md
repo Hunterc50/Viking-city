@@ -14,7 +14,7 @@ This repository holds all the game's code. You edit it in **VS Code**, and **Roj
 
 - A big Nordic valley made of realistic terrain: a flat green building area, a fjord with docks, pine and birch forests, rocky outcrops and snow-capped mountains, with warm afternoon light, haze and sun rays.
 - Your own plot with a starting longhouse and 3 villagers.
-- Tools: **Axe** (key 1) for trees, **Pickaxe** (key 2) for rocks, **Bow** (key 3) for hunting deer in the meadow behind your plot. Hold E on berry bushes to forage by hand.
+- Tools: **Axe** (key 1) for trees, **Pickaxe** (key 2) for rocks, **Bow** (key 3) for hunting, **Torch** (key 4) for burning, and the **Sword** (key 5), your real weapon. Axe and Pickaxe only scratch an enemy. Hold E on berry bushes to forage by hand.
 - 7 buildings: Longhouse and A-frame Cottage (housing), Woodcutter, Quarry, Barley Farm (jobs), Storehouse (storage), Palisade wall.
 - Villagers take jobs, walk to work (arms and legs swinging), eat, and get happier or sadder. Single adults marry and share a home, couples have babies named after a parent (like Astrid Bjornsdottir), babies toddle after their parents, children play and grow up, and old-timers become grey-bearded elders. Newcomers also arrive from neighbouring tribes.
 - Your village saves automatically (see "Saving your village").
@@ -66,7 +66,7 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 | Cancel | **Q**, or click the same button again |
 | Demolish | Click **Demolish** (right end of the tabs), then click one of your buildings (50% refund) |
 | Raid Greywater Hold | Walk west past your plot to the walled village. Sound the war horn at the gate (E) if you want a proper fight |
-| Fight | Hold the Axe (1) and click near a guard, or shoot with the Bow (3) |
+| Fight | Hold the Sword (5) and click near a guard, or shoot with the Bow (3). The Axe and Pickaxe only do a little damage. Greywater Hold has 9 axemen and 4 archers on towers, so research Ring Mail and Iron Blades first |
 | Burn buildings | Hold the Torch (4) and press **F** at a rival building. Fire spreads and chars it |
 | Plunder | Hold **E** at the chests by their storehouses for food, silver and wood |
 | New villagers | When every guard has fallen, hold **E** on the hold's villagers to offer them a home (needs a free bed) |

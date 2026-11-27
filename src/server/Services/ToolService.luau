@@ -85,12 +85,14 @@ function ToolService:ApplyGear(player: Player)
 	if steel or iron then
 		local containers = { player:FindFirstChild("Backpack"), character }
 		for _, c in containers do
-			local axe = c and c:FindFirstChild("Axe")
-			if axe and axe:IsA("Tool") then
-				for _, d in axe:GetChildren() do
-					if d:IsA("BasePart") and d.Name == "Head" then
-						d.Color = steel and Color3.fromRGB(210, 215, 225) or Color3.fromRGB(80, 82, 90)
-						d.Material = steel and Enum.Material.Foil or Enum.Material.Metal
+			for _, toolName in { "Axe", "Sword" } do
+				local axe = c and c:FindFirstChild(toolName) -- the axe or the sword
+				if axe and axe:IsA("Tool") then
+					for _, d in axe:GetChildren() do
+						if d:IsA("BasePart") and d.Name == "Head" then
+							d.Color = steel and Color3.fromRGB(210, 215, 225) or Color3.fromRGB(80, 82, 90)
+							d.Material = steel and Enum.Material.Foil or Enum.Material.Metal
+						end
 					end
 				end
 			end
@@ -206,7 +208,10 @@ local function strike(player: Player)
 	if lastStrike[player] and now - lastStrike[player] < Config.Combat.StrikeCooldown then
 		return
 	end
-	if not ToolService:IsHolding(player, "Axe") then
+	local character = player.Character
+	local held = character and character:FindFirstChildOfClass("Tool")
+	local base = held and Config.Combat.MeleeDamage[held.Name]
+	if not base then
 		return
 	end
 	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -216,11 +221,13 @@ local function strike(player: Player)
 	lastStrike[player] = now
 	Sounds.play("Swing", root)
 	local colony = services.ColonyService:Get(player)
-	local damage = Config.Combat.AxeDamage
-	if services.ColonyService:Has(colony, "SteelEdges") then
-		damage *= 2
-	elseif services.ColonyService:Has(colony, "IronAxes") then
-		damage *= 1.5
+	local damage = base
+	if held.Name == "Sword" then
+		if services.ColonyService:Has(colony, "SteelEdges") then
+			damage *= 2
+		elseif services.ColonyService:Has(colony, "IronAxes") then
+			damage *= 1.5
+		end
 	end
 	for _, guard in services.RaidService:DefendersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.RaidService:DamageDefender(guard, damage, player)

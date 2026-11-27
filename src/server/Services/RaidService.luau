@@ -271,7 +271,9 @@ end
 
 local shieldColors = { Color3.fromRGB(46, 70, 120), Color3.fromRGB(220, 214, 200), Color3.fromRGB(40, 90, 80) }
 
-local function spawnDefender(post: Vector3)
+local archerShoot -- defined below (archers use it from the guard loop)
+
+local function spawnDefender(post: Vector3, archer: boolean?)
 	local desc = Instance.new("HumanoidDescription")
 	local skin = Color3.fromRGB(226, 186, 150)
 	desc.HeadColor = skin
@@ -287,10 +289,11 @@ local function spawnDefender(post: Vector3)
 		warn("[RaidService] could not create guard: " .. tostring(model))
 		return
 	end
-	model.Name = "Greywater Guard"
+	local title = archer and "Greywater Archer" or "Greywater Guard"
+	model.Name = title
 	model:SetAttribute("Defender", true)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	humanoid.DisplayName = "Greywater Guard"
+	humanoid.DisplayName = title
 	humanoid.MaxHealth = R.DefenderHealth
 	humanoid.Health = R.DefenderHealth
 	humanoid.WalkSpeed = 13
@@ -304,10 +307,12 @@ local function spawnDefender(post: Vector3)
 		gear(model, head, "Helmet", Vector3.new(1.35, 0.7, 1.35), CFrame.new(0, 0.45, 0), Color3.fromRGB(90, 92, 98), Enum.Material.Metal, Enum.PartType.Ball)
 		gear(model, head, "NoseGuard", Vector3.new(0.15, 0.6, 0.15), CFrame.new(0, 0.1, -0.62), Color3.fromRGB(90, 92, 98))
 	end
-	if leftHand then
+	if archer and leftHand then
+		gear(model, leftHand, "BowLimb", Vector3.new(0.2, 4.2, 0.2), CFrame.new(0, 0, -0.3), Color3.fromRGB(80, 56, 36), Enum.Material.Wood)
+	elseif leftHand then
 		gear(model, leftHand, "Shield", Vector3.new(0.3, 3.4, 3.4), CFrame.new(-0.3, 0, 0), shieldColors[rng:NextInteger(1, #shieldColors)], Enum.Material.Wood, Enum.PartType.Cylinder)
 	end
-	if rightHand then
+	if rightHand and not archer then
 		gear(model, rightHand, "Haft", Vector3.new(0.25, 3.2, 0.25), CFrame.new(0, -0.6, -0.4) * CFrame.Angles(math.rad(90), 0, 0), Color3.fromRGB(110, 76, 46), Enum.Material.Wood)
 		gear(model, rightHand, "AxeHead", Vector3.new(0.2, 1, 1.1), CFrame.new(0, 0.1, -1.9), Color3.fromRGB(120, 122, 130))
 	end
@@ -344,7 +349,7 @@ local function spawnDefender(post: Vector3)
 		end
 	end)
 
-	local guard = { model = model, humanoid = humanoid, root = root, post = post, home = post, lastHit = 0, rightHand = rightHand }
+	local guard = { model = model, humanoid = humanoid, root = root, post = post, home = post, lastHit = 0, rightHand = rightHand, archer = archer }
 	humanoid.Died:Connect(function()
 		guard.dead = true
 		markRaid()
@@ -439,12 +444,50 @@ local function swingAxe(guard)
 	end
 end
 
+-- Archers hold their tower and loose arrows at raiders in range.
+archerShoot = function(g, now: number)
+	if now - g.lastHit < R.ArcherCooldown then
+		return
+	end
+	local target = nearestTarget(g.root.Position, R.ArcherRange)
+	local troot = target and target:FindFirstChild("HumanoidRootPart")
+	if not troot then
+		return
+	end
+	g.lastHit = now
+	local from = g.root.Position + Vector3.new(0, 1.5, 0)
+	g.root.CFrame = CFrame.lookAt(g.root.Position, Vector3.new(troot.Position.X, g.root.Position.Y, troot.Position.Z))
+	local hit = rng:NextNumber() < 0.6
+	local to = hit and troot.Position or (troot.Position + Vector3.new(rng:NextNumber(-6, 6), -2, rng:NextNumber(-6, 6)))
+	local arrow = ModelFactory.arrow()
+	arrow.CFrame = CFrame.lookAt(from, to)
+	arrow.Parent = workspace
+	Sounds.play("Bow", from)
+	local flight = (to - from).Magnitude / 140
+	TweenService:Create(arrow, TweenInfo.new(flight, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + (to - from).Unit) }):Play()
+	task.delay(flight + 2, function()
+		arrow:Destroy()
+	end)
+	if hit then
+		task.delay(flight, function()
+			local hum = target:FindFirstChildOfClass("Humanoid")
+			if hum then
+				local victim = Players:GetPlayerFromCharacter(target)
+				local colony = victim and services.ColonyService:Get(victim)
+				hum:TakeDamage(R.ArcherDamage * (services.ColonyService:Has(colony, "PathStorm") and 0.7 or 1))
+			end
+		end)
+	end
+end
+
 local function guardLoop()
 	while true do
 		task.wait(0.25)
 		local now = os.clock()
 		for _, g in state.defenders do
-			if not g.dead and g.root then
+			if g.archer and not g.dead and g.root then
+				archerShoot(g, now)
+			elseif not g.dead and g.root then
 				local target, dist = nearestTarget(g.root.Position, state.alarm and R.DefenderAggro * 1.6 or R.DefenderAggro)
 				if target then
 					local troot = target:FindFirstChild("HumanoidRootPart")
@@ -669,6 +712,21 @@ local function populate()
 	for i = 1, R.Defenders do
 		local a = (i / R.Defenders) * math.pi * 2
 		spawnDefender(CENTER + Vector3.new(math.cos(a) * 28, 0, math.sin(a) * 28))
+	end
+	-- archers on wooden towers just inside the palisade
+	for i = 1, R.Archers do
+		local a = (i / R.Archers) * math.pi * 2 + math.pi / R.Archers
+		local p = CENTER + Vector3.new(math.cos(a) * (R.Radius - 14), 0, math.sin(a) * (R.Radius - 14))
+		if not folder:FindFirstChild("Tower" .. i) then
+			local tower = Instance.new("Model")
+			tower.Name = "Tower" .. i
+			for _, c in { { -2, -2 }, { 2, -2 }, { -2, 2 }, { 2, 2 } } do
+				ModelFactory.addPart(tower, { Name = "Leg", Size = Vector3.new(0.8, 9, 0.8), Position = p + Vector3.new(c[1], 4.5, c[2]), Color = Color3.fromRGB(96, 70, 48) })
+			end
+			ModelFactory.addPart(tower, { Name = "Deck", Size = Vector3.new(6, 0.8, 6), Position = p + Vector3.new(0, 9, 0), Color = Color3.fromRGB(110, 80, 54), Material = Enum.Material.WoodPlanks })
+			tower.Parent = folder
+		end
+		spawnDefender(p + Vector3.new(0, 9.4, 0), true)
 	end
 	for _ = 1, R.Villagers do
 		spawnFolk()

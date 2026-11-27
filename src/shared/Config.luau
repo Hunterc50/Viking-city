@@ -199,7 +199,7 @@ for _, category in Config.BuildCategories do
 end
 
 -- Tools every player carries (built in ModelFactory.tool).
-Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch" }
+Config.Tools = { "Axe", "Pickaxe", "Bow", "Torch", "Sword" }
 
 -- Wildlife ------------------------------------------------------------------
 Config.Wildlife = {
@@ -217,18 +217,24 @@ Config.Rival = {
 	Name = "Greywater Hold",
 	Center = Vector3.new(-170, 1, 100), -- west end of the valley, past plot 1
 	Radius = 92, -- palisade ring
-	Defenders = 6,
-	DefenderHealth = 100,
-	DefenderDamage = 10,
+	Defenders = 9, -- axemen who charge
+	Archers = 4, -- bowmen who hold the walls and shoot from range
+	DefenderHealth = 150,
+	DefenderDamage = 14,
+	ArcherDamage = 9,
+	ArcherRange = 95,
+	ArcherCooldown = 2.6,
 	DefenderAggro = 70, -- studs from the village centre they will chase you
 	Villagers = 4, -- folk you can offer a new home once the guards fall
-	ChestLoot = { Food = 50, Silver = 20, Wood = 20 },
+	ChestLoot = { Food = 120, Silver = 45, Wood = 70, Hides = 6 },
 	BurnSeconds = 25,
 	RegenSeconds = 300, -- after a raid the hold rebuilds itself in 5 minutes
 }
 
 Config.Combat = {
-	AxeDamage = 34,
+	-- melee damage per blow by what you're holding: tools barely scratch,
+	-- the Sword is the real weapon
+	MeleeDamage = { Axe = 8, Pickaxe = 8, Sword = 40 },
 	ArrowDamage = 50,
 	StrikeRange = 8,
 	StrikeCooldown = 0.6,
@@ -314,10 +320,10 @@ Config.Tech = {
 	Trapping = { Branch = "Buildings", Name = "Trapping", Description = "Unlocks the Hunting Lodge.", Cost = { Lore = 20 } },
 	Chieftainship = { Branch = "Buildings", Name = "Chieftainship", Description = "Unlocks the Great Hall.", Cost = { Lore = 60, Silver = 20 }, Requires = { "Masonry" } },
 	-- Gear (needs a Smithy)
-	IronAxes = { Branch = "Gear", Name = "Iron Axes", Description = "Chop 50% more wood and hit 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
+	IronAxes = { Branch = "Gear", Name = "Iron Blades", Description = "Chop 50% more wood, and your Sword hits 50% harder.", Cost = { Lore = 20, Stone = 30 }, Building = "Smithy" },
 	Longbows = { Branch = "Gear", Name = "Yew Longbows", Description = "Arrows hit 50% harder and fly further.", Cost = { Lore = 25, Wood = 40 }, Building = "Smithy" },
 	ChainMail = { Branch = "Gear", Name = "Ring Mail", Description = "You have 150 health instead of 100.", Cost = { Lore = 40, Silver = 25 }, Building = "Smithy", Requires = { "IronAxes" } },
-	SteelEdges = { Branch = "Gear", Name = "Steel Edges", Description = "Axe blows hit twice as hard.", Cost = { Lore = 60, Silver = 30 }, Building = "Smithy", Requires = { "IronAxes" } },
+	SteelEdges = { Branch = "Gear", Name = "Steel Edges", Description = "Sword blows hit twice as hard.", Cost = { Lore = 60, Silver = 30 }, Building = "Smithy", Requires = { "IronAxes" } },
 	-- Boats (needs a Shipyard)
 	Karve = { Branch = "Boats", Name = "Karve", Description = "Launch a small boat from your dock and sail the fjord.", Cost = { Lore = 30, Wood = 80 }, Building = "Shipyard" },
 	Longship = { Branch = "Boats", Name = "Longship", Description = "Launch a fast war longship instead.", Cost = { Lore = 70, Wood = 150, Silver = 20 }, Building = "Shipyard", Requires = { "Karve" } },

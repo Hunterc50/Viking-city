@@ -473,7 +473,7 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees, click to fight\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\nE: gather, loot, talk\nT: research\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
 	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)

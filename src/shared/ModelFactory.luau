@@ -1215,7 +1215,7 @@ function ModelFactory.tool(kind: string): Tool
 	tool.Name = kind
 	tool.CanBeDropped = false
 	tool.RequiresHandle = true
-	tool.ToolTip = ({ Axe = "Chop trees, fight", Pickaxe = "Mine rocks", Bow = "Shoot deer and enemies", Torch = "Set enemy buildings alight (F)" })[kind] or kind
+	tool.ToolTip = ({ Axe = "Chop trees, fight", Pickaxe = "Mine rocks", Bow = "Shoot deer and enemies", Torch = "Set enemy buildings alight (F)", Sword = "Your weapon: click to fight" })[kind] or kind
 
 	local handle = Instance.new("Part")
 	handle.Name = "Handle"
@@ -1289,6 +1289,15 @@ function ModelFactory.tool(kind: string): Tool
 		limb(V3(0.25, 2.2, 0.25), CFrame.new(0, -1.4, 0.3) * CFrame.Angles(math.rad(15), 0, 0), Colors.DarkWood, Enum.Material.Wood)
 		limb(V3(0.06, 4.9, 0.06), CFrame.new(0, 0, 0.9), Color3.fromRGB(230, 225, 210), Enum.Material.Fabric)
 		tool.Grip = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi / 2, 0)
+		return tool
+	elseif kind == "Sword" then
+		-- a short grip, a crossguard and a long double-edged blade
+		handle.Size = V3(0.3, 1.2, 0.3)
+		handle.Color = Colors.DarkWood
+		head(V3(0.35, 0.35, 0.35), CFrame.new(0, -0.7, 0)) -- pommel
+		head(V3(0.25, 0.25, 1.6), CFrame.new(0, 0.7, 0)) -- crossguard
+		head(V3(0.12, 3.8, 0.4), CFrame.new(0, 2.7, 0)) -- blade
+		tool.Grip = CFrame.new(0, -0.2, 0)
 		return tool
 	elseif kind == "Axe" then
 		head(V3(0.25, 1, 1.3), CFrame.new(0, 1.4, -0.7))
