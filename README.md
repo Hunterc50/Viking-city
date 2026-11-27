@@ -222,13 +222,15 @@ Trees, rocks and bushes keep the size you give them (with a little random variet
 
 ### Using real 3D models (meshes)
 
-You can also replace any model with an imported one:
-1. **Window > 3D Importer** (or the Toolbox, **Creator Store** tab, for free models) and import your `.fbx`, `.obj` or `.gltf`.
-2. Drag it into **ReplicatedStorage > Assets**, and rename it to one of these slot names:
-   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `LoreHall`, `Smithy`, `Shrine`, `Shipyard`, `HuntingLodge`, `GreatHall`, `Tree_Pine`, `Tree_Spruce`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Longship`, `Axe`, `Pickaxe`, `Bow`, `Torch`
-3. Press Play. Imported buildings are resized to fit their spot on the grid automatically. If a model with the same name is in ModelWorkshop, the workshop one wins, so delete that one.
+**Ready-made meshes:** the `meshes` folder has real 3D models for the halls, trees, rocks, longship, deer, tools and props. Import `VikingAssets.glb` once (File > Import 3D) and press Play. The steps are in [meshes/README.md](meshes/README.md).
 
-Notes: `Axe`, `Pickaxe`, `Bow` and `Torch` must be **Tools** with a part named `Handle`. Only use models you made or that are free to use, and avoid ones with scripts inside.
+You can also replace any model with one of your own:
+1. **File > Import 3D** (or the Toolbox, **Creator Store** tab, for free models) and import your `.fbx`, `.obj` or `.glb`.
+2. Drag it into **ReplicatedStorage > Assets**, and rename it to one of these slot names:
+   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `LoreHall`, `Smithy`, `Shrine`, `Shipyard`, `HuntingLodge`, `GreatHall`, `Watchtower`, `Tree_Pine`, `Tree_Spruce`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Longship`, `Axe`, `Pickaxe`, `Bow`, `Torch`, `Sword`, `Prop_Cart`, `Prop_Haystack`, `Prop_FishRack`, `Prop_Barrels`, `Prop_Woodpile`, `Prop_Banner`, `Prop_BoatUpturned`
+3. Press Play. Each model is scaled and placed to match the built-in one, so size and position don't matter. If a model with the same name is in ModelWorkshop, the workshop one wins, so delete that one.
+
+Notes: a tool can be a plain model; the game holds it by the built-in handle. Only use models you made or that are free to use, and avoid ones with scripts inside.
 
 ---
 
@@ -272,6 +274,8 @@ src/
       BuildController.luau  placement preview and demolish mode
       VillagerAnimController.luau  arm and leg swing for walking villagers
 docs/DESIGN.md          the full game design and roadmap
+meshes/                 ready-made 3D models (.glb) and how to import them
+tools/meshgen/          the Python code that makes those models
 ```
 
 **Want to change the balance?** Edit `src/shared/Config.luau`. For example, make the Longhouse cheaper or days shorter.
@@ -281,5 +285,5 @@ docs/DESIGN.md          the full game design and roadmap
 ## Known limits of this first version
 
 - Buildings appear instantly; construction time comes later.
-- Models are made from parts in code; edit them or swap in real meshes (see "Editing the world and models yourself").
+- Models are made from parts in code unless you import the ready-made meshes (see meshes/README.md) or your own.
 - The rival village layout, villagers and guards are still made by code each time (its buildings do use your edited models).

@@ -11,7 +11,7 @@
         "_HowToUse": {
           "$className": "StringValue",
           "$properties": {
-            "Value": "Drop your own models (meshes) in this folder to replace the built-in ones, named exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, LoreHall, Smithy, Shrine, Shipyard, HuntingLodge, GreatHall, Tree_Pine, Tree_Spruce, Tree_Birch, Rock, Bush, Dock, Deer, Longship, Axe, Pickaxe, Bow, Torch (tools must be Tools with a Handle). Easier: run require(game.ServerScriptService.Server.EditTools).Setup() in View > Command Bar to get every built-in model in Workspace > ModelWorkshop to edit. See README."
+            "Value": "Ready-made 3D meshes: import meshes/VikingAssets.glb (File > Import 3D) and press Play, the game finds it by itself. Or drop your own models in this folder named exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, LoreHall, Smithy, Shrine, Shipyard, HuntingLodge, GreatHall, Watchtower, Tree_Pine, Tree_Spruce, Tree_Birch, Rock, Bush, Dock, Deer, Longship, Axe, Pickaxe, Bow, Torch, Sword, Prop_Cart, Prop_Haystack, Prop_FishRack, Prop_Barrels, Prop_Woodpile, Prop_Banner, Prop_BoatUpturned. See meshes/README.md."
           }
         }
       }

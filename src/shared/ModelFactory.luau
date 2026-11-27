@@ -1765,12 +1765,47 @@ ModelFactory.Slots = {
 
 -- Models laid out in Workspace > ModelWorkshop (see bakeTemplates) are
 -- looked at first, so edits made there in Studio are used straight away.
+--
+-- The ready-made meshes (meshes/VikingAssets.glb) import as one model named
+-- VikingAssets holding every slot. It works dropped straight into Assets, or
+-- even left in the Workspace where Studio's importer puts it: the server
+-- tucks it away into Assets when the game starts.
+local slotSet = {}
+for _, slot in ModelFactory.Slots do
+	slotSet[slot] = true
+end
+
+local function assetsFolder(): Instance?
+	local folder = ReplicatedStorage:FindFirstChild("Assets")
+	local pack = workspace:FindFirstChild("VikingAssets")
+	if pack and game:GetService("RunService"):IsServer() then
+		if not folder then
+			folder = Instance.new("Folder")
+			folder.Name = "Assets"
+			folder.Parent = ReplicatedStorage
+		end
+		pack.Parent = folder
+	end
+	return folder
+end
+
 local function customAsset(name: string): Instance?
 	local workshop = workspace:FindFirstChild("ModelWorkshop")
 	local item = workshop and workshop:FindFirstChild(name)
-	if not item then
-		local folder = ReplicatedStorage:FindFirstChild("Assets")
-		item = folder and folder:FindFirstChild(name)
+	local folder = not item and assetsFolder()
+	if folder then
+		item = folder:FindFirstChild(name)
+		if not item then
+			-- one level down: a pack of slots (like VikingAssets) inside Assets
+			for _, child in folder:GetChildren() do
+				if not slotSet[child.Name] and (child:IsA("Model") or child:IsA("Folder")) then
+					item = child:FindFirstChild(name)
+					if item then
+						break
+					end
+				end
+			end
+		end
 	end
 	return item and item:Clone() or nil
 end
