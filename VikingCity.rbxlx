@@ -2526,16 +2526,23 @@ local function assetsFolder(): Instance?
 	return folder
 end
 
+-- Tuck the pack away as soon as the game starts, before anything is built,
+-- so its models (all stacked on one spot) never show up in the village.
+if game:GetService("RunService"):IsServer() then
+	assetsFolder()
+end
+
 -- A slot inside a pack, however the importer nested it.
 local function findInPack(pack: Instance, name: string): Instance?
 	return pack:FindFirstChild(name) or pack:FindFirstChild(name .. "_Node") or pack:FindFirstChild(name, true) or pack:FindFirstChild(name .. "_Node", true)
 end
 
 local function customAsset(name: string): Instance?
+	local folder = assetsFolder() -- always, so an imported pack never sits in the world
 	local workshop = workspace:FindFirstChild("ModelWorkshop")
 	local item = workshop and workshop:FindFirstChild(name)
-	local folder = not item and assetsFolder()
-	if folder then
+	local fromPack = false
+	if folder and not item then
 		item = folder:FindFirstChild(name)
 		if not item then
 			-- one level down: a pack of slots (like VikingAssets) inside Assets
@@ -2543,13 +2550,27 @@ local function customAsset(name: string): Instance?
 				if not slotSet[child.Name] and (child:IsA("Model") or child:IsA("Folder")) then
 					item = findInPack(child, name)
 					if item then
+						fromPack = true
 						break
 					end
 				end
 			end
 		end
 	end
-	return item and item:Clone() or nil
+	if not item then
+		return nil
+	end
+	local clone = item:Clone()
+	-- never bring along another slot that the importer nested inside this one
+	if fromPack then
+		for _, d in clone:GetDescendants() do
+			local base = string.match(d.Name, "^(.+)_Node$") or d.Name
+			if slotSet[base] and base ~= name and d.Parent then
+				d:Destroy()
+			end
+		end
+	end
+	return clone
 end
 ModelFactory.customAsset = customAsset
 
