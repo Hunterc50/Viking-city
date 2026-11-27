@@ -19,7 +19,7 @@ Config.DAY_LENGTH = 60 -- real seconds per in-game day
 
 -- Resources ---------------------------------------------------------------
 Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides", "Silver", "Lore" }
-Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0, Silver = 0, Lore = 0 }
+Config.StartingResources = { Wood = 80, Stone = 20, Food = 160, Hides = 0, Silver = 0, Lore = 0 }
 Config.BaseStorage = 200 -- max of each resource before any storehouse
 
 -- Villagers ---------------------------------------------------------------
@@ -59,7 +59,7 @@ Config.Nodes = {
 	-- Hits = swings needed with the right tool (better tools need fewer)
 	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8, Tool = "Axe", Hits = 5 },
 	Rock = { Count = 12, Regrow = 4, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2, Tool = "Pickaxe", Hits = 6 },
-	Bush = { Count = 10, Regrow = 6, Gives = "Food", Amount = 6, Action = "Forage", Hold = 0.6 },
+	Bush = { Count = 18, Regrow = 12, Gives = "Food", Amount = 10, Action = "Forage", Hold = 0.6 },
 }
 Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
 
@@ -218,7 +218,7 @@ Config.Wildlife = {
 	Speed = 9,
 	FleeSpeed = 22,
 	FleeDistance = 22, -- deer bolt when a player gets this close
-	Meat = 15, -- Food from one deer
+	Meat = 25, -- Food from one deer
 	Hides = 2,
 }
 
@@ -344,8 +344,8 @@ Config.Trade = {
 -- Kind: "stat" (something you did, counted), "building", "population",
 -- "tech" (number researched). Rewards are added when a goal is done.
 Config.Quests = {
+	{ Title = "Food first", Text = "Your people eat every day. Open the Production tab and build a Barley Farm. For quick food, hold E on red berry bushes.", Kind = "building", Building = "Farm", Goal = 1, Reward = { Food = 40 } },
 	{ Title = "Fell your first trees", Text = "Press 1 for the Axe, walk up to a tree and click to swing until it falls.", Kind = "stat", Stat = "chop", Goal = 3, Reward = { Wood = 15 } },
-	{ Title = "Plant barley", Text = "Open the Production tab and build a Barley Farm so nobody starves.", Kind = "building", Building = "Farm", Goal = 1, Reward = { Food = 20 } },
 	{ Title = "A woodcutter's hut", Text = "Build a Woodcutter. Idle villagers will take the jobs.", Kind = "building", Building = "Woodcutter", Goal = 1, Reward = { Wood = 20 } },
 	{ Title = "Break some stone", Text = "Press 2 for the Pickaxe, walk up to a rock and click to swing until it breaks.", Kind = "stat", Stat = "mine", Goal = 2, Reward = { Stone = 15 } },
 	{ Title = "The hunt", Text = "Press 3 for the Bow and shoot a deer in the meadow behind your plot.", Kind = "stat", Stat = "deer", Goal = 1, Reward = { Food = 20 } },
@@ -556,7 +556,7 @@ Config.SeasonSeconds = 180
 Config.Seasons = {
 	{ Name = "Summer", FarmRate = 1.25, FoodUse = 1.0 },
 	{ Name = "Autumn", FarmRate = 0.8, FoodUse = 1.0 },
-	{ Name = "Winter", FarmRate = 0, FoodUse = 1.5 }, -- frozen fields, cold bellies
+	{ Name = "Winter", FarmRate = 0.35, FoodUse = 1.25 }, -- hard fields, cold bellies
 	{ Name = "Spring", FarmRate = 0.9, FoodUse = 1.0 },
 }
 

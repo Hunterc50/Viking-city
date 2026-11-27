@@ -323,7 +323,7 @@ local function eat(colony, dt: number)
 		colony.starving = need > 0
 	end
 	if colony.starving and not wasStarving then
-		services.ColonyService:Notify(colony, "Your people are starving! Build farms or forage berries.", "bad")
+		services.ColonyService:Notify(colony, "Your people are starving! Hold E on red berry bushes, hunt deer with the Bow (3), and build Barley Farms.", "bad")
 	end
 end
 

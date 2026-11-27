@@ -100,7 +100,7 @@ function TouchController:Start()
 	-- building: Place / Rotate / Cancel, above the build menu
 	local build = new("Frame", {
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -250),
+		Position = UDim2.new(0.5, 0, 1, -320),
 		Size = UDim2.fromOffset(300, 70),
 		BackgroundTransparency = 1,
 		Visible = false,

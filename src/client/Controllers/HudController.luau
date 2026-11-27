@@ -200,10 +200,12 @@ function HudController:Start()
 		Hovering a card shows a tooltip with everything about the building.
 	]]
 	local CARD_W, CARD_H = 124, 96
+	-- sits above Roblox's tool hotbar (Axe, Pickaxe, ...) so they don't overlap
+	local MENU_BOTTOM = 84
 	local buildMenu = new("Frame", {
 		Name = "BuildMenu",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -12),
+		Position = UDim2.new(0.5, 0, 1, -MENU_BOTTOM),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = THEME.Panel,
@@ -250,7 +252,7 @@ function HudController:Start()
 		Parent = gui,
 	})
 	local function placeHint()
-		hint.Position = UDim2.new(0.5, 0, 1, -12 - buildMenu.AbsoluteSize.Y - 6)
+		hint.Position = UDim2.new(0.5, 0, 1, -MENU_BOTTOM - buildMenu.AbsoluteSize.Y - 6)
 	end
 	buildMenu:GetPropertyChangedSignal("AbsoluteSize"):Connect(placeHint)
 	placeHint()
@@ -627,8 +629,16 @@ function HudController:Start()
 		jobLabel.Text = string.format("%d working, %d idle, %d children", state.workers, state.idle, state.children)
 		moodLabel.Text = string.format("Happiness %d (%s)", state.happiness, moodWord(state.happiness))
 		moodLabel.TextColor3 = state.happiness >= 55 and THEME.Good or (state.happiness >= 35 and THEME.Text or THEME.Bad)
+		local food = state.resources.Food or 0
+		local dailyFood = state.population * Config.Villagers.FoodPerAdultPerSecond * Config.DAY_LENGTH
 		if state.starving then
-			warnLabel.Text = "Starving! Get food fast."
+			warnLabel.Text = "Starving! Hold E on berry bushes, hunt deer (3), build farms."
+		elseif food < dailyFood then
+			warnLabel.Text = "Food is running low: forage berries or build a Barley Farm."
+			warnLabel.TextColor3 = THEME.Bad
+		elseif state.season == "Autumn" and food < dailyFood * 4 then
+			warnLabel.Text = "Winter is coming: fields slow down, so store food now."
+			warnLabel.TextColor3 = THEME.Bad
 		elseif state.population > state.housing then
 			warnLabel.Text = "Not enough housing!"
 		elseif state.idle > 0 then

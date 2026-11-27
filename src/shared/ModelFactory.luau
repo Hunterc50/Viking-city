@@ -1784,9 +1784,21 @@ local function assetsFolder(): Instance?
 			folder.Name = "Assets"
 			folder.Parent = ReplicatedStorage
 		end
+		-- Studio's importer wraps each slot in "<Slot>_Node": drop the suffix
+		for _, d in pack:GetDescendants() do
+			local slot = string.match(d.Name, "^(.+)_Node$")
+			if slot and slotSet[slot] then
+				d.Name = slot
+			end
+		end
 		pack.Parent = folder
 	end
 	return folder
+end
+
+-- A slot inside a pack, however the importer nested it.
+local function findInPack(pack: Instance, name: string): Instance?
+	return pack:FindFirstChild(name) or pack:FindFirstChild(name .. "_Node") or pack:FindFirstChild(name, true) or pack:FindFirstChild(name .. "_Node", true)
 end
 
 local function customAsset(name: string): Instance?
@@ -1799,7 +1811,7 @@ local function customAsset(name: string): Instance?
 			-- one level down: a pack of slots (like VikingAssets) inside Assets
 			for _, child in folder:GetChildren() do
 				if not slotSet[child.Name] and (child:IsA("Model") or child:IsA("Folder")) then
-					item = child:FindFirstChild(name)
+					item = findInPack(child, name)
 					if item then
 						break
 					end
