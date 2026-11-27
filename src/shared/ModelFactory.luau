@@ -1784,6 +1784,12 @@ local function assetsFolder(): Instance?
 			folder.Name = "Assets"
 			folder.Parent = ReplicatedStorage
 		end
+		-- imported parts come in loose: pin them before physics knocks them over
+		for _, d in pack:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = true
+			end
+		end
 		-- Studio's importer wraps each slot in "<Slot>_Node": drop the suffix
 		for _, d in pack:GetDescendants() do
 			local slot = string.match(d.Name, "^(.+)_Node$")
@@ -1894,6 +1900,45 @@ end
 	Templates (the built-in models baked into the ModelWorkshop and edited by
 	hand) are kept exactly as they are.
 ]]
+-- Studio's 3D importer can leave imported MeshParts turned (a rotation
+-- baked into each part), which made trees and halls lean. Our meshes are
+-- modelled upright, so when every part is a MeshPart sharing one rotation,
+-- that rotation is taken off.
+local function standUp(custom: Model)
+	local parts = {}
+	for _, d in custom:GetDescendants() do
+		if d:IsA("BasePart") then
+			if not d:IsA("MeshPart") then
+				return
+			end
+			table.insert(parts, d)
+		end
+	end
+	if #parts == 0 then
+		return
+	end
+	local turn = parts[1].CFrame.Rotation
+	for _, part in parts do
+		local diff = turn:ToObjectSpace(part.CFrame.Rotation)
+		local _, angle = diff:ToAxisAngle()
+		if math.abs(angle) > 0.01 then
+			-- each piece knocked a different way: stand each one up where it is
+			for _, p in parts do
+				p.CFrame = CFrame.new(p.Position)
+			end
+			return
+		end
+	end
+	local _, angle = turn:ToAxisAngle()
+	if math.abs(angle) < 0.001 then
+		return
+	end
+	local undo = turn:Inverse()
+	for _, part in parts do
+		part.CFrame = undo * part.CFrame
+	end
+end
+
 local function fitTo(custom: Model, reference: Model, mode: string, extraScale: number?)
 	local refCF, refSize = reference:GetBoundingBox()
 	local refBottom = reference:GetPivot():PointToObjectSpace(refCF.Position - V3(0, refSize.Y / 2, 0))
@@ -1902,6 +1947,10 @@ local function fitTo(custom: Model, reference: Model, mode: string, extraScale: 
 		custom:PivotTo(CFrame.new())
 		return
 	end
+	standUp(custom)
+	-- measure in world axes, not along a part's own turn
+	custom.PrimaryPart = nil
+	custom.WorldPivot = CFrame.new(custom:GetPivot().Position)
 	local _, size = custom:GetBoundingBox()
 	if size.X <= 0 or size.Y <= 0 or size.Z <= 0 then
 		return
