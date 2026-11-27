@@ -479,7 +479,7 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   J: Jarl's Table\nM: map size   E at a berry bush: pick\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   J: Jarl's Table\nM: map size   E at a berry bush: pick\nG: war band formation   X: hide the screen\nRaid Greywater Hold: walk west, chop the gate\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
 	if game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled then
@@ -523,7 +523,7 @@ function HudController:Start()
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.3),
 		Size = UDim2.fromOffset(900, 60),
-		Font = Enum.Font.Fantasy,
+		Font = Enum.Font.Garamond,
 		TextSize = 42,
 		TextColor3 = Color3.fromRGB(240, 210, 150),
 		TextStrokeTransparency = 0.2,

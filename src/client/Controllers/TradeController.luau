@@ -74,7 +74,7 @@ function TradeController:Start()
 	new("TextLabel", {
 		Size = UDim2.new(1, -40, 1, 0),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.Fantasy,
+		Font = Enum.Font.Garamond,
 		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = THEME.Accent,

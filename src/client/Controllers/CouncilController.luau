@@ -315,7 +315,7 @@ function CouncilController:Start()
 	})
 	corner(panel, 12)
 	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.4, Parent = panel })
-	text(panel, "The Jarl's Table", { Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -80, 0, 34), AutomaticSize = Enum.AutomaticSize.None, Font = Enum.Font.Fantasy, TextSize = 30, TextColor3 = THEME.Accent })
+	text(panel, "The Jarl's Table", { Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -80, 0, 34), AutomaticSize = Enum.AutomaticSize.None, Font = Enum.Font.Garamond, TextSize = 30, TextColor3 = THEME.Accent })
 	local close = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -14, 0, 14),
@@ -431,7 +431,7 @@ function CouncilController:Start()
 	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.3, Parent = report })
 	new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18), PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 14), Parent = report })
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = report })
-	local rTitle = text(report, "", { Font = Enum.Font.Fantasy, TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
+	local rTitle = text(report, "", { Font = Enum.Font.Garamond, TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
 	local rBody = text(report, "", { TextSize = 15, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 2 })
 	local okRow = new("Frame", { Size = UDim2.fromOffset(140, 34), BackgroundTransparency = 1, LayoutOrder = 3, Parent = report })
 	button(okRow, "Skål!", true, function()

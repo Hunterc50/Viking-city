@@ -116,7 +116,7 @@ function TechController:Start()
 		Position = UDim2.fromOffset(20, 12),
 		Size = UDim2.new(1, -40, 0, 34),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.Fantasy,
+		Font = Enum.Font.Garamond,
 		TextSize = 30,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = THEME.Accent,

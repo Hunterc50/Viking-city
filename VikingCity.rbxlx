@@ -6969,7 +6969,7 @@ local function newHold(R)
 		local title = Instance.new("TextLabel")
 		title.Size = UDim2.new(1, 0, 0.55, 0)
 		title.BackgroundTransparency = 1
-		title.Font = Enum.Font.Fantasy
+		title.Font = Enum.Font.Garamond
 		title.TextScaled = true
 		title.TextColor3 = Color3.fromRGB(232, 206, 150)
 		title.TextStrokeTransparency = 0.3
@@ -13559,7 +13559,7 @@ function CouncilController:Start()
 	})
 	corner(panel, 12)
 	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.4, Parent = panel })
-	text(panel, "The Jarl's Table", { Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -80, 0, 34), AutomaticSize = Enum.AutomaticSize.None, Font = Enum.Font.Fantasy, TextSize = 30, TextColor3 = THEME.Accent })
+	text(panel, "The Jarl's Table", { Position = UDim2.fromOffset(20, 12), Size = UDim2.new(1, -80, 0, 34), AutomaticSize = Enum.AutomaticSize.None, Font = Enum.Font.Garamond, TextSize = 30, TextColor3 = THEME.Accent })
 	local close = new("TextButton", {
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -14, 0, 14),
@@ -13675,7 +13675,7 @@ function CouncilController:Start()
 	new("UIStroke", { Color = THEME.Accent, Thickness = 2, Transparency = 0.3, Parent = report })
 	new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18), PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 14), Parent = report })
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center, Parent = report })
-	local rTitle = text(report, "", { Font = Enum.Font.Fantasy, TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
+	local rTitle = text(report, "", { Font = Enum.Font.Garamond, TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
 	local rBody = text(report, "", { TextSize = 15, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 2 })
 	local okRow = new("Frame", { Size = UDim2.fromOffset(140, 34), BackgroundTransparency = 1, LayoutOrder = 3, Parent = report })
 	button(okRow, "Skål!", true, function()
@@ -14435,7 +14435,7 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   J: Jarl's Table\nM: map size   E at a berry bush: pick\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   J: Jarl's Table\nM: map size   E at a berry bush: pick\nG: war band formation   X: hide the screen\nRaid Greywater Hold: walk west, chop the gate\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
 	if game:GetService("UserInputService").TouchEnabled and not game:GetService("UserInputService").KeyboardEnabled then
@@ -14479,7 +14479,7 @@ function HudController:Start()
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.3),
 		Size = UDim2.fromOffset(900, 60),
-		Font = Enum.Font.Fantasy,
+		Font = Enum.Font.Garamond,
 		TextSize = 42,
 		TextColor3 = Color3.fromRGB(240, 210, 150),
 		TextStrokeTransparency = 0.2,
@@ -15023,11 +15023,11 @@ function LoadingController:Start()
 
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.fromScale(1, 1)
-	bg.BackgroundColor3 = Color3.fromRGB(20, 18, 16)
+	bg.BackgroundColor3 = Color3.fromRGB(14, 15, 17)
 	bg.Parent = gui
 
 	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new(Color3.fromRGB(46, 52, 58), Color3.fromRGB(18, 16, 14))
+	gradient.Color = ColorSequence.new(Color3.fromRGB(40, 46, 54), Color3.fromRGB(12, 13, 15))
 	gradient.Rotation = 90
 	gradient.Parent = bg
 
@@ -15036,9 +15036,9 @@ function LoadingController:Start()
 	title.Position = UDim2.fromScale(0.5, 0.42)
 	title.Size = UDim2.fromOffset(700, 90)
 	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.Fantasy
+	title.Font = Enum.Font.Garamond
 	title.TextScaled = true
-	title.TextColor3 = Color3.fromRGB(232, 206, 150)
+	title.TextColor3 = Color3.fromRGB(238, 234, 226)
 	title.Text = "VIKING CITY"
 	title.Parent = bg
 
@@ -15291,6 +15291,63 @@ return MinimapController
           </Item>
           <Item class="ModuleScript" referent="58">
             <Properties>
+              <string name="Name">ScreenToggleController</string>
+              <string name="Source"><![CDATA[--[[
+	ScreenToggleController
+	Press X to hide every panel on screen (for screenshots and for just
+	looking at your village), and X again to bring them back.
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local ScreenToggleController = {}
+
+local controllers
+
+function ScreenToggleController:Init(all)
+	controllers = all
+end
+
+function ScreenToggleController:Start()
+	local player = Players.LocalPlayer
+	local hidden: { [ScreenGui]: boolean }? = nil
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed or input.KeyCode ~= Enum.KeyCode.X then
+			return
+		end
+		if controllers.IntroController and controllers.IntroController.Active then
+			return -- the title screen manages the panels itself
+		end
+		local playerGui = player:FindFirstChildOfClass("PlayerGui")
+		if not playerGui then
+			return
+		end
+		if hidden then
+			for gui in hidden do
+				if gui.Parent then
+					gui.Enabled = true
+				end
+			end
+			hidden = nil
+		else
+			hidden = {}
+			for _, gui in playerGui:GetChildren() do
+				if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "TerrainError" then
+					hidden[gui] = true
+					gui.Enabled = false
+				end
+			end
+		end
+	end)
+end
+
+return ScreenToggleController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="59">
+            <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
 	SeasonFxController
@@ -15382,7 +15439,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -15434,7 +15491,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -15555,7 +15612,7 @@ function TechController:Start()
 		Position = UDim2.fromOffset(20, 12),
 		Size = UDim2.new(1, -40, 0, 34),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.Fantasy,
+		Font = Enum.Font.Garamond,
 		TextSize = 30,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = THEME.Accent,
@@ -15757,7 +15814,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="61">
+          <Item class="ModuleScript" referent="62">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -15845,7 +15902,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="62">
+          <Item class="ModuleScript" referent="63">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -16030,7 +16087,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="63">
+          <Item class="ModuleScript" referent="64">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -16109,7 +16166,7 @@ function TradeController:Start()
 	new("TextLabel", {
 		Size = UDim2.new(1, -40, 1, 0),
 		BackgroundTransparency = 1,
-		Font = Enum.Font.Fantasy,
+		Font = Enum.Font.Garamond,
 		TextSize = 28,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = THEME.Accent,
@@ -16228,7 +16285,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="64">
+          <Item class="ModuleScript" referent="65">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -16281,7 +16338,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="65">
+          <Item class="ModuleScript" referent="66">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -16507,7 +16564,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="66">
+          <Item class="ModuleScript" referent="67">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -16653,12 +16710,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="67">
+  <Item class="Workspace" referent="68">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="68">
+    <Item class="Part" referent="69">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -16679,13 +16736,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="69">
+    <Item class="BoolValue" referent="70">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="70">
+    <Item class="SpawnLocation" referent="71">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -16705,7 +16762,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="71">
+    <Item class="Part" referent="72">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -16722,13 +16779,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="72">
+      <Item class="SurfaceGui" referent="73">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="73">
+        <Item class="TextLabel" referent="74">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -16760,13 +16817,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="74">
+      <Item class="SurfaceGui" referent="75">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="75">
+        <Item class="TextLabel" referent="76">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

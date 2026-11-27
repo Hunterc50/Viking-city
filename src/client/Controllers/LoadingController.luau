@@ -24,11 +24,11 @@ function LoadingController:Start()
 
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.fromScale(1, 1)
-	bg.BackgroundColor3 = Color3.fromRGB(20, 18, 16)
+	bg.BackgroundColor3 = Color3.fromRGB(14, 15, 17)
 	bg.Parent = gui
 
 	local gradient = Instance.new("UIGradient")
-	gradient.Color = ColorSequence.new(Color3.fromRGB(46, 52, 58), Color3.fromRGB(18, 16, 14))
+	gradient.Color = ColorSequence.new(Color3.fromRGB(40, 46, 54), Color3.fromRGB(12, 13, 15))
 	gradient.Rotation = 90
 	gradient.Parent = bg
 
@@ -37,9 +37,9 @@ function LoadingController:Start()
 	title.Position = UDim2.fromScale(0.5, 0.42)
 	title.Size = UDim2.fromOffset(700, 90)
 	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.Fantasy
+	title.Font = Enum.Font.Garamond
 	title.TextScaled = true
-	title.TextColor3 = Color3.fromRGB(232, 206, 150)
+	title.TextColor3 = Color3.fromRGB(238, 234, 226)
 	title.Text = "VIKING CITY"
 	title.Parent = bg
 

@@ -942,7 +942,7 @@ local function newHold(R)
 		local title = Instance.new("TextLabel")
 		title.Size = UDim2.new(1, 0, 0.55, 0)
 		title.BackgroundTransparency = 1
-		title.Font = Enum.Font.Fantasy
+		title.Font = Enum.Font.Garamond
 		title.TextScaled = true
 		title.TextColor3 = Color3.fromRGB(232, 206, 150)
 		title.TextStrokeTransparency = 0.3
