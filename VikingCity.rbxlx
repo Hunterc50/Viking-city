@@ -9509,11 +9509,36 @@ local function newDay(self, colony)
 	end
 end
 
+-- What a worker visibly does at each workplace, and what they carry away.
+local WORK = {
+	Woodcutter = { task = "Chop", carry = "Log" },
+	Quarry = { task = "Mine", carry = "Stone" },
+	Farm = { task = "Farm", carry = "Sack" },
+	Smithy = { task = "Hammer" },
+	Shipyard = { task = "Hammer", carry = "Log" },
+	HuntingLodge = { task = "Hammer", carry = "Hide" },
+}
+
+-- Where goods are taken: the storehouse, or else the biggest hall.
+local function storeOf(colony)
+	local best
+	for _, b in colony.buildings do
+		if b.type == "Storehouse" then
+			return b
+		elseif (b.type == "GreatHall" or b.type == "Longhouse") and not best then
+			best = b
+		end
+	end
+	return best
+end
+
 local function walk(colony, v, now: number)
 	if now < v.busyUntil or not v.body then
 		return
 	end
 	local target
+	local facing -- where to look on arrival
+	local work, carry
 	local job = v.job and colony.buildings[v.job]
 	local stage = v.stage or stageOf(v)
 	-- little ones stay close to a parent
@@ -9528,8 +9553,20 @@ local function walk(colony, v, now: number)
 	end
 	if parent and rng:NextNumber() < (stage == "baby" and 0.9 or 0.55) then
 		target = clampToPlot(colony, parent.body.Position + Vector3.new(rng:NextNumber(-4, 4), 0, rng:NextNumber(-4, 4)))
+	elseif job and v.atJob and WORK[job.type] and WORK[job.type].carry and storeOf(colony) and rng:NextNumber() < 0.45 then
+		-- haul what they made to the store
+		target = pointNear(colony, storeOf(colony))
+		carry = WORK[job.type].carry
 	elseif job and rng:NextNumber() < 0.85 then
-		target = pointNear(colony, job)
+		if job.type == "Farm" then
+			-- out among the crop rows
+			local h = job.sx * Config.CELL / 2 - 2.5
+			target = job.center + Vector3.new(rng:NextNumber(-h, h), 0, rng:NextNumber(-h, h))
+		else
+			target = pointNear(colony, job)
+		end
+		facing = job.center
+		work = WORK[job.type] and WORK[job.type].task
 	else
 		local home = homeOf(colony, v)
 		local wander = stage == "child" and 30 or (stage == "baby" and 6 or 20)
@@ -9538,6 +9575,13 @@ local function walk(colony, v, now: number)
 		else
 			target = clampToPlot(colony, v.body.Position + Vector3.new(rng:NextNumber(-wander, wander), 0, rng:NextNumber(-wander, wander)))
 		end
+	end
+
+	-- the client animates these: working while standing, carrying while walking
+	v.atJob = work ~= nil
+	if v.model then
+		v.model:SetAttribute("Task", work)
+		v.model:SetAttribute("Carry", carry)
 	end
 
 	local from = v.body.Position
@@ -9550,8 +9594,24 @@ local function walk(colony, v, now: number)
 	end
 	local speed = V.WalkSpeed * (({ baby = 0.45, child = 1.25, elder = 0.7 })[stage] or 1)
 	local duration = dist / speed
+	local look = flat
+	if facing then
+		local toward = Vector3.new(facing.X - to.X, 0, facing.Z - to.Z)
+		if toward.Magnitude > 0.5 then
+			look = toward
+		end
+	end
 	v.body.CFrame = CFrame.lookAt(from, from + flat)
-	TweenService:Create(v.body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) }):Play()
+	local tween = TweenService:Create(v.body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) })
+	tween:Play()
+	if look ~= flat then
+		-- turn to face the work once there
+		tween.Completed:Connect(function(state)
+			if state == Enum.PlaybackState.Completed and v.body and v.body.Parent then
+				TweenService:Create(v.body, TweenInfo.new(0.4), { CFrame = CFrame.lookAt(to, to + look) }):Play()
+			end
+		end)
+	end
 	-- workers linger at their job; others idle a while
 	v.busyUntil = now + duration + rng:NextNumber(job and 3 or 2, job and 8 or 6)
 end
@@ -14479,6 +14539,12 @@ return UIScaleController
 	step while they move and come to rest when they stop. Purely visual and
 	done on each player's own screen (the server only moves the bodies).
 	Only villagers near the camera are animated, to keep it cheap.
+	Workers also show their work (the server sets the model's Task and Carry):
+	  Chop / Mine   an axe or pick raised and brought down
+	  Farm          a hoe worked along the rows
+	  Hammer        a hammer beating, the other hand steadying
+	  Carry         a log, stone, sack or hide held in both arms on the way
+	                to the storehouse
 ]]
 
 local RunService = game:GetService("RunService")
@@ -14512,7 +14578,102 @@ local function track(model: Model)
 	if #limbs == 0 then
 		return
 	end
-	figures[model] = { body = body, limbs = limbs, last = body.Position, phase = math.random() * 6, amount = 0 }
+	figures[model] = { model = model, body = body, limbs = limbs, last = body.Position, phase = math.random() * 6, amount = 0, work = math.random() * 4 }
+end
+
+-- Little props made on this screen only and welded to the figure.
+local function prop(parent: BasePart, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material?, shape: Enum.PartType?): BasePart
+	local p = Instance.new("Part")
+	p.Name = "WorkProp"
+	p.Size = size
+	p.Color = color
+	p.Material = material or Enum.Material.Wood
+	if shape then
+		p.Shape = shape
+	end
+	p.Anchored = false
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Massless = true
+	p.CFrame = parent.CFrame * offset
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = parent
+	weld.Part1 = p
+	weld.Parent = p
+	p.Parent = parent
+	return p
+end
+
+local WOOD = Color3.fromRGB(138, 100, 64)
+local IRON = Color3.fromRGB(110, 112, 118)
+
+-- A tool in the right hand, pointing forward out of the fist.
+local function makeTool(arm: BasePart, kind: string): { BasePart }
+	local k = arm.Size.X -- scales with the figure
+	local hand = CFrame.new(0, -arm.Size.Y / 2, 0)
+	local parts = {}
+	local function add(size, offset, color, material, shape)
+		table.insert(parts, prop(arm, size * k, hand * offset, color, material, shape))
+	end
+	local along = CFrame.Angles(math.pi / 2, 0, 0) -- haft along -Z (forward)
+	if kind == "Chop" then
+		add(Vector3.new(0.16, 2.4, 0.16), CFrame.new(0, 0, -0.8 * k) * along, WOOD)
+		add(Vector3.new(0.12, 0.7, 0.75), CFrame.new(0, 0.35 * k, -1.9 * k), IRON, Enum.Material.Metal)
+	elseif kind == "Mine" then
+		add(Vector3.new(0.16, 2.4, 0.16), CFrame.new(0, 0, -0.8 * k) * along, WOOD)
+		add(Vector3.new(0.18, 2.0, 0.22), CFrame.new(0, 0, -1.95 * k), IRON, Enum.Material.Metal)
+	elseif kind == "Farm" then
+		add(Vector3.new(0.14, 3.2, 0.14), CFrame.new(0, 0, -1.1 * k) * along, WOOD)
+		add(Vector3.new(0.9, 0.1, 0.5), CFrame.new(0, -0.25 * k, -2.65 * k), IRON, Enum.Material.Metal)
+	elseif kind == "Hammer" then
+		add(Vector3.new(0.14, 1.3, 0.14), CFrame.new(0, 0, -0.45 * k) * along, WOOD)
+		add(Vector3.new(0.3, 0.5, 0.3), CFrame.new(0, 0.1 * k, -1.05 * k), IRON, Enum.Material.Metal)
+	end
+	return parts
+end
+
+-- A load held in front with both arms.
+local function makeLoad(body: BasePart, kind: string): { BasePart }
+	local k = body.Size.Y / 2
+	local front = CFrame.new(0, -0.1 * k, -body.Size.Z / 2 - 0.55 * k)
+	if kind == "Log" then
+		return { prop(body, Vector3.new(3.0, 0.75, 0.75) * k, front * CFrame.new(0, 0.2 * k, 0), Color3.fromRGB(122, 86, 54), Enum.Material.Wood, Enum.PartType.Cylinder) }
+	elseif kind == "Stone" then
+		return { prop(body, Vector3.new(1.3, 0.9, 0.9) * k, front, Color3.fromRGB(140, 138, 132), Enum.Material.Slate) }
+	elseif kind == "Sack" then
+		return { prop(body, Vector3.new(1.2, 1.4, 1.0) * k, front, Color3.fromRGB(176, 156, 112), Enum.Material.Fabric) }
+	elseif kind == "Hide" then
+		return { prop(body, Vector3.new(1.6, 0.5, 1.0) * k, front * CFrame.new(0, 0.2 * k, 0), Color3.fromRGB(150, 108, 72), Enum.Material.Fabric) }
+	end
+	return {}
+end
+
+local function clearProps(list)
+	for _, p in list or {} do
+		p:Destroy()
+	end
+end
+
+-- Arm angle (forward swing, radians) for a work pose at time t.
+local function workAngle(kind: string, t: number, right: boolean): number
+	if kind == "Chop" or kind == "Mine" then
+		-- raise slowly over the head, strike fast; both hands on the haft
+		local p = (t * 0.9) % 1
+		if p < 0.7 then
+			return 0.5 + 2.3 * (p / 0.7)
+		end
+		return 2.8 - 2.3 * ((p - 0.7) / 0.3)
+	elseif kind == "Farm" then
+		return 0.7 + 0.45 * math.sin(t * 3)
+	elseif kind == "Hammer" then
+		if right then
+			return 1.1 + 0.8 * math.abs(math.sin(t * 4.5))
+		end
+		return 0.8
+	end
+	return 0
 end
 
 function VillagerAnimController:Start()
@@ -14549,8 +14710,37 @@ function VillagerAnimController:Start()
 			f.amount += ((moving and 1 or 0) - f.amount) * math.min(1, dt * 8)
 			f.phase += dt * math.clamp(speed, 0, 12) * 1.4
 			local swing = math.sin(f.phase) * 0.7 * f.amount
+			local work = f.model:GetAttribute("Task")
+			local carry = f.model:GetAttribute("Carry")
+			local working = work ~= nil and f.amount < 0.3
+			-- tools and loads appear and go as the work changes
+			if work ~= f.toolKind then
+				clearProps(f.tool)
+				f.tool = nil
+				f.toolKind = work
+				if work then
+					for _, limb in f.limbs do
+						if limb.isArm and limb.side == 1 then
+							f.tool = makeTool(limb.weld.Part1, work)
+						end
+					end
+				end
+			end
+			if carry ~= f.loadKind then
+				clearProps(f.load)
+				f.loadKind = carry
+				f.load = carry and makeLoad(f.body, carry) or nil
+			end
+			if working then
+				f.work += dt
+			end
 			for _, limb in f.limbs do
 				local angle = swing * limb.side * (limb.isArm and 0.8 or 1)
+				if limb.isArm and carry then
+					angle = 0.95 -- both arms hold the load
+				elseif limb.isArm and working then
+					angle = workAngle(work, f.work, limb.side == 1)
+				end
 				limb.weld.C0 = limb.hip * CFrame.Angles(angle, 0, 0) * CFrame.new(0, -limb.half, 0)
 			end
 		end

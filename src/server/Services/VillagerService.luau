@@ -476,11 +476,36 @@ local function newDay(self, colony)
 	end
 end
 
+-- What a worker visibly does at each workplace, and what they carry away.
+local WORK = {
+	Woodcutter = { task = "Chop", carry = "Log" },
+	Quarry = { task = "Mine", carry = "Stone" },
+	Farm = { task = "Farm", carry = "Sack" },
+	Smithy = { task = "Hammer" },
+	Shipyard = { task = "Hammer", carry = "Log" },
+	HuntingLodge = { task = "Hammer", carry = "Hide" },
+}
+
+-- Where goods are taken: the storehouse, or else the biggest hall.
+local function storeOf(colony)
+	local best
+	for _, b in colony.buildings do
+		if b.type == "Storehouse" then
+			return b
+		elseif (b.type == "GreatHall" or b.type == "Longhouse") and not best then
+			best = b
+		end
+	end
+	return best
+end
+
 local function walk(colony, v, now: number)
 	if now < v.busyUntil or not v.body then
 		return
 	end
 	local target
+	local facing -- where to look on arrival
+	local work, carry
 	local job = v.job and colony.buildings[v.job]
 	local stage = v.stage or stageOf(v)
 	-- little ones stay close to a parent
@@ -495,8 +520,20 @@ local function walk(colony, v, now: number)
 	end
 	if parent and rng:NextNumber() < (stage == "baby" and 0.9 or 0.55) then
 		target = clampToPlot(colony, parent.body.Position + Vector3.new(rng:NextNumber(-4, 4), 0, rng:NextNumber(-4, 4)))
+	elseif job and v.atJob and WORK[job.type] and WORK[job.type].carry and storeOf(colony) and rng:NextNumber() < 0.45 then
+		-- haul what they made to the store
+		target = pointNear(colony, storeOf(colony))
+		carry = WORK[job.type].carry
 	elseif job and rng:NextNumber() < 0.85 then
-		target = pointNear(colony, job)
+		if job.type == "Farm" then
+			-- out among the crop rows
+			local h = job.sx * Config.CELL / 2 - 2.5
+			target = job.center + Vector3.new(rng:NextNumber(-h, h), 0, rng:NextNumber(-h, h))
+		else
+			target = pointNear(colony, job)
+		end
+		facing = job.center
+		work = WORK[job.type] and WORK[job.type].task
 	else
 		local home = homeOf(colony, v)
 		local wander = stage == "child" and 30 or (stage == "baby" and 6 or 20)
@@ -505,6 +542,13 @@ local function walk(colony, v, now: number)
 		else
 			target = clampToPlot(colony, v.body.Position + Vector3.new(rng:NextNumber(-wander, wander), 0, rng:NextNumber(-wander, wander)))
 		end
+	end
+
+	-- the client animates these: working while standing, carrying while walking
+	v.atJob = work ~= nil
+	if v.model then
+		v.model:SetAttribute("Task", work)
+		v.model:SetAttribute("Carry", carry)
 	end
 
 	local from = v.body.Position
@@ -517,8 +561,24 @@ local function walk(colony, v, now: number)
 	end
 	local speed = V.WalkSpeed * (({ baby = 0.45, child = 1.25, elder = 0.7 })[stage] or 1)
 	local duration = dist / speed
+	local look = flat
+	if facing then
+		local toward = Vector3.new(facing.X - to.X, 0, facing.Z - to.Z)
+		if toward.Magnitude > 0.5 then
+			look = toward
+		end
+	end
 	v.body.CFrame = CFrame.lookAt(from, from + flat)
-	TweenService:Create(v.body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) }):Play()
+	local tween = TweenService:Create(v.body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) })
+	tween:Play()
+	if look ~= flat then
+		-- turn to face the work once there
+		tween.Completed:Connect(function(state)
+			if state == Enum.PlaybackState.Completed and v.body and v.body.Parent then
+				TweenService:Create(v.body, TweenInfo.new(0.4), { CFrame = CFrame.lookAt(to, to + look) }):Play()
+			end
+		end)
+	end
 	-- workers linger at their job; others idle a while
 	v.busyUntil = now + duration + rng:NextNumber(job and 3 or 2, job and 8 or 6)
 end
