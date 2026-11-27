@@ -110,6 +110,10 @@ Save your place afterwards. When you download a new version, copy your filled-in
 
 ---
 
+## Publishing so friends can play
+
+See **PUBLISHING.md** for click-by-click steps: publish, turn on saving, set the server size to 8, upload the icon and thumbnail from the `publish` folder, and choose Friends only or Public.
+
 ## Saving your village
 
 Your village (buildings, resources, research and villagers) saves automatically every minute and when you leave. Next time you play, it's all back.
