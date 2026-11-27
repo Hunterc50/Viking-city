@@ -16,6 +16,12 @@ local Grid = require(Shared.Grid)
 
 local MinimapController = {}
 
+local controllers
+
+function MinimapController:Init(all)
+	controllers = all
+end
+
 local player = Players.LocalPlayer
 local SIZES = { 200, 320 }
 local RANGE = 360 -- studs from the centre to the edge
@@ -131,6 +137,20 @@ function MinimapController:Start()
 		ZIndex = 8,
 		Parent = frame,
 	})
+	-- the saga's next goal: a gold star, held at the edge when it's far away
+	local goal = new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(18, 18),
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextSize = 18,
+		TextColor3 = Color3.fromRGB(240, 196, 92),
+		TextStrokeTransparency = 0.1,
+		Text = "★",
+		ZIndex = 9,
+		Visible = false,
+		Parent = frame,
+	})
 	MinimapController.Toggle = function()
 		sizeIndex = sizeIndex % #SIZES + 1
 		frame.Size = UDim2.fromOffset(SIZES[sizeIndex], SIZES[sizeIndex])
@@ -201,6 +221,20 @@ function MinimapController:Start()
 		end
 		for i = n + 1, #pool do
 			pool[i].Visible = false
+		end
+		local target = controllers and controllers.GuideController and controllers.GuideController.Target
+		if target then
+			local rel = target - centre
+			local sx, sy = rel:Dot(right) * k, rel:Dot(fwd) * k
+			local edge = px / 2 - 10
+			local far = math.max(math.abs(sx), math.abs(sy))
+			if far > edge then
+				sx, sy = sx / far * edge, sy / far * edge
+			end
+			goal.Position = UDim2.fromOffset(px / 2 + sx, px / 2 - sy)
+			goal.Visible = true
+		else
+			goal.Visible = false
 		end
 	end)
 end

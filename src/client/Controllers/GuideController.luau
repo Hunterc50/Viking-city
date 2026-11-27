@@ -213,9 +213,11 @@ function GuideController:Start()
 			if root and not intro then
 				local line
 				current, line = target(root.Position)
+				GuideController.Target = current -- the minimap shows it too
 				label.Text = line or ""
 			else
 				current = nil
+				GuideController.Target = nil
 			end
 		end
 		local show = current ~= nil and root ~= nil and (current - root.Position).Magnitude > 12
