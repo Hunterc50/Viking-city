@@ -179,6 +179,29 @@ function IntroController:Start()
 	local moreHint = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -18), Size = UDim2.fromOffset(400, 22), BackgroundTransparency = 1, Font = SERIF, TextSize = 17, TextColor3 = MUTED, Text = "Click to continue", Visible = false, Parent = gui })
 
 	gui.Parent = player:WaitForChild("PlayerGui")
+
+	-- the game's own panels (saga, build menu, hotbar...) hide behind the title
+	local hidden = {}
+	task.spawn(function()
+		local playerGui = player:WaitForChild("PlayerGui")
+		while gui.Parent and IntroController.Active do
+			for _, other in playerGui:GetChildren() do
+				if other:IsA("ScreenGui") and other ~= gui and other.Name ~= "Loading" and other.Enabled and hidden[other] == nil then
+					hidden[other] = true
+					other.Enabled = false
+				end
+			end
+			task.wait(0.1)
+		end
+	end)
+	local function showHud()
+		for other in hidden do
+			if other.Parent then
+				other.Enabled = true
+			end
+		end
+		hidden = {}
+	end
 	if controllers.AudioController and controllers.AudioController.PlayTheme then
 		controllers.AudioController:PlayTheme()
 	end
@@ -278,6 +301,7 @@ function IntroController:Start()
 		task.wait(0.4)
 		camCtl.Suspended = false
 		IntroController.Active = false
+		showHud()
 		if controls then
 			controls:Enable()
 		end

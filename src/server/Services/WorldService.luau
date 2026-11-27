@@ -109,6 +109,7 @@ end
 local RIVERS = { FLAT_MIN_X - 80, FLAT_MAX_X + 80 }
 local RIVER_HALF = 7 -- half the water's width
 local RIVER_TOP_Z = 760
+local riversOn = true -- switched off if the river carving ever fails
 
 local function riverCentre(base: number, z: number): number
 	return base + math.sin(z / 110 + base) * 30 + math.sin(z / 47) * 12
@@ -117,7 +118,7 @@ end
 -- distance to the nearest river's centre line, and that line's x
 local function nearestRiver(x: number, z: number): (number, number)
 	local best, bx = math.huge, 0
-	if z < SHORE_Z - 30 or z > RIVER_TOP_Z then
+	if not riversOn or z < SHORE_Z - 30 or z > RIVER_TOP_Z then
 		return best, bx
 	end
 	for _, base in RIVERS do
@@ -374,6 +375,7 @@ local function buildTerrain()
 	end
 
 	-- 2. Write voxels chunk by chunk
+	local failed, firstError = 0, nil
 	local CHUNK = 32
 	for ci = 1, nx, CHUNK do
 		for ck = 1, nz, CHUNK do
@@ -449,7 +451,13 @@ local function buildTerrain()
 
 			local regionMin = Vector3.new(MIN_X + (ci - 1) * VOXEL, yMin, MIN_Z + (ck - 1) * VOXEL)
 			local regionMax = Vector3.new(MIN_X + ci2 * VOXEL, yMax, MIN_Z + ck2 * VOXEL)
-			Terrain:WriteVoxels(Region3.new(regionMin, regionMax), VOXEL, materials, occupancy)
+			local ok, err = pcall(function()
+				Terrain:WriteVoxels(Region3.new(regionMin, regionMax), VOXEL, materials, occupancy)
+			end)
+			if not ok then
+				failed += 1
+				firstError = firstError or tostring(err)
+			end
 
 			if os.clock() - budget > 0.05 then
 				if RunService:IsRunning() then
@@ -458,6 +466,9 @@ local function buildTerrain()
 				budget = os.clock()
 			end
 		end
+	end
+	if failed > 0 then
+		error(failed .. " terrain chunks failed: " .. tostring(firstError))
 	end
 end
 
@@ -854,6 +865,47 @@ local function buildLandings()
 	end
 end
 
+-- True if there is ground under the middle of the first plot.
+local function hasGround(): boolean
+	local o = Grid.plotOrigin(1)
+	return groundAt(o.X + Grid.PLOT_SIZE / 2, o.Z + Grid.PLOT_SIZE / 2) ~= nil
+end
+
+-- A flat slab of ground for the whole valley: only if the terrain could not
+-- be made at all, so nobody falls through the world.
+local function emergencyGround()
+	local floor = Instance.new("Part")
+	floor.Name = "EmergencyGround"
+	floor.Anchored = true
+	floor.Size = Vector3.new(MAX_X - MIN_X, 4, 900)
+	floor.Position = Vector3.new((MIN_X + MAX_X) / 2, TOP - 2, 300)
+	floor.Material = Enum.Material.Grass
+	floor.Color = Color3.fromRGB(88, 118, 58)
+	floor.Parent = workspace
+end
+
+-- Builds the terrain and never leaves the world without ground: if it
+-- fails, it tries again without rivers, and as a last resort lays a slab.
+-- The error is put on screen (workspace attribute TerrainError) so it can
+-- be reported.
+local function buildTerrainSafely()
+	local ok, err = pcall(buildTerrain)
+	if ok and hasGround() then
+		return
+	end
+	local first = ok and "no ground after building" or tostring(err)
+	warn("[WorldService] terrain failed (" .. first .. "), trying again without rivers")
+	riversOn = false
+	local ok2, err2 = pcall(buildTerrain)
+	if ok2 and hasGround() then
+		workspace:SetAttribute("TerrainError", "Rivers were switched off: " .. first)
+		return
+	end
+	warn("[WorldService] terrain failed again: " .. tostring(err2))
+	workspace:SetAttribute("TerrainError", "The valley could not be built: " .. first)
+	emergencyGround()
+end
+
 local function clearPlaceholders()
 	-- The flat Baseplate and welcome sign are only there so the place isn't
 	-- empty in edit mode; the real world replaces them.
@@ -868,13 +920,18 @@ end
 function WorldService:Init()
 	clearPlaceholders()
 	if workspace:GetAttribute("WorldBaked") then
-		-- The valley was saved into the place (see Bake), so whatever you
-		-- changed in Studio is kept: nothing is regenerated.
-		print("[WorldService] using the saved valley")
-		return
+		if hasGround() then
+			-- The valley was saved into the place (see Bake), so whatever you
+			-- changed in Studio is kept: nothing is regenerated.
+			print("[WorldService] using the saved valley")
+			return
+		end
+		-- marked as saved, but the terrain is empty: build it after all
+		warn("[WorldService] the place says the valley is saved, but there is no ground: building it")
+		workspace:SetAttribute("WorldBaked", nil)
 	end
 	setupLighting()
-	buildTerrain()
+	buildTerrainSafely()
 	scatterScenery()
 	buildLandings()
 	print("[WorldService] valley built")

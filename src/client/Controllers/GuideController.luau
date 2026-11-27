@@ -116,7 +116,41 @@ local function target(from: Vector3): (Vector3?, string?)
 	return nil
 end
 
+-- If the server couldn't build the valley, say so on screen, so a
+-- screenshot shows what went wrong.
+local function showTerrainError()
+	local function show()
+		local text = workspace:GetAttribute("TerrainError")
+		if not text then
+			return
+		end
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "TerrainError"
+		gui.ResetOnSpawn = false
+		gui.DisplayOrder = 200
+		local label = Instance.new("TextLabel")
+		label.AnchorPoint = Vector2.new(0.5, 0)
+		label.Position = UDim2.new(0.5, 0, 0, 60)
+		label.Size = UDim2.fromOffset(720, 60)
+		label.BackgroundColor3 = Color3.fromRGB(90, 24, 20)
+		label.BackgroundTransparency = 0.1
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.Font = Enum.Font.GothamMedium
+		label.TextSize = 14
+		label.TextWrapped = true
+		label.Text = "World problem (please send a screenshot): " .. tostring(text)
+		label.Parent = gui
+		gui.Parent = player:WaitForChild("PlayerGui")
+		task.delay(40, function()
+			gui:Destroy()
+		end)
+	end
+	show()
+	workspace:GetAttributeChangedSignal("TerrainError"):Connect(show)
+end
+
 function GuideController:Start()
+	task.spawn(showTerrainError)
 	-- the marker: a soft pillar of light and a sign above it
 	local beam = Instance.new("Part")
 	beam.Name = "GuideBeam"
