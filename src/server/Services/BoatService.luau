@@ -107,6 +107,8 @@ local function newShip(kindName: string, start: CFrame, owner: Player?, title: s
 	local kind = KINDS[kindName]
 	local model = ModelFactory.longship(kind.length, kind.sail)
 	model.Name = title
+	model:SetAttribute("Ship", true)
+	model:SetAttribute("OwnerUserId", owner and owner.UserId or 0)
 	model:PivotTo(start)
 	model.Parent = workspace
 	local ship = {

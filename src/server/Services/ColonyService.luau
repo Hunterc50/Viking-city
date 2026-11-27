@@ -212,6 +212,7 @@ function ColonyService:Create(player: Player)
 	end
 	colony.canSave = canSave
 	colonies[player] = colony
+	player:SetAttribute("PlotIndex", index) -- for the minimap
 
 	if data then
 		SaveService:Restore(colony, data)

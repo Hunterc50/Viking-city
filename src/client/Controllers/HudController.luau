@@ -473,7 +473,7 @@ function HudController:Start()
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LayoutOrder = 2,
-		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to shoot\n4 Torch: F sets enemy buildings alight\n5 Sword: click to fight\nE: gather, loot, talk\nT: research   M: map size\nRaid Greywater Hold: walk west\nWheel: zoom   Right-drag: turn   V: camera",
 		Parent = help,
 	})
 	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
@@ -548,7 +548,13 @@ function HudController:Start()
 			Text = text,
 			LayoutOrder = feedOrder,
 			Parent = feed,
-		}, { corner(6), new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }) })
+		}, { corner(6), new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }), frameStroke() })
+		-- fade and grow in
+		item.TextTransparency = 1
+		item.BackgroundTransparency = 1
+		local grow = new("UIScale", { Scale = 0.85, Parent = item })
+		TweenService:Create(item, TweenInfo.new(0.25), { TextTransparency = 0, BackgroundTransparency = 0.15 }):Play()
+		TweenService:Create(grow, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Scale = 1 }):Play()
 		-- keep at most 5 messages
 		local items = {}
 		for _, c in feed:GetChildren() do
@@ -564,6 +570,10 @@ function HudController:Start()
 		end
 		task.delay(kind == "gain" and 1.5 or 5, function()
 			if item.Parent then
+				local stroke = item:FindFirstChildOfClass("UIStroke")
+				if stroke then
+					TweenService:Create(stroke, TweenInfo.new(0.5), { Transparency = 1 }):Play()
+				end
 				local t = TweenService:Create(item, TweenInfo.new(0.5), { TextTransparency = 1, BackgroundTransparency = 1 })
 				t:Play()
 				t.Completed:Wait()
@@ -573,9 +583,21 @@ function HudController:Start()
 	end)
 
 	---------------------------------------------------------------- updates
+	local lastValues = {}
 	controllers.StateController.Changed:Connect(function(state)
 		for _, name in Config.ResourceOrder do
-			resLabels[name].Text = string.format("%s %d/%d", name, state.resources[name] or 0, state.storage)
+			local value = state.resources[name] or 0
+			local resLabel = resLabels[name]
+			resLabel.Text = string.format("%s %d/%d", name, value, state.storage)
+			-- flash green when it goes up, red when it goes down
+			local before = lastValues[name]
+			if before and value ~= before and math.abs(value - before) >= 1 then
+				resLabel.TextColor3 = value > before and THEME.Good or THEME.Bad
+				TweenService:Create(resLabel, TweenInfo.new(0.8), { TextColor3 = value >= state.storage and THEME.Accent or THEME.Text }):Play()
+			elseif value >= state.storage then
+				resLabel.TextColor3 = THEME.Accent -- full: build a storehouse
+			end
+			lastValues[name] = value
 		end
 		dayLabel.Text = "Day " .. state.day .. "  ·  " .. (state.season or "")
 		dayFill.Size = UDim2.fromScale(math.clamp(state.dayProgress, 0, 1), 1)
