@@ -104,14 +104,14 @@ function BuildingService:TryDemolish(player: Player, id)
 	end
 	local def = Config.Buildings[building.type]
 	if def.Housing then
-		local count = 0
+		local homes = 0
 		for _, b in colony.buildings do
-			if b.type == building.type then
-				count += 1
+			if Config.Buildings[b.type].Housing then
+				homes += 1
 			end
 		end
-		if count <= 1 then
-			return false, "You can't tear down your last " .. def.Display
+		if homes <= 1 then
+			return false, "You can't tear down your last home"
 		end
 	end
 

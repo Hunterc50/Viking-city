@@ -5,6 +5,15 @@
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "Assets": {
+        "$className": "Folder",
+        "_HowToUse": {
+          "$className": "StringValue",
+          "$properties": {
+            "Value": "Drop your own models (meshes) in this folder to replace the built-in ones. Name each one exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, Tree_Pine, Tree_Birch, Rock, Bush, Dock, Deer, Axe, Pickaxe, Bow (Axe/Pickaxe/Bow must be Tools with a Handle). Anything missing uses the built-in version."
+          }
+        }
       }
     },
     "ServerScriptService": {
@@ -17,6 +26,158 @@
         "Client": {
           "$path": "src/client"
         }
+      }
+    },
+    "Workspace": {
+      "Baseplate": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Locked": true,
+          "Size": [
+            2400,
+            16,
+            2048
+          ],
+          "Position": [
+            700,
+            -8,
+            0
+          ],
+          "Color": [
+            0.34,
+            0.47,
+            0.27
+          ],
+          "Material": "Grass",
+          "TopSurface": "Smooth",
+          "BottomSurface": "Smooth"
+        }
+      },
+      "SpawnLocation": {
+        "$className": "SpawnLocation",
+        "$properties": {
+          "Anchored": true,
+          "Size": [
+            12,
+            1,
+            12
+          ],
+          "Position": [
+            80,
+            0.5,
+            -30
+          ],
+          "Duration": 0,
+          "Color": [
+            0.47,
+            0.38,
+            0.26
+          ],
+          "Material": "WoodPlanks",
+          "TopSurface": "Smooth"
+        }
+      },
+      "WelcomeSign": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Size": [
+            30,
+            10,
+            1
+          ],
+          "Position": [
+            80,
+            9,
+            -44
+          ],
+          "Color": [
+            0.3,
+            0.21,
+            0.14
+          ],
+          "Material": "Wood"
+        },
+        "FrontText": {
+          "$className": "SurfaceGui",
+          "$properties": {
+            "Face": "Front",
+            "PixelsPerStud": 20
+          },
+          "Text": {
+            "$className": "TextLabel",
+            "$properties": {
+              "Size": {
+                "UDim2": [
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    1,
+                    0
+                  ]
+                ]
+              },
+              "BackgroundColor3": [
+                0.13,
+                0.11,
+                0.09
+              ],
+              "TextColor3": [
+                0.96,
+                0.92,
+                0.84
+              ],
+              "TextScaled": true,
+              "Font": "GothamBold",
+              "Text": "VIKING CITY\nPress Play (F5) to start your settlement"
+            }
+          }
+        },
+        "BackText": {
+          "$className": "SurfaceGui",
+          "$properties": {
+            "Face": "Back",
+            "PixelsPerStud": 20
+          },
+          "Text": {
+            "$className": "TextLabel",
+            "$properties": {
+              "Size": {
+                "UDim2": [
+                  [
+                    1,
+                    0
+                  ],
+                  [
+                    1,
+                    0
+                  ]
+                ]
+              },
+              "BackgroundColor3": [
+                0.13,
+                0.11,
+                0.09
+              ],
+              "TextColor3": [
+                0.96,
+                0.92,
+                0.84
+              ],
+              "TextScaled": true,
+              "Font": "GothamBold",
+              "Text": "VIKING CITY\nPress Play (F5) to start your settlement"
+            }
+          }
+        }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": "Future"
       }
     }
   }

@@ -95,7 +95,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 	end
 	v.model = ModelFactory.villager(v.name, v.isChild, rng)
 	v.body = v.model.PrimaryPart
-	v.height = v.body.Size.Y / 2
+	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
 	v.model.Parent = colony.plot.Villagers
 	v.busyUntil = 0

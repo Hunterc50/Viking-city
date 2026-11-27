@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 local EVENTS = {
 	"ColonyState", -- server -> client: full colony snapshot every tick
 	"Notify", -- server -> client: short message for the toast feed
+	"ShootArrow", -- client -> server: (aimPosition) when the Bow is used
 }
 
 local FUNCTIONS = {

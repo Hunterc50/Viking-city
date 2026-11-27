@@ -18,8 +18,8 @@ Config.TICK = 1 -- seconds between simulation steps
 Config.DAY_LENGTH = 60 -- real seconds per in-game day
 
 -- Resources ---------------------------------------------------------------
-Config.ResourceOrder = { "Wood", "Stone", "Food" }
-Config.StartingResources = { Wood = 80, Stone = 20, Food = 40 }
+Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides" }
+Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0 }
 Config.BaseStorage = 200 -- max of each resource before any storehouse
 
 -- Villagers ---------------------------------------------------------------
@@ -52,8 +52,9 @@ Config.Tribes = { "Ravenfjord clan", "Ashvale folk", "Stormholm kin", "Elkmarsh 
 
 -- Wild resource nodes on each plot -----------------------------------------
 Config.Nodes = {
-	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8 },
-	Rock = { Count = 12, Regrow = 0, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2 },
+	-- Tool = which tool must be held to gather it (nil = bare hands)
+	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8, Tool = "Axe" },
+	Rock = { Count = 12, Regrow = 4, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2, Tool = "Pickaxe" },
 	Bush = { Count = 10, Regrow = 6, Gives = "Food", Amount = 6, Action = "Forage", Hold = 0.6 },
 }
 Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
@@ -74,6 +75,13 @@ Config.Buildings = {
 		Size = { 4, 2 },
 		Cost = { Wood = 40, Stone = 10 },
 		Housing = 5,
+	},
+	Cottage = {
+		Display = "A-frame Cottage",
+		Description = "A small steep-roofed home for 3 villagers.",
+		Size = { 2, 2 },
+		Cost = { Wood = 25 },
+		Housing = 3,
 	},
 	Woodcutter = {
 		Display = "Woodcutter",
@@ -106,10 +114,36 @@ Config.Buildings = {
 		Cost = { Wood = 40, Stone = 20 },
 		Storage = 200,
 	},
+	Palisade = {
+		Display = "Palisade",
+		Description = "A section of sharpened-log wall. Place many in a row.",
+		Size = { 1, 1 },
+		Cost = { Wood = 3 },
+	},
 }
 
 -- Order of buttons in the build bar.
-Config.BuildOrder = { "Longhouse", "Woodcutter", "Quarry", "Farm", "Storehouse" }
+Config.BuildOrder = { "Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade" }
+
+-- Tools every player carries (built in ModelFactory.tool).
+Config.Tools = { "Axe", "Pickaxe", "Bow" }
+
+-- Wildlife ------------------------------------------------------------------
+Config.Wildlife = {
+	DeerPerPlot = 4, -- deer roaming the meadow behind each plot
+	RespawnSeconds = 45,
+	Speed = 9,
+	FleeSpeed = 22,
+	FleeDistance = 22, -- deer bolt when a player gets this close
+	Meat = 15, -- Food from one deer
+	Hides = 2,
+}
+
+Config.Bow = {
+	Range = 140,
+	Cooldown = 0.9,
+	ArrowSpeed = 160,
+}
 
 Config.DemolishRefund = 0.5 -- fraction of the cost returned
 

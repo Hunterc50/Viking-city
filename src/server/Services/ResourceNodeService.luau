@@ -1,8 +1,8 @@
 --[[
 	ResourceNodeService
 	Scatters trees, rocks and berry bushes on each plot. The player walks up
-	and holds E (or taps the prompt) to gather them by hand, which also
-	clears land for building. Trees and bushes slowly regrow.
+	and holds E to gather them: trees need the Axe, rocks the Pickaxe, berries
+	bare hands. Gathering also clears land for building. Nodes slowly regrow.
 ]]
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -52,7 +52,7 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = def.Action
-	prompt.ObjectText = kind == "Bush" and "Berry bush" or kind
+	prompt.ObjectText = (kind == "Bush" and "Berry bush" or kind) .. (def.Tool and (" (" .. def.Tool .. ")") or "")
 	prompt.HoldDuration = def.Hold
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
@@ -64,6 +64,11 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 
 	prompt.Triggered:Connect(function(player)
 		if player ~= colony.player or colony.nodes[key] ~= node then
+			return
+		end
+		if def.Tool and not services.ToolService:IsHolding(player, def.Tool) then
+			local slot = table.find(Config.Tools, def.Tool) or 1
+			ColonyService:Notify(colony, "Hold your " .. def.Tool .. " first (press " .. slot .. ")", "bad")
 			return
 		end
 		colony.nodes[key] = nil

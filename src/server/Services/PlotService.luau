@@ -5,7 +5,6 @@
 ]]
 
 local Players = game:GetService("Players")
-local Lighting = game:GetService("Lighting")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -31,22 +30,6 @@ function PlotService:Init()
 	plotsFolder = Instance.new("Folder")
 	plotsFolder.Name = "Plots"
 	plotsFolder.Parent = workspace
-
-	-- A big grassy landmass so the game works even in an empty place.
-	if not workspace:FindFirstChild("Baseplate") then
-		makePart({
-			Name = "Land",
-			Size = Vector3.new(2048, 4, 2048),
-			Position = Vector3.new(512, Config.GROUND_Y - 2.5, 0),
-			Color = Color3.fromRGB(86, 120, 70),
-			Material = Enum.Material.Grass,
-			Parent = workspace,
-		})
-	end
-
-	-- A pleasant late-afternoon light.
-	Lighting.ClockTime = 15.5
-	Lighting.Brightness = 2
 end
 
 function PlotService:Start()
@@ -78,24 +61,15 @@ function PlotService:Assign(player: Player)
 	plot:SetAttribute("OwnerUserId", player.UserId)
 
 	makePart({
+		-- Invisible: the grass you see is Terrain (WorldService). This part
+		-- is what the build preview aims at.
 		Name = "Ground",
 		Size = Vector3.new(size, 1, size),
 		Position = origin + Vector3.new(size / 2, -0.5, size / 2),
-		Color = Color3.fromRGB(104, 140, 78),
-		Material = Enum.Material.Grass,
+		Transparency = 1,
+		CanCollide = false,
 		Parent = plot,
 	})
-	-- A dirt apron in front of the plot where the player spawns.
-	makePart({
-		Name = "Apron",
-		Size = Vector3.new(size, 1, Config.CELL * 2),
-		Position = origin + Vector3.new(size / 2, -0.55, -Config.CELL),
-		Color = Color3.fromRGB(120, 96, 66),
-		Material = Enum.Material.Ground,
-		CanQuery = false,
-		Parent = plot,
-	})
-
 	-- Wooden marker posts at the corners so you can see your borders.
 	for _, x in { 0, size } do
 		for _, z in { 0, size } do

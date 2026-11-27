@@ -10,14 +10,14 @@ This repository holds all the game's code. You edit it in **VS Code**, and **Roj
 
 ---
 
-## What's in the first playable version
+## What's in the game so far
 
-- Your own plot of land on a building grid, with a starting longhouse and 3 villagers.
-- Trees, rocks and berry bushes to gather by hand (walk up and **hold E**). Gathering also clears land.
-- 5 buildings: Longhouse (housing), Woodcutter, Quarry, Barley Farm (jobs), Storehouse (storage).
-- Villagers take jobs automatically, walk to work, eat food, and get happier or sadder.
-- Happy villages with free housing grow: babies are born and immigrants arrive. Starving or homeless villages shrink.
-- A HUD with resources, population, happiness, the day counter, a build bar and a message feed.
+- A big Nordic valley made of realistic terrain: a flat green building area, a fjord with docks, pine and birch forests, rocky outcrops and snow-capped mountains, with warm afternoon light, haze and sun rays.
+- Your own plot with a starting longhouse and 3 villagers.
+- Tools: **Axe** (key 1) for trees, **Pickaxe** (key 2) for rocks, **Bow** (key 3) for hunting deer in the meadow behind your plot. Hold E on berry bushes to forage by hand.
+- 7 buildings: Longhouse and A-frame Cottage (housing), Woodcutter, Quarry, Barley Farm (jobs), Storehouse (storage), Palisade wall.
+- Villagers take jobs, walk to work, eat, and get happier or sadder. Happy villages with free housing grow through births and immigrants from neighbouring tribes.
+- A city-builder camera, a HUD with resources, population, happiness and day, a build bar and a message feed.
 
 ---
 
@@ -55,13 +55,35 @@ Open the folder in VS Code, start Rojo (step 4), open your place in Studio, clic
 
 | Action | How |
 | --- | --- |
-| Gather wood / stone / food | Walk to a tree, rock or berry bush and hold **E** |
+| Chop trees | Press **1** to hold the Axe, walk to a tree, hold **E** |
+| Mine rocks | Press **2** to hold the Pickaxe, walk to a rock, hold **E** |
+| Hunt deer | Press **3** to hold the Bow, aim at a deer in the meadow and click (they run if you get too close) |
+| Forage berries | Walk to a berry bush and hold **E** |
 | Build | Click a building in the bottom bar, move the mouse over your land, click to place |
-| Rotate | **R** while placing |
+| Rotate building | **R** while placing |
 | Cancel | **Q**, or click the same button again |
 | Demolish | Click **Demolish**, then click one of your buildings (50% refund) |
+| Camera | Mouse wheel zooms, hold right mouse and drag to turn, **V** switches to the normal camera |
 
-Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Each Longhouse holds 5 people. Immigrants only come when you have free housing and your people are happy.
+Tips: build a **Barley Farm** first so nobody starves, then a **Woodcutter**. Each Longhouse holds 5 people and each Cottage 3. Immigrants only come when you have free housing and your people are happy.
+
+---
+
+## Using your own 3D models (meshes) for extra realism
+
+The game is built from simple blocks so it works out of the box, but you can swap any of them for a realistic model, and the game will use yours automatically.
+
+1. In Studio, open **Window > 3D Importer** (or the Toolbox, **Creator Store** tab, to find free models) and import your model (`.fbx`, `.obj` or `.gltf`).
+2. In the Explorer, open **ReplicatedStorage > Assets**.
+3. Drag your model into the **Assets** folder.
+4. Rename it to exactly one of these slot names:
+   `Longhouse`, `Cottage`, `Woodcutter`, `Quarry`, `Farm`, `Storehouse`, `Palisade`, `Tree_Pine`, `Tree_Birch`, `Rock`, `Bush`, `Dock`, `Deer`, `Axe`, `Pickaxe`, `Bow`
+5. Press Play. Buildings are resized to fit their spot on the grid automatically.
+
+Notes:
+- `Axe`, `Pickaxe` and `Bow` must be **Tools** (with a part named `Handle`). Everything else is a **Model**.
+- Only use models you made or that are free to use, and avoid ones with scripts inside.
+- Save your place with your models in it (File > Save to File As). When a new `VikingCity.rbxl` comes out, open it, then copy your **Assets** folder across from your saved place.
 
 ---
 
@@ -74,11 +96,14 @@ src/
     Config.luau         every balance number: costs, rates, timings
     Grid.luau           grid maths: cells, footprints, rotation
     Remotes.luau        RemoteEvents/RemoteFunctions between client and server
-    ModelFactory.luau   builds the placeholder buildings, trees and villagers
+    ModelFactory.luau   builds every model from parts, or uses your own from Assets
   server/   -> ServerScriptService.Server
     init.server.luau    loads every service in Services/
     Services/
+      WorldService.luau         generates the valley terrain, forests, docks and lighting
       PlotService.luau          gives each player land, spawns them there
+      ToolService.luau          gives out Axe, Pickaxe and Bow, handles arrows
+      WildlifeService.luau      deer that wander, flee and can be hunted
       ColonyService.luau        colony state, resources, main loop, HUD sync
       BuildingService.luau      validates and places / demolishes buildings
       ResourceNodeService.luau  trees, rocks, bushes, hand gathering, regrowth
@@ -87,6 +112,8 @@ src/
     init.client.luau    loads every controller in Controllers/
     Controllers/
       StateController.luau  receives colony snapshots from the server
+      CameraController.luau city-builder camera
+      ToolController.luau   bow shooting and tool swings
       HudController.luau    the on-screen interface
       BuildController.luau  placement preview and demolish mode
 docs/DESIGN.md          the full game design and roadmap
@@ -100,4 +127,4 @@ docs/DESIGN.md          the full game design and roadmap
 
 - Progress isn't saved yet (coming with DataStores in Phase 1).
 - Buildings appear instantly; construction time comes later.
-- Models are simple blocks made in code, so you can replace them with your own art.
+- Models are made from parts in code; swap in real meshes with the Assets folder (above).

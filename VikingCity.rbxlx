@@ -1,13 +1,30 @@
 <roblox version="4">
-  <Item class="ReplicatedStorage" referent="0">
+  <Item class="Lighting" referent="0">
+    <Properties>
+      <string name="Name">Lighting</string>
+      <token name="Technology">4</token>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="1">
     <Properties>
       <string name="Name">ReplicatedStorage</string>
     </Properties>
-    <Item class="Folder" referent="1">
+    <Item class="Folder" referent="2">
+      <Properties>
+        <string name="Name">Assets</string>
+      </Properties>
+      <Item class="StringValue" referent="3">
+        <Properties>
+          <string name="Name">_HowToUse</string>
+          <string name="Value">Drop your own models (meshes) in this folder to replace the built-in ones. Name each one exactly like a slot: Longhouse, Cottage, Woodcutter, Quarry, Farm, Storehouse, Palisade, Tree_Pine, Tree_Birch, Rock, Bush, Dock, Deer, Axe, Pickaxe, Bow (Axe/Pickaxe/Bow must be Tools with a Handle). Anything missing uses the built-in version.</string>
+        </Properties>
+      </Item>
+    </Item>
+    <Item class="Folder" referent="4">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="2">
+      <Item class="ModuleScript" referent="5">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--[[
@@ -30,8 +47,8 @@ Config.TICK = 1 -- seconds between simulation steps
 Config.DAY_LENGTH = 60 -- real seconds per in-game day
 
 -- Resources ---------------------------------------------------------------
-Config.ResourceOrder = { "Wood", "Stone", "Food" }
-Config.StartingResources = { Wood = 80, Stone = 20, Food = 40 }
+Config.ResourceOrder = { "Wood", "Stone", "Food", "Hides" }
+Config.StartingResources = { Wood = 80, Stone = 20, Food = 40, Hides = 0 }
 Config.BaseStorage = 200 -- max of each resource before any storehouse
 
 -- Villagers ---------------------------------------------------------------
@@ -64,8 +81,9 @@ Config.Tribes = { "Ravenfjord clan", "Ashvale folk", "Stormholm kin", "Elkmarsh 
 
 -- Wild resource nodes on each plot -----------------------------------------
 Config.Nodes = {
-	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8 },
-	Rock = { Count = 12, Regrow = 0, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2 },
+	-- Tool = which tool must be held to gather it (nil = bare hands)
+	Tree = { Count = 34, Regrow = 22, Gives = "Wood", Amount = 10, Action = "Chop", Hold = 0.8, Tool = "Axe" },
+	Rock = { Count = 12, Regrow = 4, Gives = "Stone", Amount = 8, Action = "Mine", Hold = 1.2, Tool = "Pickaxe" },
 	Bush = { Count = 10, Regrow = 6, Gives = "Food", Amount = 6, Action = "Forage", Hold = 0.6 },
 }
 Config.NodeRegrowInterval = 20 -- seconds between regrowth attempts
@@ -86,6 +104,13 @@ Config.Buildings = {
 		Size = { 4, 2 },
 		Cost = { Wood = 40, Stone = 10 },
 		Housing = 5,
+	},
+	Cottage = {
+		Display = "A-frame Cottage",
+		Description = "A small steep-roofed home for 3 villagers.",
+		Size = { 2, 2 },
+		Cost = { Wood = 25 },
+		Housing = 3,
 	},
 	Woodcutter = {
 		Display = "Woodcutter",
@@ -118,10 +143,36 @@ Config.Buildings = {
 		Cost = { Wood = 40, Stone = 20 },
 		Storage = 200,
 	},
+	Palisade = {
+		Display = "Palisade",
+		Description = "A section of sharpened-log wall. Place many in a row.",
+		Size = { 1, 1 },
+		Cost = { Wood = 3 },
+	},
 }
 
 -- Order of buttons in the build bar.
-Config.BuildOrder = { "Longhouse", "Woodcutter", "Quarry", "Farm", "Storehouse" }
+Config.BuildOrder = { "Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade" }
+
+-- Tools every player carries (built in ModelFactory.tool).
+Config.Tools = { "Axe", "Pickaxe", "Bow" }
+
+-- Wildlife ------------------------------------------------------------------
+Config.Wildlife = {
+	DeerPerPlot = 4, -- deer roaming the meadow behind each plot
+	RespawnSeconds = 45,
+	Speed = 9,
+	FleeSpeed = 22,
+	FleeDistance = 22, -- deer bolt when a player gets this close
+	Meat = 15, -- Food from one deer
+	Hides = 2,
+}
+
+Config.Bow = {
+	Range = 140,
+	Cooldown = 0.9,
+	ArrowSpeed = 160,
+}
 
 Config.DemolishRefund = 0.5 -- fraction of the cost returned
 
@@ -129,7 +180,7 @@ return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="3">
+      <Item class="ModuleScript" referent="6">
         <Properties>
           <string name="Name">Grid</string>
           <string name="Source"><![CDATA[--[[
@@ -238,48 +289,64 @@ return Grid
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="4">
+      <Item class="ModuleScript" referent="7">
         <Properties>
           <string name="Name">ModelFactory</string>
           <string name="Source"><![CDATA[--[[
 	ModelFactory
-	Builds simple placeholder models out of Parts so the game is playable with
-	no imported assets. Every model is built around (0, 0, 0) = centre of its
+	Builds every model in the game out of plain Parts, so the game needs no
+	imported assets. Every model is built around (0, 0, 0) = centre of its
 	footprint at ground level, and its WorldPivot is set there, so callers just
 	do model:PivotTo(cframe).
 
-	Later you can swap any of these for real meshes made in Studio or Blender:
-	put a model in ReplicatedStorage and clone it here instead.
+	MESH SWAP: put a model (or Tool) in ReplicatedStorage > Assets with one of
+	the slot names in ModelFactory.Slots and the game uses it instead of the
+	part-built version. Buildings are scaled to fit their footprint.
 ]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(script.Parent.Config)
 
 local ModelFactory = {}
 
 local CELL = Config.CELL
+local V3 = Vector3.new
 
 local Colors = {
-	Wood = Color3.fromRGB(122, 84, 52),
-	DarkWood = Color3.fromRGB(78, 54, 36),
-	Thatch = Color3.fromRGB(178, 150, 92),
-	Turf = Color3.fromRGB(92, 120, 64),
-	Stone = Color3.fromRGB(128, 128, 132),
-	Soil = Color3.fromRGB(96, 68, 44),
-	Barley = Color3.fromRGB(214, 188, 96),
-	Leaf = Color3.fromRGB(46, 92, 52),
-	LeafLight = Color3.fromRGB(64, 116, 64),
+	Wood = Color3.fromRGB(128, 90, 58),
+	DarkWood = Color3.fromRGB(74, 52, 36),
+	Weathered = Color3.fromRGB(104, 92, 78),
+	Thatch = Color3.fromRGB(176, 146, 88),
+	Shingle = Color3.fromRGB(86, 62, 44),
+	Turf = Color3.fromRGB(88, 112, 58),
+	Stone = Color3.fromRGB(124, 124, 120),
+	Soil = Color3.fromRGB(92, 66, 44),
+	Barley = Color3.fromRGB(206, 178, 92),
+	Pine = Color3.fromRGB(38, 70, 44),
+	PineLight = Color3.fromRGB(52, 86, 50),
+	Leaf = Color3.fromRGB(70, 112, 56),
+	Birch = Color3.fromRGB(222, 218, 205),
 	Berry = Color3.fromRGB(170, 34, 46),
 	Skin = Color3.fromRGB(234, 196, 160),
+	Lantern = Color3.fromRGB(255, 170, 80),
+	Iron = Color3.fromRGB(90, 92, 98),
 }
 ModelFactory.Colors = Colors
 
 local Tunics = {
 	Color3.fromRGB(150, 60, 50),
-	Color3.fromRGB(60, 90, 140),
-	Color3.fromRGB(90, 120, 70),
-	Color3.fromRGB(170, 140, 80),
-	Color3.fromRGB(110, 80, 120),
-	Color3.fromRGB(120, 110, 100),
+	Color3.fromRGB(60, 86, 130),
+	Color3.fromRGB(86, 110, 66),
+	Color3.fromRGB(168, 138, 82),
+	Color3.fromRGB(108, 78, 112),
+	Color3.fromRGB(122, 112, 100),
+}
+local Hair = {
+	Color3.fromRGB(196, 150, 80),
+	Color3.fromRGB(150, 74, 40),
+	Color3.fromRGB(80, 56, 38),
+	Color3.fromRGB(220, 200, 150),
 }
 
 local function addPart(model: Instance, props)
@@ -295,161 +362,390 @@ local function addPart(model: Instance, props)
 	p.Color = props.Color or Colors.Wood
 	p.Material = props.Material or Enum.Material.Wood
 	p.Name = props.Name or "Part"
+	if props.CanCollide == false then
+		p.CanCollide = false
+	end
 	p.Parent = model
 	return p
 end
+ModelFactory.addPart = addPart
 
--- A walled hut with a pitched roof whose ridge runs along local X.
-local function hut(model, cf: CFrame, w: number, d: number, wallH: number, roofColor: Color3, roofMaterial)
-	local wallTop = 0.6 + wallH
-	addPart(model, {
-		Size = Vector3.new(w + 1, 0.6, d + 1),
-		CFrame = cf * CFrame.new(0, 0.3, 0),
+-- A vertical log (cylinder) standing at `pos` (its bottom on pos.Y).
+local function post(model, pos: Vector3, height: number, diameter: number, color: Color3?)
+	return addPart(model, {
+		Shape = Enum.PartType.Cylinder,
+		Size = V3(height, diameter, diameter),
+		CFrame = CFrame.new(pos + V3(0, height / 2, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = color or Colors.DarkWood,
+	})
+end
+
+local function lantern(model, cf: CFrame)
+	local l = addPart(model, {
+		Name = "Lantern",
+		Size = V3(0.6, 0.8, 0.6),
+		CFrame = cf,
+		Color = Colors.Lantern,
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	})
+	local light = Instance.new("PointLight")
+	light.Color = Colors.Lantern
+	light.Range = 16
+	light.Brightness = 1.4
+	light.Shadows = true
+	light.Parent = l
+end
+
+local function smoke(model, cf: CFrame)
+	local hole = addPart(model, {
+		Name = "SmokeHole",
+		Size = V3(1.6, 0.8, 1.6),
+		CFrame = cf,
 		Color = Colors.DarkWood,
+	})
+	local s = Instance.new("Smoke")
+	s.Color = Color3.fromRGB(210, 205, 200)
+	s.Opacity = 0.12
+	s.RiseVelocity = 3
+	s.Size = 1.5
+	s.Parent = hole
+end
+
+--[[
+	A timber hall: stone footing, plank walls with log banding, a pitched
+	roof (ridge along local X), filled gable ends, crossed carved boards at
+	both gables, a door on the -Z side, a lantern and optional chimney smoke.
+	o = { w, d, wallH, roof = "thatch" | "shingle" | "turf", pitch, smoke, lantern }
+]]
+local function hall(model, cf: CFrame, o)
+	local w, d, wallH = o.w, o.d, o.wallH
+	local base = 1
+	addPart(model, {
+		Name = "Foundation",
+		Size = V3(w + 1.2, 1, d + 1.2),
+		CFrame = cf * CFrame.new(0, 0.5, 0),
+		Color = Colors.Stone,
+		Material = Enum.Material.Cobblestone,
 	})
 	addPart(model, {
 		Name = "Walls",
-		Size = Vector3.new(w, wallH, d),
-		CFrame = cf * CFrame.new(0, 0.6 + wallH / 2, 0),
+		Size = V3(w, wallH, d),
+		CFrame = cf * CFrame.new(0, base + wallH / 2, 0),
 		Color = Colors.Wood,
 		Material = Enum.Material.WoodPlanks,
 	})
+	-- horizontal log banding on the long sides
+	local bands = math.floor(wallH / 1.5)
+	for i = 1, bands do
+		for _, side in { 1, -1 } do
+			addPart(model, {
+				Name = "Log",
+				Size = V3(w + 0.8, 0.4, 0.4),
+				CFrame = cf * CFrame.new(0, base + i * 1.5 - 0.3, side * (d / 2 + 0.15)),
+				Color = Colors.DarkWood,
+			})
+		end
+	end
+	-- corner posts
+	for _, sx in { 1, -1 } do
+		for _, sz in { 1, -1 } do
+			addPart(model, {
+				Size = V3(0.9, wallH, 0.9),
+				CFrame = cf * CFrame.new(sx * w / 2, base + wallH / 2, sz * d / 2),
+				Color = Colors.DarkWood,
+			})
+		end
+	end
 
-	local angle = math.rad(35)
-	local halfD = d / 2 + 1.2
+	-- roof
+	local roofColor = Colors.Thatch
+	local roofMaterial = Enum.Material.Grass
+	if o.roof == "shingle" then
+		roofColor, roofMaterial = Colors.Shingle, Enum.Material.WoodPlanks
+	elseif o.roof == "turf" then
+		roofColor, roofMaterial = Colors.Turf, Enum.Material.Grass
+	end
+	local wallTop = base + wallH
+	local angle = math.rad(o.pitch or 38)
+	local halfD = d / 2 + 1.6
 	local rise = halfD * math.tan(angle)
 	local slope = halfD / math.cos(angle) + 0.6
+	local ridgeY = wallTop + rise
 	for _, side in { 1, -1 } do
 		addPart(model, {
 			Name = "Roof",
-			Size = Vector3.new(w + 2, 0.6, slope),
+			Size = V3(w + 2.6, 1, slope),
 			CFrame = cf * CFrame.new(0, wallTop + rise / 2, side * halfD / 2) * CFrame.Angles(side * angle, 0, 0),
 			Color = roofColor,
-			Material = roofMaterial or Enum.Material.Grass,
+			Material = roofMaterial,
 		})
 	end
 	addPart(model, {
 		Name = "Ridge",
-		Size = Vector3.new(w + 2.6, 0.8, 0.8),
-		CFrame = cf * CFrame.new(0, wallTop + rise + 0.1, 0),
+		Size = V3(w + 3, 0.9, 0.9),
+		CFrame = cf * CFrame.new(0, ridgeY + 0.2, 0),
+		Color = Colors.DarkWood,
+	})
+
+	-- gable ends: stepped planks filling the triangle under the roof
+	local steps = 5
+	local stepH = rise / steps
+	for _, sx in { 1, -1 } do
+		for k = 1, steps do
+			local hw = math.min(d / 2, halfD * (1 - (k - 0.5) / steps))
+			if hw > 0.3 then
+				addPart(model, {
+					Name = "Gable",
+					Size = V3(0.6, stepH + 0.05, hw * 2),
+					CFrame = cf * CFrame.new(sx * w / 2, wallTop + (k - 0.5) * stepH, 0),
+					Color = Colors.Weathered,
+					Material = Enum.Material.WoodPlanks,
+				})
+			end
+		end
+		-- crossed carved boards that stick up past the ridge like horns
+		for _, side in { 1, -1 } do
+			addPart(model, {
+				Name = "GableBoard",
+				Size = V3(0.5, 0.7, slope + 3.2),
+				CFrame = cf
+					* CFrame.new(sx * (w / 2 + 1.2), ridgeY + 0.3, 0)
+					* CFrame.Angles(side * angle, 0, 0)
+					* CFrame.new(0, 0, side * (slope / 2 - 1.6)),
+				Color = Colors.DarkWood,
+			})
+		end
+	end
+
+	-- door with frame
+	addPart(model, {
+		Name = "DoorFrame",
+		Size = V3(4, 5.8, 0.3),
+		CFrame = cf * CFrame.new(0, base + 2.9, -d / 2 - 0.1),
 		Color = Colors.DarkWood,
 	})
 	addPart(model, {
 		Name = "Door",
-		Size = Vector3.new(2.6, 4.5, 0.3),
-		CFrame = cf * CFrame.new(0, 0.6 + 2.25, -d / 2 - 0.15),
-		Color = Colors.DarkWood,
+		Size = V3(3, 5, 0.3),
+		CFrame = cf * CFrame.new(0, base + 2.5, -d / 2 - 0.25),
+		Color = Color3.fromRGB(60, 40, 28),
+		Material = Enum.Material.WoodPlanks,
 	})
+	if o.lantern ~= false then
+		lantern(model, cf * CFrame.new(2.8, base + 4.6, -d / 2 - 0.6))
+	end
+	if o.smoke then
+		smoke(model, cf * CFrame.new(w * 0.22, ridgeY + 0.6, 0))
+	end
 end
 
 local function logPile(model, cf: CFrame)
-	for i, offset in { Vector3.new(0, 0.6, -1.3), Vector3.new(0, 0.6, 0), Vector3.new(0, 0.6, 1.3), Vector3.new(0, 1.7, -0.65), Vector3.new(0, 1.7, 0.65) } do
+	local offsets = { V3(0, 0.6, -1.3), V3(0, 0.6, 0), V3(0, 0.6, 1.3), V3(0, 1.7, -0.65), V3(0, 1.7, 0.65), V3(0, 2.8, 0) }
+	for i, offset in offsets do
 		addPart(model, {
 			Name = "Log" .. i,
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(6, 1.2, 1.2),
+			Size = V3(6, 1.2, 1.2),
 			CFrame = cf * CFrame.new(offset),
-			Color = Colors.Wood,
+			Color = i % 2 == 0 and Colors.Wood or Colors.DarkWood,
 		})
+	end
+end
+
+local function fence(model, w: number, d: number, gapSide: boolean?)
+	-- posts every ~4 studs with two rails, leaving a gap on the -Z side
+	local hw, hd = w / 2 - 0.6, d / 2 - 0.6
+	local corners = { V3(-hw, 0, -hd), V3(hw, 0, -hd), V3(hw, 0, hd), V3(-hw, 0, hd) }
+	for i = 1, 4 do
+		local a, b = corners[i], corners[i % 4 + 1]
+		local len = (b - a).Magnitude
+		local mid = (a + b) / 2
+		local isGap = gapSide and i == 1
+		local n = math.max(1, math.floor(len / 4))
+		for j = 0, n do
+			local p = a:Lerp(b, j / n)
+			post(model, p, 2.6, 0.45)
+		end
+		if not isGap then
+			for _, y in { 1, 2.1 } do
+				addPart(model, {
+					Name = "Rail",
+					Size = V3(len, 0.25, 0.25),
+					CFrame = CFrame.lookAt(mid + V3(0, y, 0), b + V3(0, y, 0)) * CFrame.Angles(0, math.pi / 2, 0),
+					Color = Colors.Weathered,
+				})
+			end
+		end
 	end
 end
 
 local Builders = {}
 
 function Builders.Longhouse(model, w, d)
-	hut(model, CFrame.new(), w - 3, d - 4, 7, Colors.Turf, Enum.Material.Grass)
-	-- carved posts at the corners
-	for _, x in { -1, 1 } do
-		for _, z in { -1, 1 } do
+	hall(model, CFrame.new(), { w = w - 4, d = d - 5, wallH = 7, roof = "thatch", smoke = true })
+end
+
+function Builders.Cottage(model, w, d)
+	-- A steep A-frame: the roof reaches the ground, ridge runs along local Z.
+	local base = 0.8
+	addPart(model, {
+		Name = "Foundation",
+		Size = V3(w - 2, base, d - 2),
+		Position = V3(0, base / 2, 0),
+		Color = Colors.Stone,
+		Material = Enum.Material.Cobblestone,
+	})
+	local depth = d - 3
+	local halfW = (w - 3) / 2
+	local angle = math.rad(62)
+	local rise = halfW * math.tan(angle)
+	local slope = halfW / math.cos(angle) + 0.4
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "Roof",
+			Size = V3(slope, 0.9, depth + 1.6),
+			CFrame = CFrame.new(side * halfW / 2, base + rise / 2, 0) * CFrame.Angles(0, 0, -side * angle),
+			Color = Colors.Shingle,
+			Material = Enum.Material.WoodPlanks,
+		})
+	end
+	local steps = 7
+	local stepH = rise / steps
+	for _, sz in { 1, -1 } do
+		for k = 1, steps do
+			local hw = halfW * (1 - (k - 0.5) / steps)
 			addPart(model, {
-				Size = Vector3.new(1, 9, 1),
-				Position = Vector3.new(x * (w - 3) / 2, 4.5, z * (d - 4) / 2),
-				Color = Colors.DarkWood,
+				Name = "Gable",
+				Size = V3(hw * 2, stepH + 0.05, 0.6),
+				Position = V3(0, base + (k - 0.5) * stepH, sz * depth / 2),
+				Color = Colors.Wood,
+				Material = Enum.Material.WoodPlanks,
 			})
 		end
 	end
+	-- crossed boards on the front gable
+	for _, side in { 1, -1 } do
+		addPart(model, {
+			Name = "GableBoard",
+			Size = V3(slope + 3, 0.6, 0.5),
+			CFrame = CFrame.new(0, base + rise, -depth / 2 - 0.9) * CFrame.Angles(0, 0, -side * angle) * CFrame.new(side * (slope / 2 - 1.5), 0, 0),
+			Color = Colors.DarkWood,
+		})
+	end
+	addPart(model, { Name = "Door", Size = V3(2.6, 4.4, 0.3), Position = V3(0, base + 2.2, -depth / 2 - 0.4), Color = Color3.fromRGB(60, 40, 28), Material = Enum.Material.WoodPlanks })
+	addPart(model, { Name = "Window", Size = V3(1.2, 1.2, 0.2), Position = V3(0, base + 6.5, -depth / 2 - 0.35), Color = Colors.Lantern, Material = Enum.Material.Neon })
+	lantern(model, CFrame.new(2.2, base + 3.6, -depth / 2 - 0.8))
+	smoke(model, CFrame.new(0, base + rise + 0.3, depth / 4))
 end
 
 function Builders.Woodcutter(model, w, d)
-	hut(model, CFrame.new(-2.5, 0, 2), 8, 7, 5, Colors.Thatch, Enum.Material.Fabric)
-	logPile(model, CFrame.new(3, 0, -4))
+	hall(model, CFrame.new(-2, 0, 2.5), { w = 9, d = 7, wallH = 5, roof = "shingle", smoke = false })
+	logPile(model, CFrame.new(3, 0, -4.5))
 	addPart(model, {
 		Name = "Stump",
 		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(1.4, 2, 2),
-		CFrame = CFrame.new(4.5, 0.7, 3) * CFrame.Angles(0, 0, math.pi / 2),
+		Size = V3(1.4, 2.2, 2.2),
+		CFrame = CFrame.new(5, 0.7, 3) * CFrame.Angles(0, 0, math.pi / 2),
 		Color = Colors.Wood,
 	})
+	-- an axe stuck in the stump
+	addPart(model, { Size = V3(0.25, 2.2, 0.25), CFrame = CFrame.new(5, 2.4, 3) * CFrame.Angles(0, 0, 0.5), Color = Colors.Wood })
+	addPart(model, { Size = V3(0.9, 0.7, 0.15), CFrame = CFrame.new(5.3, 1.6, 3), Color = Colors.Iron, Material = Enum.Material.Metal })
 end
 
 function Builders.Quarry(model, w, d)
 	addPart(model, {
-		Size = Vector3.new(w - 1, 0.4, d - 1),
-		Position = Vector3.new(0, 0.2, 0),
-		Color = Colors.Stone,
+		Size = V3(w - 1, 0.4, d - 1),
+		Position = V3(0, 0.2, 0),
+		Color = Color3.fromRGB(110, 108, 104),
 		Material = Enum.Material.Slate,
 	})
 	local blocks = {
-		{ Vector3.new(-3, 1.5, -3), Vector3.new(4, 2.6, 3) },
-		{ Vector3.new(3, 1.2, -2), Vector3.new(3, 2, 3) },
-		{ Vector3.new(-2, 2.2, 3), Vector3.new(5, 4, 4) },
-		{ Vector3.new(4, 0.9, 4), Vector3.new(2, 1.4, 2) },
+		{ V3(-3, 1.5, -3), V3(4, 2.6, 3) },
+		{ V3(3, 1.2, -2), V3(3, 2, 3) },
+		{ V3(-2.5, 2.2, 3), V3(5, 4, 4) },
+		{ V3(4, 0.9, 4), V3(2, 1.4, 2) },
+		{ V3(0.5, 0.8, 0), V3(2.4, 1.2, 1.6) },
 	}
 	for _, b in blocks do
 		addPart(model, { Size = b[2], Position = b[1], Color = Colors.Stone, Material = Enum.Material.Slate })
 	end
-	-- a simple wooden lifting frame
-	addPart(model, { Size = Vector3.new(0.6, 7, 0.6), Position = Vector3.new(5.5, 3.5, -5.5), Color = Colors.DarkWood })
-	addPart(model, { Size = Vector3.new(0.6, 0.6, 6), Position = Vector3.new(5.5, 7, -3), Color = Colors.DarkWood })
+	-- wooden lifting crane
+	post(model, V3(5.5, 0, -5.5), 8, 0.7)
+	addPart(model, { Size = V3(0.5, 0.5, 7), Position = V3(5.5, 7.8, -2.5), Color = Colors.DarkWood })
+	addPart(model, { Size = V3(0.12, 4, 0.12), Position = V3(5.5, 5.8, 0.6), Color = Colors.Thatch, Material = Enum.Material.Fabric })
+	addPart(model, { Size = V3(1.2, 1, 1.2), Position = V3(5.5, 3.3, 0.6), Color = Colors.Stone, Material = Enum.Material.Slate })
 end
 
 function Builders.Farm(model, w, d)
 	addPart(model, {
-		Size = Vector3.new(w - 1, 0.3, d - 1),
-		Position = Vector3.new(0, 0.15, 0),
+		Size = V3(w - 1, 0.3, d - 1),
+		Position = V3(0, 0.15, 0),
 		Color = Colors.Soil,
 		Material = Enum.Material.Ground,
 	})
-	local rows = 6
+	local rows = 8
 	for i = 1, rows do
-		local z = -d / 2 + 2 + (i - 1) * ((d - 4) / (rows - 1))
+		local z = -d / 2 + 2.2 + (i - 1) * ((d - 4.4) / (rows - 1))
 		addPart(model, {
 			Name = "Barley",
-			Size = Vector3.new(w - 4, 1.4, 1.6),
-			Position = Vector3.new(0, 1, z),
-			Color = Colors.Barley,
+			Size = V3(w - 4, 1.2, 1.5),
+			Position = V3(0, 0.9, z),
+			Color = i % 2 == 0 and Colors.Barley or Color3.fromRGB(184, 168, 84),
 			Material = Enum.Material.Grass,
 		})
 	end
-	for _, x in { -1, 1 } do
-		for _, z in { -1, 1 } do
-			addPart(model, {
-				Size = Vector3.new(0.6, 2.5, 0.6),
-				Position = Vector3.new(x * (w / 2 - 0.8), 1.25, z * (d / 2 - 0.8)),
-				Color = Colors.DarkWood,
-			})
-		end
-	end
+	fence(model, w, d, true)
+	-- scarecrow
+	post(model, V3(w / 4, 0, d / 4 - 1), 5, 0.3, Colors.Wood)
+	addPart(model, { Size = V3(3, 0.3, 0.3), Position = V3(w / 4, 4, d / 4 - 1), Color = Colors.Wood })
+	addPart(model, { Size = V3(1.3, 1.8, 0.6), Position = V3(w / 4, 3.4, d / 4 - 1), Color = Color3.fromRGB(120, 60, 50), Material = Enum.Material.Fabric })
+	addPart(model, { Shape = Enum.PartType.Ball, Size = Vector3.one * 1, Position = V3(w / 4, 5.1, d / 4 - 1), Color = Colors.Thatch, Material = Enum.Material.Fabric })
 end
 
 function Builders.Storehouse(model, w, d)
-	addPart(model, {
-		Size = Vector3.new(w - 2, 1.2, d - 2),
-		Position = Vector3.new(0, 0.6, 0),
-		Color = Colors.Stone,
-		Material = Enum.Material.Cobblestone,
-	})
-	-- the hut ridge runs along local X, so rotate it to run along the long Z side
-	hut(model, CFrame.new(0, 1.2, 0) * CFrame.Angles(0, math.pi / 2, 0), d - 6, w - 5, 6, Colors.Thatch, Enum.Material.Fabric)
-	for i, pos in { Vector3.new(-4, 2.2, -10.3), Vector3.new(-1.6, 2.2, -10.3), Vector3.new(4.5, 2.2, -10.3) } do
+	-- raised on stilts to keep goods dry; ridge along the long Z side
+	for _, x in { -1, 1 } do
+		for _, z in { -1, 0, 1 } do
+			post(model, V3(x * (w / 2 - 2.5), 0, z * (d / 2 - 3)), 2, 1)
+		end
+	end
+	hall(model, CFrame.new(0, 1, 0) * CFrame.Angles(0, math.pi / 2, 0), { w = d - 5, d = w - 5, wallH = 6, roof = "shingle", smoke = false })
+	for i, pos in { V3(-4, 1, -10.3), V3(-1.6, 1, -10.3), V3(4.5, 1, -10.3) } do
 		addPart(model, {
 			Name = "Crate" .. i,
-			Size = Vector3.new(2, 2, 2),
+			Size = V3(2, 2, 2),
 			Position = pos,
 			Color = Colors.Wood,
 			Material = Enum.Material.WoodPlanks,
 		})
 	end
+	addPart(model, {
+		Name = "Barrel",
+		Shape = Enum.PartType.Cylinder,
+		Size = V3(2.2, 1.8, 1.8),
+		CFrame = CFrame.new(5.5, 1.1, 9.5) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = Colors.Wood,
+	})
+end
+
+function Builders.Palisade(model, w, d)
+	-- five sharpened logs in a row along local X, tied with a beam
+	local n = 5
+	for i = 1, n do
+		local x = -w / 2 + (i - 0.5) * (w / n)
+		local h = 8 + ((i * 37) % 7) / 6
+		post(model, V3(x, 0, 0), h, 1.55, i % 2 == 0 and Colors.Wood or Colors.Weathered)
+		addPart(model, {
+			Name = "Point",
+			Size = V3(1.05, 1.05, 1.05),
+			CFrame = CFrame.new(x, h, 0) * CFrame.Angles(math.pi / 4, 0, math.pi / 4),
+			Color = Colors.Weathered,
+		})
+	end
+	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 3, 0.9), Color = Colors.DarkWood })
+	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 6, 0.9), Color = Colors.DarkWood })
 end
 
 -- Builds a building model for `buildingType` in its unrotated orientation.
@@ -462,7 +758,7 @@ function ModelFactory.building(buildingType: string): Model
 	if builder then
 		builder(model, w, d)
 	else
-		addPart(model, { Size = Vector3.new(w - 1, 4, d - 1), Position = Vector3.new(0, 2, 0) })
+		addPart(model, { Size = V3(w - 1, 4, d - 1), Position = V3(0, 2, 0) })
 	end
 	model.WorldPivot = CFrame.new()
 	return model
@@ -477,111 +773,288 @@ function ModelFactory.makeGhost(model: Model)
 			d.CanQuery = false
 			d.CanTouch = false
 			d.CastShadow = false
+		elseif d:IsA("Smoke") or d:IsA("Light") then
+			d.Enabled = false
 		end
 	end
 end
 
--- Wild resource nodes. Returns the model and the part the prompt goes on.
-function ModelFactory.node(kind: string, rng: Random): (Model, BasePart)
+-- Trees ----------------------------------------------------------------------
+
+-- A layered pine. Returns model, trunk.
+function ModelFactory.pine(rng: Random, scale: number?): (Model, BasePart)
+	local s = scale or rng:NextNumber(0.85, 1.5)
 	local model = Instance.new("Model")
-	model.Name = kind
+	model.Name = "Pine"
+	local trunk = post(model, Vector3.zero, 7 * s, 1.2 * s)
+	trunk.Name = "Trunk"
+	local tiers = 5
+	local twist = rng:NextNumber(0, math.pi)
+	for i = 1, tiers do
+		local t = (i - 1) / (tiers - 1)
+		local width = (7.5 - 5.6 * t) * s
+		addPart(model, {
+			Name = "Needles",
+			Size = V3(width, 2.4 * s, width),
+			CFrame = CFrame.new(0, (3.6 + i * 2.5) * s, 0) * CFrame.Angles(0, twist + i * math.pi / 4, 0),
+			Color = i % 2 == 0 and Colors.PineLight or Colors.Pine,
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+		})
+	end
+	addPart(model, {
+		Name = "Tip",
+		Size = V3(1.2 * s, 2.4 * s, 1.2 * s),
+		Position = V3(0, (3.6 + tiers * 2.5 + 2) * s, 0),
+		Color = Colors.Pine,
+		Material = Enum.Material.Grass,
+		CanCollide = false,
+	})
+	model.WorldPivot = CFrame.new()
+	return model, trunk
+end
+
+-- A round-crowned birch. Returns model, trunk.
+function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
+	local s = scale or rng:NextNumber(0.85, 1.3)
+	local model = Instance.new("Model")
+	model.Name = "Birch"
+	local trunk = post(model, Vector3.zero, 9 * s, 1 * s, Colors.Birch)
+	trunk.Name = "Trunk"
+	for i = 1, 3 do
+		local a = i * 2.1 + rng:NextNumber(0, 1)
+		addPart(model, {
+			Name = "Leaves",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * rng:NextNumber(4.5, 6.5) * s,
+			Position = V3(math.cos(a) * 1.6 * s, (8.5 + i * 0.8) * s, math.sin(a) * 1.6 * s),
+			Color = i == 2 and Colors.Leaf or Color3.fromRGB(96, 134, 64),
+			Material = Enum.Material.Grass,
+			CanCollide = false,
+		})
+	end
+	model.WorldPivot = CFrame.new()
+	return model, trunk
+end
+
+-- A boulder cluster. Returns model, main part.
+function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
+	local s = scale or 1
+	local model = Instance.new("Model")
+	model.Name = "Boulder"
 	local main
-	if kind == "Tree" then
-		local s = rng:NextNumber(0.85, 1.3)
-		main = addPart(model, {
-			Name = "Trunk",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(6 * s, 1.3 * s, 1.3 * s),
-			CFrame = CFrame.new(0, 3 * s, 0) * CFrame.Angles(0, 0, math.pi / 2),
-			Color = Colors.DarkWood,
-		})
-		addPart(model, {
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 6 * s,
-			Position = Vector3.new(0, 7.5 * s, 0),
-			Color = Colors.Leaf,
-			Material = Enum.Material.Grass,
-		})
-		addPart(model, {
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 4.2 * s,
-			Position = Vector3.new(0, 10.5 * s, 0),
-			Color = Colors.LeafLight,
-			Material = Enum.Material.Grass,
-		})
-	elseif kind == "Rock" then
-		local size = Vector3.new(rng:NextNumber(3, 5.5), rng:NextNumber(2, 3.5), rng:NextNumber(3, 5.5))
-		main = addPart(model, {
-			Name = "Rock",
+	for i = 1, 3 do
+		local size = V3(rng:NextNumber(2.5, 5), rng:NextNumber(1.8, 3.5), rng:NextNumber(2.5, 5)) * s * (i == 1 and 1.2 or 0.8)
+		local p = addPart(model, {
+			Name = i == 1 and "Rock" or "RockBit",
 			Size = size,
-			CFrame = CFrame.new(0, size.Y / 2 - 0.3, 0) * CFrame.Angles(rng:NextNumber(-0.2, 0.2), rng:NextNumber(0, math.pi), rng:NextNumber(-0.2, 0.2)),
-			Color = Colors.Stone,
+			CFrame = CFrame.new(rng:NextNumber(-1.5, 1.5) * s * (i - 1), size.Y / 2 - 0.4, rng:NextNumber(-1.5, 1.5) * s * (i - 1))
+				* CFrame.Angles(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, math.pi), rng:NextNumber(-0.25, 0.25)),
+			Color = i == 1 and Colors.Stone or Color3.fromRGB(108, 110, 106),
 			Material = Enum.Material.Slate,
 		})
-	else -- Bush
-		main = addPart(model, {
-			Name = "Bush",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 3.6,
-			Position = Vector3.new(0, 1.4, 0),
-			Color = Colors.LeafLight,
-			Material = Enum.Material.Grass,
-		})
-		for i = 1, 5 do
-			local a = i / 5 * math.pi * 2
-			addPart(model, {
-				Shape = Enum.PartType.Ball,
-				Size = Vector3.one * 0.6,
-				Position = Vector3.new(math.cos(a) * 1.5, 1.7 + (i % 2) * 0.5, math.sin(a) * 1.5),
-				Color = Colors.Berry,
-				Material = Enum.Material.SmoothPlastic,
-			})
-		end
+		main = main or p
 	end
 	model.WorldPivot = CFrame.new()
 	return model, main
 end
 
--- A tiny villager figure. The body is anchored and moved by the server;
--- the head is welded to it so it follows.
+-- Wild resource nodes. Returns the model and the part the prompt goes on.
+function ModelFactory.node(kind: string, rng: Random): (Model, BasePart)
+	if kind == "Tree" then
+		if rng:NextNumber() < 0.75 then
+			return ModelFactory.pine(rng)
+		end
+		return ModelFactory.birch(rng)
+	elseif kind == "Rock" then
+		return ModelFactory.boulder(rng)
+	end
+	-- Bush
+	local model = Instance.new("Model")
+	model.Name = "Bush"
+	local main = addPart(model, {
+		Name = "Bush",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 3.6,
+		Position = V3(0, 1.4, 0),
+		Color = Colors.Leaf,
+		Material = Enum.Material.Grass,
+	})
+	for i = 1, 6 do
+		local a = i / 6 * math.pi * 2
+		addPart(model, {
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 0.6,
+			Position = V3(math.cos(a) * 1.55, 1.6 + (i % 2) * 0.6, math.sin(a) * 1.55),
+			Color = Colors.Berry,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+		})
+	end
+	model.WorldPivot = CFrame.new()
+	return model, main
+end
+
+-- A wooden jetty running along local -Z from (0,0,0), `length` studs long.
+function ModelFactory.dock(length: number): Model
+	local model = Instance.new("Model")
+	model.Name = "Dock"
+	addPart(model, {
+		Name = "Deck",
+		Size = V3(6, 0.5, length),
+		Position = V3(0, 1.2, -length / 2),
+		Color = Colors.Weathered,
+		Material = Enum.Material.WoodPlanks,
+	})
+	for z = 0, length, 6 do
+		for _, x in { -2.8, 2.8 } do
+			post(model, V3(x, -8, -z), 10, 0.7)
+		end
+	end
+	-- a little rowing boat tied up at the end
+	addPart(model, { Name = "Boat", Size = V3(3, 1.2, 9), Position = V3(-5.5, 0.1, -length + 4), Color = Colors.Wood, Material = Enum.Material.WoodPlanks })
+	addPart(model, { Size = V3(2.2, 0.3, 7.6), Position = V3(-5.5, 0.6, -length + 4), Color = Colors.DarkWood })
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
+-- Wildlife --------------------------------------------------------------------
+
+-- A deer. The Body is anchored and moved by the server; other parts are
+-- welded to it. GroundOffset attribute = body centre height above ground.
+function ModelFactory.deer(rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "Deer"
+	local coat = Color3.fromRGB(140 + rng:NextInteger(-12, 12), 98, 60)
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Anchored = true
+	body.CanCollide = false
+	body.Size = V3(1.6, 1.6, 3.6)
+	body.Color = coat
+	body.Material = Enum.Material.Fabric
+	body.CFrame = CFrame.new(0, 3, 0)
+	body.Parent = model
+
+	local function attach(name, size, offset: CFrame, color, shape)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color or coat
+		p.Material = Enum.Material.Fabric
+		if shape then
+			p.Shape = shape
+		end
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = body.CFrame * offset
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	for _, x in { -0.55, 0.55 } do
+		for _, z in { -1.3, 1.3 } do
+			attach("Leg", V3(0.35, 2.3, 0.35), CFrame.new(x, -1.9, z), Color3.fromRGB(110, 78, 50))
+		end
+	end
+	attach("Neck", V3(0.7, 1.8, 0.7), CFrame.new(0, 1.1, -1.7) * CFrame.Angles(math.rad(-25), 0, 0))
+	attach("Head", V3(0.8, 0.8, 1.5), CFrame.new(0, 2, -2.3))
+	attach("Tail", V3(0.4, 0.5, 0.3), CFrame.new(0, 0.5, 1.9), Color3.fromRGB(235, 225, 210))
+	for _, x in { -0.4, 0.4 } do
+		attach("Antler", V3(0.15, 1.4, 0.15), CFrame.new(x, 2.9, -2.1) * CFrame.Angles(0, 0, x * 0.9), Color3.fromRGB(220, 205, 180))
+	end
+	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", 3)
+	return model
+end
+
+-- A flying arrow (visual only).
+function ModelFactory.arrow(): BasePart
+	local shaft = Instance.new("Part")
+	shaft.Name = "Arrow"
+	shaft.Anchored = true
+	shaft.CanCollide = false
+	shaft.CanQuery = false
+	shaft.Size = V3(0.12, 0.12, 2.6)
+	shaft.Color = Colors.Wood
+	shaft.Material = Enum.Material.Wood
+	local tip = Instance.new("Part")
+	tip.Name = "Tip"
+	tip.Anchored = false
+	tip.Massless = true
+	tip.CanCollide = false
+	tip.CanQuery = false
+	tip.Size = V3(0.25, 0.25, 0.4)
+	tip.Color = Colors.Iron
+	tip.Material = Enum.Material.Metal
+	tip.CFrame = shaft.CFrame * CFrame.new(0, 0, -1.4)
+	tip.Parent = shaft
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = shaft
+	weld.Part1 = tip
+	weld.Parent = tip
+	return shaft
+end
+
+-- Villagers -------------------------------------------------------------------
+
+-- A small villager figure. The body is anchored and moved by the server;
+-- the head, hair and legs are welded to it so they follow.
+-- GroundOffset attribute = body centre height above ground.
 function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Model
 	local s = isChild and 0.65 or 1
 	local model = Instance.new("Model")
 	model.Name = name
 
+	local legH = 1.1 * s
+	local bodyH = 1.8 * s
 	local body = Instance.new("Part")
 	body.Name = "Body"
 	body.Anchored = true
 	body.CanCollide = false
-	body.Size = Vector3.new(1.4, 2.2, 0.9) * s
+	body.Size = V3(1.5, bodyH, 0.95) * V3(s, 1, s)
 	body.Color = Tunics[rng:NextInteger(1, #Tunics)]
 	body.Material = Enum.Material.Fabric
-	body.CFrame = CFrame.new(0, 1.1 * s, 0)
+	body.CFrame = CFrame.new(0, legH + bodyH / 2, 0)
 	body.Parent = model
 
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Shape = Enum.PartType.Ball
-	head.Anchored = false
-	head.CanCollide = false
-	head.Massless = true
-	head.Size = Vector3.one * 1.1 * s
-	head.Color = Colors.Skin
-	head.Material = Enum.Material.SmoothPlastic
-	head.CFrame = body.CFrame * CFrame.new(0, 1.65 * s, 0)
-	head.Parent = model
+	local function attach(partName, size, offset: CFrame, color, material, shape)
+		local p = Instance.new("Part")
+		p.Name = partName
+		if shape then
+			p.Shape = shape
+		end
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.Size = size
+		p.Color = color
+		p.Material = material
+		p.CFrame = body.CFrame * offset
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
 
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = body
-	weld.Part1 = head
-	weld.Parent = body
+	attach("Head", Vector3.one * 1.1 * s, CFrame.new(0, bodyH / 2 + 0.55 * s, 0), Colors.Skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	attach("Hair", V3(1.15, 0.5, 1.15) * s, CFrame.new(0, bodyH / 2 + 0.95 * s, 0.1 * s), Hair[rng:NextInteger(1, #Hair)], Enum.Material.Fabric)
+	attach("Belt", V3(1.55 * s, 0.25 * s, 1 * s), CFrame.new(0, -bodyH * 0.15, 0), Colors.DarkWood, Enum.Material.Fabric)
+	for _, x in { -0.35, 0.35 } do
+		attach("Leg", V3(0.5, legH, 0.6) * V3(s, 1, s), CFrame.new(x * s, -bodyH / 2 - legH / 2, 0), Color3.fromRGB(70, 62, 54), Enum.Material.Fabric)
+	end
 
 	local tag = Instance.new("BillboardGui")
 	tag.Name = "NameTag"
-	tag.Size = UDim2.fromOffset(120, 22)
-	tag.StudsOffset = Vector3.new(0, 2.8 * s, 0)
+	tag.Size = UDim2.fromOffset(140, 22)
+	tag.StudsOffset = V3(0, bodyH / 2 + 1.8 * s, 0)
 	tag.MaxDistance = 60
-	tag.AlwaysOnTop = false
 	tag.Adornee = body
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
@@ -596,14 +1069,254 @@ function ModelFactory.villager(name: string, isChild: boolean, rng: Random): Mod
 	tag.Parent = body
 
 	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", legH + bodyH / 2)
 	return model
+end
+
+-- Tools -----------------------------------------------------------------------
+
+-- Builds a hand tool ("Axe", "Pickaxe" or "Bow") that players hold.
+function ModelFactory.tool(kind: string): Tool
+	local tool = Instance.new("Tool")
+	tool.Name = kind
+	tool.CanBeDropped = false
+	tool.RequiresHandle = true
+	tool.ToolTip = ({ Axe = "Chop trees", Pickaxe = "Mine rocks", Bow = "Click to shoot deer for meat and hides" })[kind] or kind
+
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = V3(0.3, 3.6, 0.3)
+	handle.Color = Colors.Wood
+	handle.Material = Enum.Material.Wood
+	handle.CanCollide = false
+	handle.Massless = true
+	handle.Parent = tool
+
+	local function head(size, offset: CFrame)
+		local p = Instance.new("Part")
+		p.Name = "Head"
+		p.Size = size
+		p.Color = Colors.Iron
+		p.Material = Enum.Material.Metal
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = handle.CFrame * offset
+		p.Parent = tool
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = handle
+		weld.Part1 = p
+		weld.Parent = p
+	end
+	if kind == "Bow" then
+		-- the handle is the grip; two angled limbs and a string make the bow
+		handle.Size = V3(0.3, 1, 0.3)
+		local function limb(size, offset: CFrame, color, material)
+			local p = Instance.new("Part")
+			p.Name = "Limb"
+			p.Size = size
+			p.Color = color
+			p.Material = material
+			p.CanCollide = false
+			p.Massless = true
+			p.CFrame = handle.CFrame * offset
+			p.Parent = tool
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = handle
+			weld.Part1 = p
+			weld.Parent = p
+		end
+		limb(V3(0.25, 2.2, 0.25), CFrame.new(0, 1.4, 0.3) * CFrame.Angles(math.rad(-15), 0, 0), Colors.DarkWood, Enum.Material.Wood)
+		limb(V3(0.25, 2.2, 0.25), CFrame.new(0, -1.4, 0.3) * CFrame.Angles(math.rad(15), 0, 0), Colors.DarkWood, Enum.Material.Wood)
+		limb(V3(0.06, 4.9, 0.06), CFrame.new(0, 0, 0.9), Color3.fromRGB(230, 225, 210), Enum.Material.Fabric)
+		tool.Grip = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.pi / 2, 0)
+		return tool
+	elseif kind == "Axe" then
+		head(V3(0.25, 1, 1.3), CFrame.new(0, 1.4, -0.7))
+	else
+		head(V3(0.25, 0.4, 3), CFrame.new(0, 1.6, 0))
+		head(V3(0.2, 0.3, 0.6), CFrame.new(0, 1.5, -1.6) * CFrame.Angles(math.rad(25), 0, 0))
+		head(V3(0.2, 0.3, 0.6), CFrame.new(0, 1.5, 1.6) * CFrame.Angles(math.rad(-25), 0, 0))
+	end
+	-- hold it near the bottom of the shaft
+	tool.Grip = CFrame.new(0, -1.2, 0)
+	return tool
+end
+
+-- Mesh swap ---------------------------------------------------------------------
+--[[
+	If ReplicatedStorage.Assets has a child named after a slot below, that
+	model is used instead of the part-built one. Its pivot is moved to the
+	bottom-centre of the model automatically, so it sits on the ground.
+]]
+ModelFactory.Slots = {
+	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
+	"Tree_Pine", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
+	"Axe", "Pickaxe", "Bow", "Longship",
+}
+
+local function customAsset(name: string): Instance?
+	local folder = ReplicatedStorage:FindFirstChild("Assets")
+	local item = folder and folder:FindFirstChild(name)
+	return item and item:Clone() or nil
+end
+ModelFactory.customAsset = customAsset
+
+local function largestPart(model: Model): BasePart?
+	local best, bestVolume = nil, -1
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			local v = d.Size.X * d.Size.Y * d.Size.Z
+			if v > bestVolume then
+				best, bestVolume = d, v
+			end
+		end
+	end
+	return best
+end
+
+-- Wraps loose parts in a Model, anchors it, optionally scales it to fit
+-- `fit` (x/z), and puts its pivot at the bottom-centre at (0, 0, 0).
+local function prepare(item: Instance, anchored: boolean, fit: Vector3?, scale: number?): Model
+	local model: Model
+	if item:IsA("Model") then
+		model = item
+	else
+		model = Instance.new("Model")
+		model.Name = item.Name
+		item.Parent = model
+	end
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = anchored
+		end
+	end
+	local _, size = model:GetBoundingBox()
+	local factor = scale or 1
+	if fit and size.X > 0 and size.Z > 0 then
+		factor *= math.min(fit.X / size.X, fit.Z / size.Z)
+	end
+	if math.abs(factor - 1) > 0.01 then
+		model:ScaleTo(model:GetScale() * factor)
+	end
+	local cf, newSize = model:GetBoundingBox()
+	model.WorldPivot = CFrame.new(cf.Position - Vector3.new(0, newSize.Y / 2, 0))
+	model:PivotTo(CFrame.new())
+	return model
+end
+
+local partBuilt = {
+	building = ModelFactory.building,
+	pine = ModelFactory.pine,
+	birch = ModelFactory.birch,
+	boulder = ModelFactory.boulder,
+	node = ModelFactory.node,
+	dock = ModelFactory.dock,
+	deer = ModelFactory.deer,
+	tool = ModelFactory.tool,
+}
+
+function ModelFactory.building(buildingType: string): Model
+	local custom = customAsset(buildingType)
+	if custom then
+		local def = Config.Buildings[buildingType]
+		local model = prepare(custom, true, V3(def.Size[1] * CELL * 0.96, 0, def.Size[2] * CELL * 0.96))
+		model.Name = buildingType
+		return model
+	end
+	return partBuilt.building(buildingType)
+end
+
+local function customTree(slot: string, rng: Random, scale: number?)
+	local custom = customAsset(slot)
+	if not custom then
+		return nil
+	end
+	local model = prepare(custom, true, nil, scale or rng:NextNumber(0.85, 1.4))
+	return model, largestPart(model)
+end
+
+function ModelFactory.pine(rng: Random, scale: number?): (Model, BasePart)
+	local model, main = customTree("Tree_Pine", rng, scale)
+	if model then
+		return model, main
+	end
+	return partBuilt.pine(rng, scale)
+end
+
+function ModelFactory.birch(rng: Random, scale: number?): (Model, BasePart)
+	local model, main = customTree("Tree_Birch", rng, scale)
+	if model then
+		return model, main
+	end
+	return partBuilt.birch(rng, scale)
+end
+
+function ModelFactory.boulder(rng: Random, scale: number?): (Model, BasePart)
+	local model, main = customTree("Rock", rng, scale)
+	if model then
+		return model, main
+	end
+	return partBuilt.boulder(rng, scale)
+end
+
+function ModelFactory.node(kind: string, rng: Random): (Model, BasePart)
+	if kind == "Bush" then
+		local model, main = customTree("Bush", rng, 1)
+		if model then
+			return model, main
+		end
+	end
+	return partBuilt.node(kind, rng)
+end
+
+function ModelFactory.dock(length: number): Model
+	local custom = customAsset("Dock")
+	if custom then
+		return prepare(custom, true)
+	end
+	return partBuilt.dock(length)
+end
+
+function ModelFactory.deer(rng: Random): Model
+	local custom = customAsset("Deer")
+	if not custom then
+		return partBuilt.deer(rng)
+	end
+	local model = prepare(custom, false)
+	model.Name = "Deer"
+	local body = model.PrimaryPart or largestPart(model)
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.CanCollide = false
+			if d ~= body then
+				d.Massless = true
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = body
+				weld.Part1 = d
+				weld.Parent = d
+			end
+		end
+	end
+	body.Anchored = true
+	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", body.Position.Y)
+	return model
+end
+
+function ModelFactory.tool(kind: string): Tool
+	local custom = customAsset(kind)
+	if custom and custom:IsA("Tool") then
+		custom.Name = kind
+		return custom
+	end
+	return partBuilt.tool(kind)
 end
 
 return ModelFactory
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="5">
+      <Item class="ModuleScript" referent="8">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--[[
@@ -618,6 +1331,7 @@ local RunService = game:GetService("RunService")
 local EVENTS = {
 	"ColonyState", -- server -> client: full colony snapshot every tick
 	"Notify", -- server -> client: short message for the toast feed
+	"ShootArrow", -- client -> server: (aimPosition) when the Bow is used
 }
 
 local FUNCTIONS = {
@@ -659,11 +1373,11 @@ return Remotes
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="6">
+  <Item class="ServerScriptService" referent="9">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="7">
+    <Item class="Script" referent="10">
       <Properties>
         <string name="Name">Server</string>
         <token name="RunContext">0</token>
@@ -699,11 +1413,11 @@ for name, service in services do
 end
 ]]></string>
       </Properties>
-      <Item class="Folder" referent="8">
+      <Item class="Folder" referent="11">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="9">
+        <Item class="ModuleScript" referent="12">
           <Properties>
             <string name="Name">BuildingService</string>
             <string name="Source"><![CDATA[--[[
@@ -812,14 +1526,14 @@ function BuildingService:TryDemolish(player: Player, id)
 	end
 	local def = Config.Buildings[building.type]
 	if def.Housing then
-		local count = 0
+		local homes = 0
 		for _, b in colony.buildings do
-			if b.type == building.type then
-				count += 1
+			if Config.Buildings[b.type].Housing then
+				homes += 1
 			end
 		end
-		if count <= 1 then
-			return false, "You can't tear down your last " .. def.Display
+		if homes <= 1 then
+			return false, "You can't tear down your last home"
 		end
 	end
 
@@ -849,7 +1563,7 @@ return BuildingService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="10">
+        <Item class="ModuleScript" referent="13">
           <Properties>
             <string name="Name">ColonyService</string>
             <string name="Source"><![CDATA[--[[
@@ -1073,7 +1787,7 @@ return ColonyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="11">
+        <Item class="ModuleScript" referent="14">
           <Properties>
             <string name="Name">PlotService</string>
             <string name="Source"><![CDATA[--[[
@@ -1083,7 +1797,6 @@ return ColonyService
 ]]
 
 local Players = game:GetService("Players")
-local Lighting = game:GetService("Lighting")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -1109,22 +1822,6 @@ function PlotService:Init()
 	plotsFolder = Instance.new("Folder")
 	plotsFolder.Name = "Plots"
 	plotsFolder.Parent = workspace
-
-	-- A big grassy landmass so the game works even in an empty place.
-	if not workspace:FindFirstChild("Baseplate") then
-		makePart({
-			Name = "Land",
-			Size = Vector3.new(2048, 4, 2048),
-			Position = Vector3.new(512, Config.GROUND_Y - 2.5, 0),
-			Color = Color3.fromRGB(86, 120, 70),
-			Material = Enum.Material.Grass,
-			Parent = workspace,
-		})
-	end
-
-	-- A pleasant late-afternoon light.
-	Lighting.ClockTime = 15.5
-	Lighting.Brightness = 2
 end
 
 function PlotService:Start()
@@ -1156,24 +1853,15 @@ function PlotService:Assign(player: Player)
 	plot:SetAttribute("OwnerUserId", player.UserId)
 
 	makePart({
+		-- Invisible: the grass you see is Terrain (WorldService). This part
+		-- is what the build preview aims at.
 		Name = "Ground",
 		Size = Vector3.new(size, 1, size),
 		Position = origin + Vector3.new(size / 2, -0.5, size / 2),
-		Color = Color3.fromRGB(104, 140, 78),
-		Material = Enum.Material.Grass,
+		Transparency = 1,
+		CanCollide = false,
 		Parent = plot,
 	})
-	-- A dirt apron in front of the plot where the player spawns.
-	makePart({
-		Name = "Apron",
-		Size = Vector3.new(size, 1, Config.CELL * 2),
-		Position = origin + Vector3.new(size / 2, -0.55, -Config.CELL),
-		Color = Color3.fromRGB(120, 96, 66),
-		Material = Enum.Material.Ground,
-		CanQuery = false,
-		Parent = plot,
-	})
-
 	-- Wooden marker posts at the corners so you can see your borders.
 	for _, x in { 0, size } do
 		for _, z in { 0, size } do
@@ -1244,14 +1932,14 @@ return PlotService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="12">
+        <Item class="ModuleScript" referent="15">
           <Properties>
             <string name="Name">ResourceNodeService</string>
             <string name="Source"><![CDATA[--[[
 	ResourceNodeService
 	Scatters trees, rocks and berry bushes on each plot. The player walks up
-	and holds E (or taps the prompt) to gather them by hand, which also
-	clears land for building. Trees and bushes slowly regrow.
+	and holds E to gather them: trees need the Axe, rocks the Pickaxe, berries
+	bare hands. Gathering also clears land for building. Nodes slowly regrow.
 ]]
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -1301,7 +1989,7 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = def.Action
-	prompt.ObjectText = kind == "Bush" and "Berry bush" or kind
+	prompt.ObjectText = (kind == "Bush" and "Berry bush" or kind) .. (def.Tool and (" (" .. def.Tool .. ")") or "")
 	prompt.HoldDuration = def.Hold
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
@@ -1313,6 +2001,11 @@ function ResourceNodeService:Spawn(colony, kind: string, x: number, z: number)
 
 	prompt.Triggered:Connect(function(player)
 		if player ~= colony.player or colony.nodes[key] ~= node then
+			return
+		end
+		if def.Tool and not services.ToolService:IsHolding(player, def.Tool) then
+			local slot = table.find(Config.Tools, def.Tool) or 1
+			ColonyService:Notify(colony, "Hold your " .. def.Tool .. " first (press " .. slot .. ")", "bad")
 			return
 		end
 		colony.nodes[key] = nil
@@ -1355,7 +2048,132 @@ return ResourceNodeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="13">
+        <Item class="ModuleScript" referent="16">
+          <Properties>
+            <string name="Name">ToolService</string>
+            <string name="Source"><![CDATA[--[[
+	ToolService
+	Gives every player an Axe, a Pickaxe and a Bow each time they spawn
+	(keys 1, 2, 3), and handles Bow shots: the client sends where it aimed,
+	the server checks the shot, flies an arrow and tells WildlifeService if a
+	deer was hit.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+local ModelFactory = require(Shared.ModelFactory)
+
+local ToolService = {}
+
+local services
+local lastShot = {} -- [player] = os.clock()
+
+function ToolService:Init(allServices)
+	services = allServices
+end
+
+-- True if the player is currently holding the named tool.
+function ToolService:IsHolding(player: Player, toolName: string): boolean
+	local character = player.Character
+	local tool = character and character:FindFirstChildOfClass("Tool")
+	return tool ~= nil and tool.Name == toolName
+end
+
+local function giveTools(player: Player)
+	local backpack = player:WaitForChild("Backpack")
+	for _, name in Config.Tools do
+		if not backpack:FindFirstChild(name) and not (player.Character and player.Character:FindFirstChild(name)) then
+			ModelFactory.tool(name).Parent = backpack
+		end
+	end
+end
+
+local function findDeer(inst: Instance?): Model?
+	while inst and inst ~= workspace do
+		if inst:IsA("Model") and inst:GetAttribute("DeerId") then
+			return inst
+		end
+		inst = inst.Parent
+	end
+	return nil
+end
+
+local function shoot(player: Player, aim)
+	if typeof(aim) ~= "Vector3" or aim ~= aim then
+		return
+	end
+	local now = os.clock()
+	if lastShot[player] and now - lastShot[player] < Config.Bow.Cooldown then
+		return
+	end
+	if not ToolService:IsHolding(player, "Bow") then
+		return
+	end
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not head then
+		return
+	end
+	lastShot[player] = now
+
+	local origin = head.Position + Vector3.new(0, 0.3, 0)
+	local delta = aim - origin
+	if delta.Magnitude < 1 then
+		return
+	end
+	local dir = delta.Unit * Config.Bow.Range
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+	local hit = workspace:Raycast(origin, dir, params)
+	local endPoint = hit and hit.Position or origin + dir
+
+	-- the visible arrow
+	local arrow = ModelFactory.arrow()
+	arrow.CFrame = CFrame.lookAt(origin, endPoint)
+	arrow.Parent = workspace
+	local flight = (endPoint - origin).Magnitude / Config.Bow.ArrowSpeed
+	TweenService:Create(arrow, TweenInfo.new(flight, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(endPoint, endPoint + dir) }):Play()
+	Debris:AddItem(arrow, flight + 3)
+
+	local deer = hit and findDeer(hit.Instance)
+	if deer then
+		task.delay(flight, function()
+			services.WildlifeService:Kill(deer, player)
+		end)
+	end
+end
+
+function ToolService:Start()
+	local function onPlayer(player: Player)
+		player.CharacterAdded:Connect(function()
+			giveTools(player)
+		end)
+		if player.Character then
+			giveTools(player)
+		end
+	end
+	Players.PlayerAdded:Connect(onPlayer)
+	for _, player in Players:GetPlayers() do
+		onPlayer(player)
+	end
+	Players.PlayerRemoving:Connect(function(player)
+		lastShot[player] = nil
+	end)
+
+	Remotes.ShootArrow.OnServerEvent:Connect(shoot)
+end
+
+return ToolService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">VillagerService</string>
             <string name="Source"><![CDATA[--[[
@@ -1455,7 +2273,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 	end
 	v.model = ModelFactory.villager(v.name, v.isChild, rng)
 	v.body = v.model.PrimaryPart
-	v.height = v.body.Size.Y / 2
+	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
 	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
 	v.model.Parent = colony.plot.Villagers
 	v.busyUntil = 0
@@ -1710,18 +2528,638 @@ return VillagerService
 ]]></string>
           </Properties>
         </Item>
+        <Item class="ModuleScript" referent="18">
+          <Properties>
+            <string name="Name">WildlifeService</string>
+            <string name="Source"><![CDATA[--[[
+	WildlifeService
+	Deer graze in the meadow behind each plot. They wander slowly and bolt
+	when a player comes close, so you hunt them with the Bow from a distance.
+	A deer gives meat (Food) and Hides, then a new one wanders in later.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+
+local WildlifeService = {}
+
+local W = Config.Wildlife
+local services
+local rng = Random.new()
+local folder: Folder
+local herd = {} -- [model] = deer record
+local nextId = 0
+
+local MEADOW_MIN_Z, MEADOW_MAX_Z = Grid.PLOT_SIZE + 18, Grid.PLOT_SIZE + 105
+
+function WildlifeService:Init(allServices)
+	services = allServices
+end
+
+local function areaFor(index: number)
+	local o = Grid.plotOrigin(index)
+	return { minX = o.X - 16, maxX = o.X + Grid.PLOT_SIZE + 16, minZ = MEADOW_MIN_Z, maxZ = MEADOW_MAX_Z, plot = index }
+end
+
+local function clampToArea(area, x: number, z: number): (number, number)
+	return math.clamp(x, area.minX, area.maxX), math.clamp(z, area.minZ, area.maxZ)
+end
+
+local function moveTo(deer, x: number, z: number, speed: number)
+	local body = deer.body
+	local from = body.Position
+	local y = services.WorldService:GroundHeight(x, z) + deer.offset
+	local to = Vector3.new(x, y, z)
+	local flat = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	if flat.Magnitude < 1 then
+		return 0
+	end
+	local duration = flat.Magnitude / speed
+	body.CFrame = CFrame.lookAt(from, from + flat)
+	if deer.tween then
+		deer.tween:Cancel()
+	end
+	deer.tween = TweenService:Create(body, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = CFrame.lookAt(to, to + flat) })
+	deer.tween:Play()
+	return duration
+end
+
+function WildlifeService:Spawn(area)
+	nextId += 1
+	local model = ModelFactory.deer(rng)
+	model:SetAttribute("DeerId", nextId)
+	local x = rng:NextNumber(area.minX, area.maxX)
+	local z = rng:NextNumber(area.minZ, area.maxZ)
+	local offset = model:GetAttribute("GroundOffset")
+	model:PivotTo(CFrame.new(x, services.WorldService:GroundHeight(x, z) + offset, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+	model.Parent = folder
+
+	herd[model] = {
+		model = model,
+		body = model.PrimaryPart,
+		offset = offset,
+		area = area,
+		busyUntil = 0,
+	}
+end
+
+-- Called by ToolService when an arrow hits a deer.
+function WildlifeService:Kill(model: Model, hunter: Player)
+	local deer = herd[model]
+	if not deer then
+		return
+	end
+	herd[model] = nil
+	if deer.tween then
+		deer.tween:Cancel()
+	end
+	-- topple over, then vanish
+	deer.body.CFrame = deer.body.CFrame * CFrame.new(0, -1.2, 0) * CFrame.Angles(0, 0, math.pi / 2)
+	task.delay(2, function()
+		model:Destroy()
+	end)
+
+	local ColonyService = services.ColonyService
+	local colony = ColonyService:Get(hunter)
+	if colony then
+		ColonyService:Add(colony, "Food", W.Meat)
+		ColonyService:Add(colony, "Hides", W.Hides)
+		ColonyService:Notify(colony, "Deer hunted! +" .. W.Meat .. " Food, +" .. W.Hides .. " Hides", "gain")
+		ColonyService:Sync(colony)
+	end
+
+	task.delay(W.RespawnSeconds, function()
+		self:Spawn(deer.area)
+	end)
+end
+
+local function nearestPlayer(pos: Vector3): (Vector3?, number)
+	local best, bestDist = nil, math.huge
+	for _, player in Players:GetPlayers() do
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root then
+			local d = (root.Position - pos).Magnitude
+			if d < bestDist then
+				best, bestDist = root.Position, d
+			end
+		end
+	end
+	return best, bestDist
+end
+
+function WildlifeService:Start()
+	folder = Instance.new("Folder")
+	folder.Name = "Wildlife"
+	folder.Parent = workspace
+
+	for i = 1, Config.MAX_PLOTS do
+		local area = areaFor(i)
+		for _ = 1, W.DeerPerPlot do
+			self:Spawn(area)
+		end
+	end
+
+	while true do
+		task.wait(0.4)
+		local now = os.clock()
+		for _, deer in herd do
+			local pos = deer.body.Position
+			local threat, dist = nearestPlayer(pos)
+			if threat and dist < W.FleeDistance and not deer.fleeing then
+				-- bolt directly away
+				local away = Vector3.new(pos.X - threat.X, 0, pos.Z - threat.Z)
+				away = away.Magnitude > 0.1 and away.Unit or Vector3.new(0, 0, 1)
+				local x, z = clampToArea(deer.area, pos.X + away.X * 40, pos.Z + away.Z * 40)
+				local t = moveTo(deer, x, z, W.FleeSpeed)
+				deer.fleeing = true
+				deer.busyUntil = now + t + 1
+			elseif now >= deer.busyUntil then
+				deer.fleeing = false
+				local x, z = clampToArea(deer.area, pos.X + rng:NextNumber(-25, 25), pos.Z + rng:NextNumber(-25, 25))
+				local t = moveTo(deer, x, z, W.Speed * rng:NextNumber(0.4, 1))
+				deer.busyUntil = now + t + rng:NextNumber(3, 9) -- graze a while
+			end
+		end
+	end
+end
+
+return WildlifeService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="19">
+          <Properties>
+            <string name="Name">WorldService</string>
+            <string name="Source"><![CDATA[--[[
+	WorldService
+	Builds the world when the server starts: a Nordic valley made of Terrain,
+	generated from layered noise (a heightmap) so it looks natural, then
+	painted by height and steepness: grass and meadow flowers in the valley,
+	bare rock and slate on cliffs, snow above the snowline, sand and mud at
+	the fjord. The build area stays perfectly flat.
+
+	Layout (looking from the lake toward the mountains):
+	  z < -44      a fjord lake, with a far shore and peaks across the water
+	  z -44..0     sandy beach and docks, then a dirt path in front of each plot
+	  z 0..160     the row of player plots (grass)
+	  z 160..270   an open meadow where deer roam
+	  z 270..470   pine forest, rolling hills and rock outcrops
+	  z 480+       snow-capped mountains
+	Also sets up warm afternoon light, haze, sky and colour grading.
+
+	Everything here is decoration: change the numbers freely.
+]]
+
+local Lighting = game:GetService("Lighting")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+
+local WorldService = {}
+
+local Terrain = workspace.Terrain
+local M = Enum.Material
+local rng = Random.new(1066) -- fixed seed: the valley looks the same every time
+
+local PLOTS_END_X = Config.MAX_PLOTS * (Grid.PLOT_SIZE + Config.PLOT_GAP) - Config.PLOT_GAP
+local TOP = Config.GROUND_Y
+local VOXEL = 4
+
+-- World bounds (multiples of 4 so they line up with the terrain voxel grid)
+local MIN_X = -760
+local MAX_X = math.ceil((PLOTS_END_X + 760) / VOXEL) * VOXEL
+local MIN_Z, MAX_Z = -800, 840
+
+-- The flat, buildable part of the valley
+local FLAT_MIN_X, FLAT_MAX_X = -40, PLOTS_END_X + 40
+local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 115
+local SHORE_Z = -40 -- where the beach starts to slope into the fjord
+local SEED = 7.31
+
+-- Noise helpers ---------------------------------------------------------------
+
+local function smooth(edge0: number, edge1: number, x: number): number
+	local t = math.clamp((x - edge0) / (edge1 - edge0), 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
+local function lerp(a: number, b: number, t: number): number
+	return a + (b - a) * t
+end
+
+-- fractal noise, roughly -0.5..0.5
+local function fbm(x: number, z: number, freq: number, octaves: number, salt: number): number
+	local amp, sum, norm = 1, 0, 0
+	for o = 1, octaves do
+		sum += math.noise(x * freq, z * freq, SEED + salt + o * 17.3) * amp
+		norm += amp
+		amp *= 0.5
+		freq *= 2
+	end
+	return sum / norm
+end
+
+-- ridged noise, 0..1, sharp crests: good for mountain ridges
+local function ridged(x: number, z: number, freq: number, octaves: number): number
+	local amp, sum, norm = 1, 0, 0
+	for o = 1, octaves do
+		local n = 1 - math.abs(math.noise(x * freq, z * freq, SEED + 91 + o * 31.7) * 1.6)
+		n = math.max(n, 0)
+		sum += n * n * amp
+		norm += amp
+		amp *= 0.5
+		freq *= 2.1
+	end
+	return sum / norm
+end
+
+-- 0 outside the build zone, 1 inside, with a soft 60-stud edge
+local function flatMask(x: number, z: number): number
+	local fx = math.min(smooth(FLAT_MIN_X - 60, FLAT_MIN_X, x), smooth(FLAT_MAX_X + 60, FLAT_MAX_X, x))
+	local fz = math.min(smooth(FLAT_MIN_Z - 70, FLAT_MIN_Z, z), smooth(FLAT_MAX_Z + 90, FLAT_MAX_Z, z))
+	return math.min(fx, fz)
+end
+
+local function mountainMask(x: number, z: number): (number, number)
+	local wobble = fbm(x, z, 1 / 320, 2, 5) * 160
+	local back = smooth(380, 660, z + wobble)
+	local far = smooth(-540, -720, z - wobble * 0.5)
+	local side = math.max(smooth(FLAT_MIN_X - 220, FLAT_MIN_X - 520, x + wobble), smooth(FLAT_MAX_X + 220, FLAT_MAX_X + 520, x + wobble))
+	return math.max(back, far, side), far
+end
+
+-- The height of the land at x, z
+local function heightAt(x: number, z: number): number
+	local m, far = mountainMask(x, z)
+	local mountains = m * (40 + 210 * ridged(x, z, 1 / 380, 5))
+	local hills = 26 * (fbm(x, z, 1 / 170, 4, 1) + 0.5) * smooth(200, 340, z)
+	local detail = fbm(x, z, 1 / 36, 2, 3) * 2.5
+	local h = TOP + hills + mountains + detail
+
+	-- the fjord: slope down from the beach, rise again at the far shore
+	if z < SHORE_Z then
+		local lake = smooth(SHORE_Z, SHORE_Z - 80, z) * (1 - far)
+		local bed = -15 + fbm(x, z, 1 / 90, 3, 7) * 6
+		h = lerp(h, bed, lake)
+	end
+
+	return lerp(h, TOP, flatMask(x, z))
+end
+
+local function inPlotArea(x: number, z: number): boolean
+	if z < -50 or z > Grid.PLOT_SIZE + 12 then
+		return false
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		if x > o.X - 8 and x < o.X + Grid.PLOT_SIZE + 8 then
+			return true
+		end
+	end
+	return false
+end
+
+local function inApron(x: number, z: number): boolean
+	if z < -16 or z > 0 then
+		return false
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		if x >= o.X and x <= o.X + Grid.PLOT_SIZE then
+			return true
+		end
+	end
+	return false
+end
+
+local function groundAt(x: number, z: number): RaycastResult?
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { Terrain }
+	return workspace:Raycast(Vector3.new(x, 600, z), Vector3.new(0, -700, 0), params)
+end
+
+-- Picks the surface material from height, steepness and position.
+local function surfaceMaterial(x: number, z: number, h: number, slope: number)
+	if inApron(x, z) then
+		return M.Ground
+	end
+	if inPlotArea(x, z) then
+		return M.Grass
+	end
+	if h < -6 then
+		return M.Mud
+	end
+	if h < 3 and z < SHORE_Z + 12 then
+		return M.Sand
+	end
+	local snowline = 150 + fbm(x, z, 1 / 80, 2, 11) * 50
+	if h > snowline and slope < 1.3 then
+		return M.Snow
+	end
+	if slope > 1.15 then
+		return M.Rock
+	end
+	if slope > 0.75 then
+		return M.Slate
+	end
+	if h > snowline - 45 then
+		return fbm(x, z, 1 / 30, 2, 13) > 0 and M.Rock or M.Ground
+	end
+	local n = fbm(x, z, 1 / 70, 3, 17)
+	if n > 0.22 then
+		return M.LeafyGrass
+	elseif n < -0.28 then
+		return M.Ground
+	end
+	return M.Grass
+end
+
+local function buildTerrain()
+	Terrain:Clear()
+
+	-- Materials and water look
+	Terrain:SetMaterialColor(M.Grass, Color3.fromRGB(88, 118, 58))
+	Terrain:SetMaterialColor(M.LeafyGrass, Color3.fromRGB(78, 106, 52))
+	Terrain:SetMaterialColor(M.Rock, Color3.fromRGB(104, 104, 102))
+	Terrain:SetMaterialColor(M.Slate, Color3.fromRGB(88, 90, 88))
+	Terrain:SetMaterialColor(M.Snow, Color3.fromRGB(240, 244, 250))
+	Terrain:SetMaterialColor(M.Sand, Color3.fromRGB(176, 164, 134))
+	Terrain:SetMaterialColor(M.Ground, Color3.fromRGB(104, 88, 64))
+	Terrain:SetMaterialColor(M.Mud, Color3.fromRGB(62, 56, 46))
+	Terrain.WaterColor = Color3.fromRGB(34, 58, 70)
+	Terrain.WaterTransparency = 0.3
+	Terrain.WaterReflectance = 0.85
+	Terrain.WaterWaveSize = 0.1
+	Terrain.WaterWaveSpeed = 7
+	pcall(function()
+		Terrain.Decoration = true -- animated grass blades on Grass
+	end)
+
+	-- 1. Heightmap: one height per 4x4-stud column
+	local nx = (MAX_X - MIN_X) // VOXEL
+	local nz = (MAX_Z - MIN_Z) // VOXEL
+	local heights = table.create(nx + 2)
+	local budget = os.clock()
+	for i = 0, nx + 1 do
+		local row = table.create(nz + 2)
+		local x = MIN_X + (i - 0.5) * VOXEL
+		for k = 0, nz + 1 do
+			row[k] = heightAt(x, MIN_Z + (k - 0.5) * VOXEL)
+		end
+		heights[i] = row
+		if os.clock() - budget > 0.05 then
+			task.wait()
+			budget = os.clock()
+		end
+	end
+
+	-- 2. Write voxels chunk by chunk
+	local CHUNK = 32
+	for ci = 1, nx, CHUNK do
+		for ck = 1, nz, CHUNK do
+			local ci2 = math.min(ci + CHUNK - 1, nx)
+			local ck2 = math.min(ck + CHUNK - 1, nz)
+			local lo, hi = math.huge, -math.huge
+			for i = ci, ci2 do
+				local row = heights[i]
+				for k = ck, ck2 do
+					local h = row[k]
+					lo = math.min(lo, h)
+					hi = math.max(hi, h)
+				end
+			end
+			hi = math.max(hi, 0) -- room for water
+			local yMin = math.floor((lo - 14) / VOXEL) * VOXEL
+			local yMax = math.ceil((hi + 1) / VOXEL) * VOXEL
+			local ny = (yMax - yMin) // VOXEL
+
+			local materials = table.create(ci2 - ci + 1)
+			local occupancy = table.create(ci2 - ci + 1)
+			for i = ci, ci2 do
+				local mx, ox = table.create(ny), table.create(ny)
+				local x = MIN_X + (i - 0.5) * VOXEL
+				local row, rowL, rowR = heights[i], heights[i - 1], heights[i + 1]
+				for j = 1, ny do
+					mx[j] = table.create(ck2 - ck + 1)
+					ox[j] = table.create(ck2 - ck + 1)
+				end
+				for k = ck, ck2 do
+					local z = MIN_Z + (k - 0.5) * VOXEL
+					local h = row[k]
+					local slope = math.max(math.abs(rowR[k] - rowL[k]), math.abs(row[k + 1] - row[k - 1])) / (2 * VOXEL)
+					local surface = surfaceMaterial(x, z, h, slope)
+					local under = (surface == M.Grass or surface == M.LeafyGrass) and M.Ground or surface
+					local kk = k - ck + 1
+					for j = 1, ny do
+						local y0 = yMin + (j - 1) * VOXEL
+						local mat, occ
+						if h >= y0 + VOXEL then
+							local depth = h - (y0 + VOXEL)
+							occ = 1
+							if depth < 3 then
+								mat = surface
+							elseif depth < 9 then
+								mat = under
+							else
+								mat = M.Rock
+							end
+						elseif h > y0 then
+							occ = (h - y0) / VOXEL
+							mat = surface
+						elseif y0 + VOXEL <= 0 then
+							occ = 1
+							mat = M.Water
+						else
+							occ = 0
+							mat = M.Air
+						end
+						mx[j][kk] = mat
+						ox[j][kk] = occ
+					end
+				end
+				materials[i - ci + 1] = mx
+				occupancy[i - ci + 1] = ox
+			end
+
+			local regionMin = Vector3.new(MIN_X + (ci - 1) * VOXEL, yMin, MIN_Z + (ck - 1) * VOXEL)
+			local regionMax = Vector3.new(MIN_X + ci2 * VOXEL, yMax, MIN_Z + ck2 * VOXEL)
+			Terrain:WriteVoxels(Region3.new(regionMin, regionMax), VOXEL, materials, occupancy)
+
+			if os.clock() - budget > 0.05 then
+				task.wait()
+				budget = os.clock()
+			end
+		end
+	end
+end
+
+local function scatterScenery()
+	local folder = Instance.new("Folder")
+	folder.Name = "Scenery"
+	folder.Parent = workspace
+
+	local treeMaterials = { [M.Grass] = true, [M.LeafyGrass] = true, [M.Ground] = true }
+
+	local function plant(x: number, z: number): boolean
+		if inPlotArea(x, z) or (x > FLAT_MIN_X and x < FLAT_MAX_X and z > -60 and z < 0) then
+			return false
+		end
+		local hit = groundAt(x, z)
+		if not hit or not treeMaterials[hit.Material] or hit.Normal.Y < 0.82 then
+			return false
+		end
+		local treeline = 125 + fbm(x, z, 1 / 80, 2, 23) * 40
+		if hit.Position.Y > treeline or hit.Position.Y < 1.5 then
+			return false
+		end
+		local model
+		local s = rng:NextNumber(1, 2.1) * (1 - hit.Position.Y / 400) -- smaller trees higher up
+		if rng:NextNumber() < 0.82 then
+			model = ModelFactory.pine(rng, s)
+		else
+			model = ModelFactory.birch(rng, s * 0.8)
+		end
+		model:PivotTo(CFrame.new(hit.Position - Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+		model.Parent = folder
+		return true
+	end
+
+	-- Forests grow in patches: noise decides where the woods are dense.
+	local planted, tries = 0, 0
+	local budget = os.clock()
+	while planted < 950 and tries < 9000 do
+		tries += 1
+		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(MIN_Z + 40, 640)
+		local density = fbm(x, z, 1 / 220, 3, 29) + 0.15
+		if z > FLAT_MAX_Z - 30 and z < FLAT_MAX_Z + 40 and x > FLAT_MIN_X and x < FLAT_MAX_X then
+			density -= 0.35 -- keep the deer meadow open
+		end
+		if rng:NextNumber() < density * 2 and plant(x, z) then
+			planted += 1
+		end
+		if os.clock() - budget > 0.05 then
+			task.wait()
+			budget = os.clock()
+		end
+	end
+
+	-- loose boulders
+	for _ = 1, 70 do
+		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(-60, 500)
+		if not inPlotArea(x, z) then
+			local hit = groundAt(x, z)
+			if hit and hit.Position.Y < 80 and hit.Material ~= M.Water then
+				local model = ModelFactory.boulder(rng, rng:NextNumber(1, 2.6))
+				model:PivotTo(CFrame.new(hit.Position) * CFrame.Angles(0, rng:NextNumber(0, 6), 0))
+				model.Parent = folder
+			end
+		end
+	end
+
+	-- a jetty on the fjord in front of every plot
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		local dock = ModelFactory.dock(48)
+		dock:PivotTo(CFrame.new(o.X + Grid.PLOT_SIZE * 0.25, 0, -34))
+		dock.Parent = folder
+	end
+end
+
+local function setupLighting()
+	for _, child in Lighting:GetChildren() do
+		if child:IsA("Sky") or child:IsA("Atmosphere") or child:IsA("PostEffect") then
+			child:Destroy()
+		end
+	end
+
+	Lighting.ClockTime = 15.6
+	Lighting.GeographicLatitude = 58
+	Lighting.Brightness = 3
+	Lighting.Ambient = Color3.fromRGB(58, 60, 68)
+	Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ShadowSoftness = 0.25
+	Lighting.GlobalShadows = true
+
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.33
+	atmosphere.Offset = 0.22
+	atmosphere.Color = Color3.fromRGB(200, 190, 170)
+	atmosphere.Decay = Color3.fromRGB(96, 106, 122)
+	atmosphere.Glare = 0.35
+	atmosphere.Haze = 1.7
+	atmosphere.Parent = Lighting
+
+	local sky = Instance.new("Sky")
+	sky.SunAngularSize = 14
+	sky.Parent = Lighting
+
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Brightness = 0.02
+	grade.Contrast = 0.1
+	grade.Saturation = 0.1
+	grade.TintColor = Color3.fromRGB(255, 244, 228)
+	grade.Parent = Lighting
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.5
+	bloom.Size = 24
+	bloom.Threshold = 0.95
+	bloom.Parent = Lighting
+
+	local rays = Instance.new("SunRaysEffect")
+	rays.Intensity = 0.05
+	rays.Spread = 0.7
+	rays.Parent = Lighting
+end
+
+function WorldService:Init()
+	-- The flat Baseplate and welcome sign are only there so the place isn't
+	-- empty in edit mode; the real world replaces them when the game runs.
+	for _, name in { "Baseplate", "WelcomeSign" } do
+		local old = workspace:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+
+	setupLighting()
+	buildTerrain()
+	scatterScenery()
+	print("[WorldService] valley built")
+end
+
+-- Height of the terrain at x, z (used by wildlife).
+function WorldService:GroundHeight(x: number, z: number): number
+	local hit = groundAt(x, z)
+	return hit and hit.Position.Y or TOP
+end
+
+return WorldService
+]]></string>
+          </Properties>
+        </Item>
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="14">
+  <Item class="StarterPlayer" referent="20">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="15">
+    <Item class="StarterPlayerScripts" referent="21">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="16">
+      <Item class="LocalScript" referent="22">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -1754,11 +3192,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="17">
+        <Item class="Folder" referent="23">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="18">
+          <Item class="ModuleScript" referent="24">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -1997,7 +3435,97 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="19">
+          <Item class="ModuleScript" referent="25">
+            <Properties>
+              <string name="Name">CameraController</string>
+              <string name="Source"><![CDATA[--[[
+	CameraController
+	A city-builder camera that follows your character from high above at an
+	angle, like looking down over your village.
+
+	  Mouse wheel        zoom in / out
+	  Right mouse drag   turn and tilt the view
+	  V                  switch to the normal Roblox camera and back
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local CameraController = {}
+
+local player = Players.LocalPlayer
+
+local enabled = true
+local yaw = math.pi -- looking from the lake toward the mountains (+Z)
+local pitch = math.rad(48)
+local distance = 75
+local targetDistance = 75
+local focus: Vector3? = nil
+local rotating = false
+
+local MIN_DIST, MAX_DIST = 18, 260
+local MIN_PITCH, MAX_PITCH = math.rad(15), math.rad(82)
+
+function CameraController:IsEnabled(): boolean
+	return enabled
+end
+
+function CameraController:Start()
+	local camera = workspace.CurrentCamera
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 and enabled then
+			rotating = true
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+		elseif input.KeyCode == Enum.KeyCode.V and not processed then
+			enabled = not enabled
+			if not enabled then
+				camera.CameraType = Enum.CameraType.Custom
+			end
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton2 then
+			rotating = false
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input, processed)
+		if not enabled then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseWheel and not processed then
+			targetDistance = math.clamp(targetDistance * (1 - input.Position.Z * 0.12), MIN_DIST, MAX_DIST)
+		elseif input.UserInputType == Enum.UserInputType.MouseMovement and rotating then
+			yaw -= input.Delta.X * 0.008
+			pitch = math.clamp(pitch + input.Delta.Y * 0.006, MIN_PITCH, MAX_PITCH)
+		end
+	end)
+
+	RunService:BindToRenderStep("VikingCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		if not enabled then
+			return
+		end
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if not root then
+			return
+		end
+		camera.CameraType = Enum.CameraType.Scriptable
+		local target = root.Position
+		focus = focus and focus:Lerp(target, math.min(1, dt * 8)) or target
+		distance += (targetDistance - distance) * math.min(1, dt * 10)
+		-- lower the angle a little when zoomed in close, like a tilt-shift view
+		local p = pitch - math.rad(18) * (1 - (distance - MIN_DIST) / (MAX_DIST - MIN_DIST)) ^ 3
+		camera.CFrame = CFrame.new(focus) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(-p, 0, 0) * CFrame.new(0, 0, distance)
+	end)
+end
+
+return CameraController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="26">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -2035,6 +3563,7 @@ local RESOURCE_COLORS = {
 	Wood = Color3.fromRGB(150, 100, 60),
 	Stone = Color3.fromRGB(150, 150, 158),
 	Food = Color3.fromRGB(220, 190, 90),
+	Hides = Color3.fromRGB(176, 120, 84),
 }
 
 local function new(className: string, props, children)
@@ -2108,7 +3637,7 @@ function HudController:Start()
 	local resBar = new("Frame", {
 		Name = "Resources",
 		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(420, 44),
+		Size = UDim2.fromOffset(560, 44),
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
@@ -2181,6 +3710,18 @@ function HudController:Start()
 		TextSize = 15,
 		TextStrokeTransparency = 0.4,
 		Text = "Pick a building below. Walk up to trees, rocks and bushes and hold E to gather.",
+		Parent = gui,
+	})
+
+	label({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12, 1, -12),
+		Size = UDim2.fromOffset(250, 110),
+		TextSize = 13,
+		TextColor3 = THEME.Muted,
+		TextStrokeTransparency = 0.5,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to hunt deer\nMouse wheel: zoom\nRight-drag: turn camera\nV: switch camera",
 		Parent = gui,
 	})
 
@@ -2329,7 +3870,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="20">
+          <Item class="ModuleScript" referent="27">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -2381,6 +3922,231 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
+          <Item class="ModuleScript" referent="28">
+            <Properties>
+              <string name="Name">ToolController</string>
+              <string name="Source"><![CDATA[--[[
+	ToolController
+	Makes the tools feel alive on your side:
+	  Bow      click to shoot where the mouse points (the server checks the hit)
+	  Axe /
+	  Pickaxe  click to swing (just for show; gathering uses the E prompt)
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Remotes = require(Shared.Remotes)
+local Config = require(Shared.Config)
+
+local ToolController = {}
+
+local player = Players.LocalPlayer
+local lastShot = 0
+
+local function aimPoint(): Vector3
+	local camera = workspace.CurrentCamera
+	local pos = UserInputService:GetMouseLocation()
+	local ray = camera:ViewportPointToRay(pos.X, pos.Y)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { player.Character }
+	local hit = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+	return hit and hit.Position or ray.Origin + ray.Direction * 1000
+end
+
+local function swing(tool: Tool)
+	local base = tool.Grip
+	local info = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true)
+	local t = TweenService:Create(tool, info, { Grip = base * CFrame.Angles(math.rad(-70), 0, 0) })
+	t:Play()
+	t.Completed:Wait()
+	tool.Grip = base
+end
+
+local function hookTool(tool: Instance)
+	if not tool:IsA("Tool") or tool:GetAttribute("Hooked") then
+		return
+	end
+	tool:SetAttribute("Hooked", true)
+	tool.Activated:Connect(function()
+		if tool.Name == "Bow" then
+			local now = os.clock()
+			if now - lastShot < Config.Bow.Cooldown then
+				return
+			end
+			lastShot = now
+			Remotes.ShootArrow:FireServer(aimPoint())
+		else
+			swing(tool)
+		end
+	end)
+end
+
+function ToolController:Start()
+	local function watch(container: Instance)
+		for _, child in container:GetChildren() do
+			hookTool(child)
+		end
+		container.ChildAdded:Connect(hookTool)
+	end
+	local function onCharacter(character)
+		watch(character)
+		watch(player:WaitForChild("Backpack"))
+	end
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		onCharacter(player.Character)
+	end
+end
+
+return ToolController
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="29">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="NeedsPivotMigration">false</bool>
+    </Properties>
+    <Item class="Part" referent="30">
+      <Properties>
+        <string name="Name">Baseplate</string>
+        <bool name="Anchored">true</bool>
+        <token name="BottomSurface">0</token>
+        <Color3uint8 name="Color3uint8">5732421</Color3uint8>
+        <bool name="Locked">true</bool>
+        <token name="Material">1280</token>
+        <Vector3 name="Position">
+          <X>700</X>
+          <Y>-8</Y>
+          <Z>0</Z>
+        </Vector3>
+        <Vector3 name="size">
+          <X>2400</X>
+          <Y>16</Y>
+          <Z>2048</Z>
+        </Vector3>
+        <token name="TopSurface">0</token>
+      </Properties>
+    </Item>
+    <Item class="SpawnLocation" referent="31">
+      <Properties>
+        <string name="Name">SpawnLocation</string>
+        <bool name="Anchored">true</bool>
+        <Color3uint8 name="Color3uint8">7889218</Color3uint8>
+        <int name="Duration">0</int>
+        <token name="Material">528</token>
+        <Vector3 name="Position">
+          <X>80</X>
+          <Y>0.5</Y>
+          <Z>-30</Z>
+        </Vector3>
+        <Vector3 name="size">
+          <X>12</X>
+          <Y>1</Y>
+          <Z>12</Z>
+        </Vector3>
+        <token name="TopSurface">0</token>
+      </Properties>
+    </Item>
+    <Item class="Part" referent="32">
+      <Properties>
+        <string name="Name">WelcomeSign</string>
+        <bool name="Anchored">true</bool>
+        <Color3uint8 name="Color3uint8">5060132</Color3uint8>
+        <token name="Material">512</token>
+        <Vector3 name="Position">
+          <X>80</X>
+          <Y>9</Y>
+          <Z>-44</Z>
+        </Vector3>
+        <Vector3 name="size">
+          <X>30</X>
+          <Y>10</Y>
+          <Z>1</Z>
+        </Vector3>
+      </Properties>
+      <Item class="SurfaceGui" referent="33">
+        <Properties>
+          <string name="Name">BackText</string>
+          <token name="Face">2</token>
+          <float name="PixelsPerStud">20</float>
+        </Properties>
+        <Item class="TextLabel" referent="34">
+          <Properties>
+            <string name="Name">Text</string>
+            <Color3 name="BackgroundColor3">
+              <R>0.13</R>
+              <G>0.11</G>
+              <B>0.09</B>
+            </Color3>
+            <Font name="FontFace">
+              <Family>
+                <url>rbxasset://fonts/families/GothamSSm.json</url>
+              </Family>
+              <Weight>700</Weight>
+              <Style>Normal</Style>
+            </Font>
+            <UDim2 name="Size">
+              <XS>1</XS>
+              <XO>0</XO>
+              <YS>1</YS>
+              <YO>0</YO>
+            </UDim2>
+            <string name="Text">VIKING CITY
+Press Play (F5) to start your settlement</string>
+            <Color3 name="TextColor3">
+              <R>0.96</R>
+              <G>0.92</G>
+              <B>0.84</B>
+            </Color3>
+            <bool name="TextScaled">true</bool>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="SurfaceGui" referent="35">
+        <Properties>
+          <string name="Name">FrontText</string>
+          <token name="Face">5</token>
+          <float name="PixelsPerStud">20</float>
+        </Properties>
+        <Item class="TextLabel" referent="36">
+          <Properties>
+            <string name="Name">Text</string>
+            <Color3 name="BackgroundColor3">
+              <R>0.13</R>
+              <G>0.11</G>
+              <B>0.09</B>
+            </Color3>
+            <Font name="FontFace">
+              <Family>
+                <url>rbxasset://fonts/families/GothamSSm.json</url>
+              </Family>
+              <Weight>700</Weight>
+              <Style>Normal</Style>
+            </Font>
+            <UDim2 name="Size">
+              <XS>1</XS>
+              <XO>0</XO>
+              <YS>1</YS>
+              <YO>0</YO>
+            </UDim2>
+            <string name="Text">VIKING CITY
+Press Play (F5) to start your settlement</string>
+            <Color3 name="TextColor3">
+              <R>0.96</R>
+              <G>0.92</G>
+              <B>0.84</B>
+            </Color3>
+            <bool name="TextScaled">true</bool>
+          </Properties>
         </Item>
       </Item>
     </Item>

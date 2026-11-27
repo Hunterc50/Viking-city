@@ -33,6 +33,7 @@ local RESOURCE_COLORS = {
 	Wood = Color3.fromRGB(150, 100, 60),
 	Stone = Color3.fromRGB(150, 150, 158),
 	Food = Color3.fromRGB(220, 190, 90),
+	Hides = Color3.fromRGB(176, 120, 84),
 }
 
 local function new(className: string, props, children)
@@ -106,7 +107,7 @@ function HudController:Start()
 	local resBar = new("Frame", {
 		Name = "Resources",
 		Position = UDim2.fromOffset(12, 12),
-		Size = UDim2.fromOffset(420, 44),
+		Size = UDim2.fromOffset(560, 44),
 		BackgroundColor3 = THEME.Panel,
 		BackgroundTransparency = 0.1,
 		Parent = gui,
@@ -179,6 +180,18 @@ function HudController:Start()
 		TextSize = 15,
 		TextStrokeTransparency = 0.4,
 		Text = "Pick a building below. Walk up to trees, rocks and bushes and hold E to gather.",
+		Parent = gui,
+	})
+
+	label({
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 12, 1, -12),
+		Size = UDim2.fromOffset(250, 110),
+		TextSize = 13,
+		TextColor3 = THEME.Muted,
+		TextStrokeTransparency = 0.5,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		Text = "1 Axe: chop trees\n2 Pickaxe: mine rocks\n3 Bow: click to hunt deer\nMouse wheel: zoom\nRight-drag: turn camera\nV: switch camera",
 		Parent = gui,
 	})
 

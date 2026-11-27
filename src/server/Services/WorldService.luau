@@ -1,0 +1,450 @@
+--[[
+	WorldService
+	Builds the world when the server starts: a Nordic valley made of Terrain,
+	generated from layered noise (a heightmap) so it looks natural, then
+	painted by height and steepness: grass and meadow flowers in the valley,
+	bare rock and slate on cliffs, snow above the snowline, sand and mud at
+	the fjord. The build area stays perfectly flat.
+
+	Layout (looking from the lake toward the mountains):
+	  z < -44      a fjord lake, with a far shore and peaks across the water
+	  z -44..0     sandy beach and docks, then a dirt path in front of each plot
+	  z 0..160     the row of player plots (grass)
+	  z 160..270   an open meadow where deer roam
+	  z 270..470   pine forest, rolling hills and rock outcrops
+	  z 480+       snow-capped mountains
+	Also sets up warm afternoon light, haze, sky and colour grading.
+
+	Everything here is decoration: change the numbers freely.
+]]
+
+local Lighting = game:GetService("Lighting")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+
+local WorldService = {}
+
+local Terrain = workspace.Terrain
+local M = Enum.Material
+local rng = Random.new(1066) -- fixed seed: the valley looks the same every time
+
+local PLOTS_END_X = Config.MAX_PLOTS * (Grid.PLOT_SIZE + Config.PLOT_GAP) - Config.PLOT_GAP
+local TOP = Config.GROUND_Y
+local VOXEL = 4
+
+-- World bounds (multiples of 4 so they line up with the terrain voxel grid)
+local MIN_X = -760
+local MAX_X = math.ceil((PLOTS_END_X + 760) / VOXEL) * VOXEL
+local MIN_Z, MAX_Z = -800, 840
+
+-- The flat, buildable part of the valley
+local FLAT_MIN_X, FLAT_MAX_X = -40, PLOTS_END_X + 40
+local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 115
+local SHORE_Z = -40 -- where the beach starts to slope into the fjord
+local SEED = 7.31
+
+-- Noise helpers ---------------------------------------------------------------
+
+local function smooth(edge0: number, edge1: number, x: number): number
+	local t = math.clamp((x - edge0) / (edge1 - edge0), 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
+local function lerp(a: number, b: number, t: number): number
+	return a + (b - a) * t
+end
+
+-- fractal noise, roughly -0.5..0.5
+local function fbm(x: number, z: number, freq: number, octaves: number, salt: number): number
+	local amp, sum, norm = 1, 0, 0
+	for o = 1, octaves do
+		sum += math.noise(x * freq, z * freq, SEED + salt + o * 17.3) * amp
+		norm += amp
+		amp *= 0.5
+		freq *= 2
+	end
+	return sum / norm
+end
+
+-- ridged noise, 0..1, sharp crests: good for mountain ridges
+local function ridged(x: number, z: number, freq: number, octaves: number): number
+	local amp, sum, norm = 1, 0, 0
+	for o = 1, octaves do
+		local n = 1 - math.abs(math.noise(x * freq, z * freq, SEED + 91 + o * 31.7) * 1.6)
+		n = math.max(n, 0)
+		sum += n * n * amp
+		norm += amp
+		amp *= 0.5
+		freq *= 2.1
+	end
+	return sum / norm
+end
+
+-- 0 outside the build zone, 1 inside, with a soft 60-stud edge
+local function flatMask(x: number, z: number): number
+	local fx = math.min(smooth(FLAT_MIN_X - 60, FLAT_MIN_X, x), smooth(FLAT_MAX_X + 60, FLAT_MAX_X, x))
+	local fz = math.min(smooth(FLAT_MIN_Z - 70, FLAT_MIN_Z, z), smooth(FLAT_MAX_Z + 90, FLAT_MAX_Z, z))
+	return math.min(fx, fz)
+end
+
+local function mountainMask(x: number, z: number): (number, number)
+	local wobble = fbm(x, z, 1 / 320, 2, 5) * 160
+	local back = smooth(380, 660, z + wobble)
+	local far = smooth(-540, -720, z - wobble * 0.5)
+	local side = math.max(smooth(FLAT_MIN_X - 220, FLAT_MIN_X - 520, x + wobble), smooth(FLAT_MAX_X + 220, FLAT_MAX_X + 520, x + wobble))
+	return math.max(back, far, side), far
+end
+
+-- The height of the land at x, z
+local function heightAt(x: number, z: number): number
+	local m, far = mountainMask(x, z)
+	local mountains = m * (40 + 210 * ridged(x, z, 1 / 380, 5))
+	local hills = 26 * (fbm(x, z, 1 / 170, 4, 1) + 0.5) * smooth(200, 340, z)
+	local detail = fbm(x, z, 1 / 36, 2, 3) * 2.5
+	local h = TOP + hills + mountains + detail
+
+	-- the fjord: slope down from the beach, rise again at the far shore
+	if z < SHORE_Z then
+		local lake = smooth(SHORE_Z, SHORE_Z - 80, z) * (1 - far)
+		local bed = -15 + fbm(x, z, 1 / 90, 3, 7) * 6
+		h = lerp(h, bed, lake)
+	end
+
+	return lerp(h, TOP, flatMask(x, z))
+end
+
+local function inPlotArea(x: number, z: number): boolean
+	if z < -50 or z > Grid.PLOT_SIZE + 12 then
+		return false
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		if x > o.X - 8 and x < o.X + Grid.PLOT_SIZE + 8 then
+			return true
+		end
+	end
+	return false
+end
+
+local function inApron(x: number, z: number): boolean
+	if z < -16 or z > 0 then
+		return false
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		if x >= o.X and x <= o.X + Grid.PLOT_SIZE then
+			return true
+		end
+	end
+	return false
+end
+
+local function groundAt(x: number, z: number): RaycastResult?
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { Terrain }
+	return workspace:Raycast(Vector3.new(x, 600, z), Vector3.new(0, -700, 0), params)
+end
+
+-- Picks the surface material from height, steepness and position.
+local function surfaceMaterial(x: number, z: number, h: number, slope: number)
+	if inApron(x, z) then
+		return M.Ground
+	end
+	if inPlotArea(x, z) then
+		return M.Grass
+	end
+	if h < -6 then
+		return M.Mud
+	end
+	if h < 3 and z < SHORE_Z + 12 then
+		return M.Sand
+	end
+	local snowline = 150 + fbm(x, z, 1 / 80, 2, 11) * 50
+	if h > snowline and slope < 1.3 then
+		return M.Snow
+	end
+	if slope > 1.15 then
+		return M.Rock
+	end
+	if slope > 0.75 then
+		return M.Slate
+	end
+	if h > snowline - 45 then
+		return fbm(x, z, 1 / 30, 2, 13) > 0 and M.Rock or M.Ground
+	end
+	local n = fbm(x, z, 1 / 70, 3, 17)
+	if n > 0.22 then
+		return M.LeafyGrass
+	elseif n < -0.28 then
+		return M.Ground
+	end
+	return M.Grass
+end
+
+local function buildTerrain()
+	Terrain:Clear()
+
+	-- Materials and water look
+	Terrain:SetMaterialColor(M.Grass, Color3.fromRGB(88, 118, 58))
+	Terrain:SetMaterialColor(M.LeafyGrass, Color3.fromRGB(78, 106, 52))
+	Terrain:SetMaterialColor(M.Rock, Color3.fromRGB(104, 104, 102))
+	Terrain:SetMaterialColor(M.Slate, Color3.fromRGB(88, 90, 88))
+	Terrain:SetMaterialColor(M.Snow, Color3.fromRGB(240, 244, 250))
+	Terrain:SetMaterialColor(M.Sand, Color3.fromRGB(176, 164, 134))
+	Terrain:SetMaterialColor(M.Ground, Color3.fromRGB(104, 88, 64))
+	Terrain:SetMaterialColor(M.Mud, Color3.fromRGB(62, 56, 46))
+	Terrain.WaterColor = Color3.fromRGB(34, 58, 70)
+	Terrain.WaterTransparency = 0.3
+	Terrain.WaterReflectance = 0.85
+	Terrain.WaterWaveSize = 0.1
+	Terrain.WaterWaveSpeed = 7
+	pcall(function()
+		Terrain.Decoration = true -- animated grass blades on Grass
+	end)
+
+	-- 1. Heightmap: one height per 4x4-stud column
+	local nx = (MAX_X - MIN_X) // VOXEL
+	local nz = (MAX_Z - MIN_Z) // VOXEL
+	local heights = table.create(nx + 2)
+	local budget = os.clock()
+	for i = 0, nx + 1 do
+		local row = table.create(nz + 2)
+		local x = MIN_X + (i - 0.5) * VOXEL
+		for k = 0, nz + 1 do
+			row[k] = heightAt(x, MIN_Z + (k - 0.5) * VOXEL)
+		end
+		heights[i] = row
+		if os.clock() - budget > 0.05 then
+			task.wait()
+			budget = os.clock()
+		end
+	end
+
+	-- 2. Write voxels chunk by chunk
+	local CHUNK = 32
+	for ci = 1, nx, CHUNK do
+		for ck = 1, nz, CHUNK do
+			local ci2 = math.min(ci + CHUNK - 1, nx)
+			local ck2 = math.min(ck + CHUNK - 1, nz)
+			local lo, hi = math.huge, -math.huge
+			for i = ci, ci2 do
+				local row = heights[i]
+				for k = ck, ck2 do
+					local h = row[k]
+					lo = math.min(lo, h)
+					hi = math.max(hi, h)
+				end
+			end
+			hi = math.max(hi, 0) -- room for water
+			local yMin = math.floor((lo - 14) / VOXEL) * VOXEL
+			local yMax = math.ceil((hi + 1) / VOXEL) * VOXEL
+			local ny = (yMax - yMin) // VOXEL
+
+			local materials = table.create(ci2 - ci + 1)
+			local occupancy = table.create(ci2 - ci + 1)
+			for i = ci, ci2 do
+				local mx, ox = table.create(ny), table.create(ny)
+				local x = MIN_X + (i - 0.5) * VOXEL
+				local row, rowL, rowR = heights[i], heights[i - 1], heights[i + 1]
+				for j = 1, ny do
+					mx[j] = table.create(ck2 - ck + 1)
+					ox[j] = table.create(ck2 - ck + 1)
+				end
+				for k = ck, ck2 do
+					local z = MIN_Z + (k - 0.5) * VOXEL
+					local h = row[k]
+					local slope = math.max(math.abs(rowR[k] - rowL[k]), math.abs(row[k + 1] - row[k - 1])) / (2 * VOXEL)
+					local surface = surfaceMaterial(x, z, h, slope)
+					local under = (surface == M.Grass or surface == M.LeafyGrass) and M.Ground or surface
+					local kk = k - ck + 1
+					for j = 1, ny do
+						local y0 = yMin + (j - 1) * VOXEL
+						local mat, occ
+						if h >= y0 + VOXEL then
+							local depth = h - (y0 + VOXEL)
+							occ = 1
+							if depth < 3 then
+								mat = surface
+							elseif depth < 9 then
+								mat = under
+							else
+								mat = M.Rock
+							end
+						elseif h > y0 then
+							occ = (h - y0) / VOXEL
+							mat = surface
+						elseif y0 + VOXEL <= 0 then
+							occ = 1
+							mat = M.Water
+						else
+							occ = 0
+							mat = M.Air
+						end
+						mx[j][kk] = mat
+						ox[j][kk] = occ
+					end
+				end
+				materials[i - ci + 1] = mx
+				occupancy[i - ci + 1] = ox
+			end
+
+			local regionMin = Vector3.new(MIN_X + (ci - 1) * VOXEL, yMin, MIN_Z + (ck - 1) * VOXEL)
+			local regionMax = Vector3.new(MIN_X + ci2 * VOXEL, yMax, MIN_Z + ck2 * VOXEL)
+			Terrain:WriteVoxels(Region3.new(regionMin, regionMax), VOXEL, materials, occupancy)
+
+			if os.clock() - budget > 0.05 then
+				task.wait()
+				budget = os.clock()
+			end
+		end
+	end
+end
+
+local function scatterScenery()
+	local folder = Instance.new("Folder")
+	folder.Name = "Scenery"
+	folder.Parent = workspace
+
+	local treeMaterials = { [M.Grass] = true, [M.LeafyGrass] = true, [M.Ground] = true }
+
+	local function plant(x: number, z: number): boolean
+		if inPlotArea(x, z) or (x > FLAT_MIN_X and x < FLAT_MAX_X and z > -60 and z < 0) then
+			return false
+		end
+		local hit = groundAt(x, z)
+		if not hit or not treeMaterials[hit.Material] or hit.Normal.Y < 0.82 then
+			return false
+		end
+		local treeline = 125 + fbm(x, z, 1 / 80, 2, 23) * 40
+		if hit.Position.Y > treeline or hit.Position.Y < 1.5 then
+			return false
+		end
+		local model
+		local s = rng:NextNumber(1, 2.1) * (1 - hit.Position.Y / 400) -- smaller trees higher up
+		if rng:NextNumber() < 0.82 then
+			model = ModelFactory.pine(rng, s)
+		else
+			model = ModelFactory.birch(rng, s * 0.8)
+		end
+		model:PivotTo(CFrame.new(hit.Position - Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+		model.Parent = folder
+		return true
+	end
+
+	-- Forests grow in patches: noise decides where the woods are dense.
+	local planted, tries = 0, 0
+	local budget = os.clock()
+	while planted < 950 and tries < 9000 do
+		tries += 1
+		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(MIN_Z + 40, 640)
+		local density = fbm(x, z, 1 / 220, 3, 29) + 0.15
+		if z > FLAT_MAX_Z - 30 and z < FLAT_MAX_Z + 40 and x > FLAT_MIN_X and x < FLAT_MAX_X then
+			density -= 0.35 -- keep the deer meadow open
+		end
+		if rng:NextNumber() < density * 2 and plant(x, z) then
+			planted += 1
+		end
+		if os.clock() - budget > 0.05 then
+			task.wait()
+			budget = os.clock()
+		end
+	end
+
+	-- loose boulders
+	for _ = 1, 70 do
+		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(-60, 500)
+		if not inPlotArea(x, z) then
+			local hit = groundAt(x, z)
+			if hit and hit.Position.Y < 80 and hit.Material ~= M.Water then
+				local model = ModelFactory.boulder(rng, rng:NextNumber(1, 2.6))
+				model:PivotTo(CFrame.new(hit.Position) * CFrame.Angles(0, rng:NextNumber(0, 6), 0))
+				model.Parent = folder
+			end
+		end
+	end
+
+	-- a jetty on the fjord in front of every plot
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		local dock = ModelFactory.dock(48)
+		dock:PivotTo(CFrame.new(o.X + Grid.PLOT_SIZE * 0.25, 0, -34))
+		dock.Parent = folder
+	end
+end
+
+local function setupLighting()
+	for _, child in Lighting:GetChildren() do
+		if child:IsA("Sky") or child:IsA("Atmosphere") or child:IsA("PostEffect") then
+			child:Destroy()
+		end
+	end
+
+	Lighting.ClockTime = 15.6
+	Lighting.GeographicLatitude = 58
+	Lighting.Brightness = 3
+	Lighting.Ambient = Color3.fromRGB(58, 60, 68)
+	Lighting.OutdoorAmbient = Color3.fromRGB(128, 122, 114)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ShadowSoftness = 0.25
+	Lighting.GlobalShadows = true
+
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.33
+	atmosphere.Offset = 0.22
+	atmosphere.Color = Color3.fromRGB(200, 190, 170)
+	atmosphere.Decay = Color3.fromRGB(96, 106, 122)
+	atmosphere.Glare = 0.35
+	atmosphere.Haze = 1.7
+	atmosphere.Parent = Lighting
+
+	local sky = Instance.new("Sky")
+	sky.SunAngularSize = 14
+	sky.Parent = Lighting
+
+	local grade = Instance.new("ColorCorrectionEffect")
+	grade.Brightness = 0.02
+	grade.Contrast = 0.1
+	grade.Saturation = 0.1
+	grade.TintColor = Color3.fromRGB(255, 244, 228)
+	grade.Parent = Lighting
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 0.5
+	bloom.Size = 24
+	bloom.Threshold = 0.95
+	bloom.Parent = Lighting
+
+	local rays = Instance.new("SunRaysEffect")
+	rays.Intensity = 0.05
+	rays.Spread = 0.7
+	rays.Parent = Lighting
+end
+
+function WorldService:Init()
+	-- The flat Baseplate and welcome sign are only there so the place isn't
+	-- empty in edit mode; the real world replaces them when the game runs.
+	for _, name in { "Baseplate", "WelcomeSign" } do
+		local old = workspace:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+
+	setupLighting()
+	buildTerrain()
+	scatterScenery()
+	print("[WorldService] valley built")
+end
+
+-- Height of the terrain at x, z (used by wildlife).
+function WorldService:GroundHeight(x: number, z: number): number
+	local hit = groundAt(x, z)
+	return hit and hit.Position.Y or TOP
+end
+
+return WorldService
