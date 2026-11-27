@@ -15546,7 +15546,8 @@ return LoadingController
 	MinimapController
 	A round-cornered map in the top right that turns with your camera:
 	your plot (gold), other plots, rival holds (red), Ottar's stalls
-	(yellow), ships (blue = yours, red = enemy), other players (white) and
+	(yellow), ships (blue = yours, red = enemy), deer (brown), wolves (grey),
+	other players (white) and
 	you (the arrow in the middle). Press M to make it bigger or smaller.
 ]]
 
@@ -15790,6 +15791,21 @@ function MinimapController:Start()
 				f.BackgroundColor3 = owner == player.UserId and Color3.fromRGB(90, 170, 255) or (owner == 0 and Color3.fromRGB(230, 70, 60) or Color3.fromRGB(240, 240, 240))
 				f.Size = UDim2.fromOffset(10, 10)
 				place(f, child:GetPivot().Position)
+			end
+		end
+		-- deer (brown) and, in winter, wolves (grey)
+		local wild = workspace:FindFirstChild("Wildlife")
+		if wild then
+			for _, m in wild:GetChildren() do
+				local body = m:IsA("Model") and m.PrimaryPart
+				if body and (body.Position - centre).Magnitude < RANGE * 1.5 then
+					n += 1
+					local f = dot(n)
+					local wolf = m:GetAttribute("Wolf") == true
+					f.BackgroundColor3 = wolf and Color3.fromRGB(150, 150, 156) or Color3.fromRGB(176, 124, 74)
+					f.Size = UDim2.fromOffset(wolf and 6 or 5, wolf and 6 or 5)
+					place(f, body.Position)
+				end
 			end
 		end
 		for i = n + 1, #pool do
