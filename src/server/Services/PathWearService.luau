@@ -3,7 +3,7 @@
 	Paths form where people walk. Every couple of seconds each villager and
 	each player leaves a little wear on the 4x4-stud patch of ground under
 	their feet. Grass on a well-trodden patch turns to bare earth, and a
-	really busy one becomes a gravel road. Paved paths, fields and water are
+	really busy one becomes a stone road. Paved paths, fields and water are
 	left alone.
 ]]
 
@@ -17,7 +17,7 @@ local M = Enum.Material
 
 local STEP = 2 -- seconds between footstep passes
 local DIRT = 14 -- wear for grass to become bare earth
-local GRAVEL = 60 -- wear for earth to become a gravel road
+local GRAVEL = 60 -- wear for earth to become a stone road
 local VOXEL = 4
 
 local wear = {} -- ["x,z"] = wear
@@ -55,7 +55,7 @@ local function step(who: BasePart, pos: Vector3, groundY: number, amount: number
 		repaint(cx, cz, groundY, { M.Grass, M.LeafyGrass }, M.Ground)
 	elseif s < 2 and w >= GRAVEL then
 		stage[key] = 2
-		repaint(cx, cz, groundY, { M.Ground, M.Grass, M.LeafyGrass }, M.Pebble)
+		repaint(cx, cz, groundY, { M.Ground, M.Grass, M.LeafyGrass }, M.Cobblestone)
 	end
 end
 

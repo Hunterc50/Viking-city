@@ -287,7 +287,7 @@ local function surfaceMaterial(x: number, z: number, h: number, slope: number)
 	if rd < RIVER_HALF + 2 then
 		return M.Mud
 	elseif rd < 14 then
-		return fbm(x, z, 1 / 12, 2, 77) > 0 and M.Pebble or M.Ground
+		return fbm(x, z, 1 / 12, 2, 77) > 0 and M.Rock or M.Ground -- stony banks (Pebble isn't a terrain material)
 	end
 	if h < -6 then
 		return M.Mud
@@ -337,7 +337,7 @@ local function buildTerrain()
 	Terrain:SetMaterialColor(M.Sand, Color3.fromRGB(176, 164, 134))
 	Terrain:SetMaterialColor(M.Ground, Color3.fromRGB(104, 88, 64))
 	Terrain:SetMaterialColor(M.Mud, Color3.fromRGB(62, 56, 46))
-	Terrain:SetMaterialColor(M.Pebble, Color3.fromRGB(128, 122, 112))
+	Terrain:SetMaterialColor(M.Cobblestone, Color3.fromRGB(112, 108, 100))
 	-- deep fjord teal: low transparency so depth reads as colour, full
 	-- reflectance so the sky and mountains mirror in it
 	Terrain.WaterColor = Color3.fromRGB(22, 50, 60)

@@ -2547,7 +2547,9 @@ function ModelFactory.deer(rng: Random): Model
 	end
 	body.Anchored = true
 	model.PrimaryPart = body
-	model:SetAttribute("GroundOffset", body.Position.Y)
+	-- how high the body sits above the hooves, measured from the model's real bottom
+	local boxCF, boxSize = model:GetBoundingBox()
+	model:SetAttribute("GroundOffset", body.Position.Y - (boxCF.Position.Y - boxSize.Y / 2))
 	return model
 end
 
