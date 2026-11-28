@@ -270,7 +270,7 @@ end
 -- The nearest enemy of this colony to `pos`: rival guards, raiders attacking
 -- the village, or militia in a town raid you started.
 local function nearestEnemy(colony, pos: Vector3, range: number)
-	local best, bestRoot, bestDmg = services.RaidService:NearestDefender(pos, range)
+	local best, bestRoot, bestDmg = services.RaidService:NearestDefender(pos, range, true)
 	local bestD = bestRoot and (bestRoot.Position - pos).Magnitude or range
 	local kind = best and "defender"
 	local m, root = services.VillageDefenseService:NearestRaider(colony, pos, bestD)

@@ -679,9 +679,21 @@ local function newHold(R)
 	end
 
 	-- The closest living guard to `position` (for the war band).
-	function hold:NearestDefender(position: Vector3, range: number): (Model?, BasePart?)
+	-- `reachable`: only guards someone on foot at `position` can get at, so
+	-- not archers up on the wall, nor anyone behind the palisade while the
+	-- gate still stands (the war band hacks at the gate instead).
+	function hold:NearestDefender(position: Vector3, range: number, reachable: boolean?): (Model?, BasePart?)
 		local best, bestRoot, bestD = nil, nil, range
+		local flatC = Vector3.new(R.Center.X, 0, R.Center.Z)
+		local outside = (Vector3.new(position.X, 0, position.Z) - flatC).Magnitude > R.Radius - 1
+		local walled = state.gate ~= nil and not state.gate.broken
 		for _, g in state.defenders do
+			if reachable and g.root then
+				local inside = (Vector3.new(g.root.Position.X, 0, g.root.Position.Z) - flatC).Magnitude < R.Radius - 1
+				if (g.archer and g.root.Position.Y > position.Y + 4) or (walled and outside and inside) then
+					continue
+				end
+			end
 			if not g.dead and g.root and g.root.Parent then
 				local d = (g.root.Position - position).Magnitude
 				if d < bestD then
@@ -1123,10 +1135,10 @@ function RaidService:DefendersNear(position: Vector3, look: Vector3, range: numb
 end
 
 -- The closest living guard of any hold (for the war band), and its damage.
-function RaidService:NearestDefender(position: Vector3, range: number): (Model?, BasePart?, number?)
+function RaidService:NearestDefender(position: Vector3, range: number, reachable: boolean?): (Model?, BasePart?, number?)
 	local best, bestRoot, bestDmg, bestD = nil, nil, nil, range
 	for _, h in holds do
-		local m, root = h:NearestDefender(position, bestD)
+		local m, root = h:NearestDefender(position, bestD, reachable)
 		if m and root then
 			best, bestRoot, bestDmg, bestD = m, root, h.def.DefenderDamage, (root.Position - position).Magnitude
 		end
