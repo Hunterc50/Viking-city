@@ -196,6 +196,65 @@ Config.Buildings = {
 		Size = { 1, 1 },
 		Cost = { Wood = 3 },
 	},
+	-- Decorations: cheap, one cell, no workers. A few cheer people up a little.
+	DecorTorch = {
+		Display = "Torch Post",
+		Description = "A post with a cup of burning pitch. Lights your paths at night.",
+		Size = { 1, 1 },
+		Cost = { Wood = 4 },
+		Decor = true,
+	},
+	DecorBrazier = {
+		Display = "Iron Brazier",
+		Description = "A big fire basket on three iron legs. Warm light for your square.",
+		Size = { 1, 1 },
+		Cost = { Wood = 6, Stone = 4 },
+		Decor = true,
+	},
+	DecorRuneStone = {
+		Display = "Rune Stone",
+		Description = "A standing stone carved with runes and a coiled serpent, telling your saga. +2 happiness.",
+		Size = { 1, 1 },
+		Cost = { Stone = 15 },
+		Happiness = 2,
+		Decor = true,
+	},
+	DecorBanner = {
+		Display = "Clan Banner",
+		Description = "A tall pole flying your clan's colours.",
+		Size = { 1, 1 },
+		Cost = { Wood = 5, Hides = 1 },
+		Decor = true,
+	},
+	DecorShieldRack = {
+		Display = "Shield Rack",
+		Description = "Painted round shields and spears on a rack, ready for war.",
+		Size = { 1, 1 },
+		Cost = { Wood = 8 },
+		Decor = true,
+	},
+	DecorTotem = {
+		Display = "Carved Post",
+		Description = "A tall post carved with gods' faces and a raven on top. +2 happiness.",
+		Size = { 1, 1 },
+		Cost = { Wood = 12 },
+		Happiness = 2,
+		Decor = true,
+	},
+	DecorAntlers = {
+		Display = "Antler Arch",
+		Description = "Two posts and a beam crowned with stag antlers: a proud gateway.",
+		Size = { 1, 1 },
+		Cost = { Wood = 8, Hides = 1 },
+		Decor = true,
+	},
+	DecorWoodpile = {
+		Display = "Woodpile",
+		Description = "Split logs stacked for the winter hearths.",
+		Size = { 1, 1 },
+		Cost = { Wood = 6 },
+		Decor = true,
+	},
 	Watchtower = {
 		Display = "Watchtower",
 		Description = "A tall lookout. Its archer shoots at raiders who attack your village.",
@@ -213,12 +272,14 @@ Config.BuildCategories = {
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
 	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
+	{ Name = "Decorations", Icon = "🪵", Buildings = { "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
 	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
+	DecorTorch = "🔥", DecorBrazier = "🔥", DecorRuneStone = "🪨", DecorBanner = "🚩", DecorShieldRack = "🛡️", DecorTotem = "🗿", DecorAntlers = "🦌", DecorWoodpile = "🪵",
 }
 
 -- Every building in menu order (built from the tabs above).

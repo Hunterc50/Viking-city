@@ -70,7 +70,7 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
 	model:PivotTo(finalCFrame)
 	-- clear and level the ground under it (palisades are too small to bother)
-	if buildingType ~= "Palisade" and services.WorldService.LevelUnder then
+	if buildingType ~= "Palisade" and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
 		services.WorldService:LevelUnder(finalCFrame, sx * Config.CELL, sz * Config.CELL)
 	end
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter

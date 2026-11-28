@@ -680,6 +680,144 @@ function Builders.Palisade(model, w, d)
 	addPart(model, { Name = "Beam", Size = V3(w, 0.5, 0.4), Position = V3(0, 6, 0.9), Color = Colors.DarkWood })
 end
 
+-- Decorations (one cell each) ---------------------------------------------------
+
+local function flameAt(model, pos: Vector3, size: number, range: number)
+	local flame = noShadow(addPart(model, { Name = "Pitch", Size = V3(0.5, 0.2, 0.5), Position = pos, Color = Color3.fromRGB(255, 120, 40), Material = Enum.Material.Neon, CanCollide = false }))
+	flame:SetAttribute("KeepWithMesh", true)
+	local fire = Instance.new("Fire")
+	fire.Size = size
+	fire.Heat = 5
+	fire.Color = Color3.fromRGB(255, 140, 50)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 20)
+	fire.Parent = flame
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 70)
+	light.Range = range
+	light.Brightness = 1.5
+	light.Parent = flame
+	return flame
+end
+
+function Builders.DecorTorch(model, _w, _d)
+	post(model, V3(0, 0, 0), 5.2, 0.45, Colors.DarkWood)
+	addPart(model, { Name = "Wrap", Shape = Enum.PartType.Cylinder, Size = V3(0.5, 0.55, 0.55), CFrame = CFrame.new(0, 3.6, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 78, 50), Material = Enum.Material.Fabric })
+	noShadow(addPart(model, { Name = "Cup", Shape = Enum.PartType.Cylinder, Size = V3(0.6, 1, 1), CFrame = CFrame.new(0, 5.4, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false }))
+	flameAt(model, V3(0, 5.75, 0), 1.8, 18)
+	-- a few stones round the foot
+	for i = 1, 4 do
+		local a = i / 4 * math.pi * 2 + 0.4
+		addPart(model, { Name = "Stone", Size = V3(0.8, 0.5, 0.7), CFrame = CFrame.new(math.cos(a) * 0.7, 0.25, math.sin(a) * 0.7) * CFrame.Angles(0, a, 0), Color = vary(Colors.Stone, 0.1), Material = Enum.Material.Slate })
+	end
+end
+
+function Builders.DecorBrazier(model, _w, _d)
+	brazier(model, V3(0, 0, 0), 3.4)
+	-- a ring of flagstones under it
+	addPart(model, { Name = "Flag", Shape = Enum.PartType.Cylinder, Size = V3(0.25, 5.5, 5.5), CFrame = CFrame.new(0, 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(96, 96, 94), Material = Enum.Material.Slate })
+end
+
+function Builders.DecorRuneStone(model, _w, _d)
+	-- a tall grey slab, slightly tapered, with a red-painted serpent band of runes
+	local grey = Color3.fromRGB(118, 120, 120)
+	addPart(model, { Name = "Stone", Size = V3(3.2, 4.2, 1.1), Position = V3(0, 2.1, 0), Color = grey, Material = Enum.Material.Slate })
+	addPart(model, { Name = "Stone", Size = V3(2.6, 2.2, 1.0), Position = V3(0, 5.2, 0), Color = grey, Material = Enum.Material.Slate })
+	addPart(model, { Name = "Stone", Size = V3(1.6, 0.9, 0.9), Position = V3(0, 6.7, 0), Color = grey, Material = Enum.Material.Slate })
+	local red = Color3.fromRGB(150, 44, 36)
+	-- the serpent's band running up both sides and over the top
+	for _, x in { -1.15, 1.15 } do
+		noShadow(addPart(model, { Name = "Band", Size = V3(0.3, 5.4, 0.08), Position = V3(x * (x > 0 and 0.95 or 1), 3.3, -0.58), Color = red, CanCollide = false }))
+	end
+	noShadow(addPart(model, { Name = "Band", Size = V3(2.0, 0.3, 0.08), Position = V3(0, 6.1, -0.58), Color = red, CanCollide = false }))
+	-- rune marks inside the band
+	for i = 0, 5 do
+		noShadow(addPart(model, { Name = "Rune", Size = V3(0.12, 0.55, 0.06), CFrame = CFrame.new(-0.55 + (i % 3) * 0.55, 2 + math.floor(i / 3) * 1.3, -0.57) * CFrame.Angles(0, 0, math.rad((i % 2 == 0) and 20 or -15)), Color = Color3.fromRGB(40, 36, 34), CanCollide = false }))
+	end
+	-- moss at the foot
+	addPart(model, { Name = "Moss", Size = V3(3.6, 0.3, 1.6), Position = V3(0, 0.15, 0), Color = Color3.fromRGB(74, 98, 48), Material = Enum.Material.Grass, CanCollide = false })
+end
+
+function Builders.DecorBanner(model, _w, _d)
+	post(model, V3(0, 0, 0), 11, 0.4, Colors.DarkWood)
+	addPart(model, { Name = "BannerPole", Size = V3(3.2, 0.25, 0.25), Position = V3(1.4, 10.4, 0), Color = Colors.DarkWood, CanCollide = false })
+	noShadow(addPart(model, { Name = "BannerCloth", Size = V3(2.8, 5.6, 0.1), Position = V3(1.5, 7.5, 0), Color = Color3.fromRGB(122, 30, 30), Material = Enum.Material.Fabric, CanCollide = false }))
+	noShadow(addPart(model, { Name = "BannerCloth", Size = V3(0.5, 5.6, 0.12), Position = V3(1.5, 7.5, -0.02), Color = Color3.fromRGB(196, 160, 80), Material = Enum.Material.Fabric, CanCollide = false }))
+	-- a raven-wing finial
+	addPart(model, { Name = "Finial", Size = V3(0.7, 0.7, 0.2), CFrame = CFrame.new(0, 11.3, 0) * CFrame.Angles(0, 0, math.rad(45)), Color = Colors.Iron, Material = Enum.Material.Metal })
+end
+
+function Builders.DecorShieldRack(model, _w, _d)
+	for _, x in { -2.6, 2.6 } do
+		post(model, V3(x, 0, 0), 4, 0.35, Colors.DarkWood)
+	end
+	addPart(model, { Name = "Rail", Size = V3(5.8, 0.3, 0.3), Position = V3(0, 3.4, 0), Color = Colors.DarkWood })
+	addPart(model, { Name = "Rail", Size = V3(5.8, 0.3, 0.3), Position = V3(0, 0.8, 0.3), Color = Colors.DarkWood })
+	local palette = { Color3.fromRGB(150, 40, 36), Color3.fromRGB(196, 160, 80), Color3.fromRGB(52, 76, 112) }
+	for i, x in { -1.7, 0, 1.7 } do
+		local at = CFrame.new(x, 2.1, -0.35) * CFrame.Angles(math.rad(-8), math.pi / 2, 0)
+		addPart(model, { Name = "Shield", Shape = Enum.PartType.Cylinder, Size = V3(0.22, 2.4, 2.4), CFrame = at, Color = palette[i], Material = Enum.Material.Wood })
+		addPart(model, { Name = "ShieldBoss", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6, CFrame = at * CFrame.new(-0.15, 0, 0), Color = Colors.Iron, Material = Enum.Material.Metal })
+	end
+	-- spears leaning behind
+	for _, x in { -2.1, -0.8, 0.9, 2.2 } do
+		local at = CFrame.new(x, 3, 0.5) * CFrame.Angles(math.rad(-10), 0, math.rad(x * 2))
+		addPart(model, { Name = "Spear", Size = V3(0.15, 6, 0.15), CFrame = at, Color = Colors.Wood, CanCollide = false })
+		addPart(model, { Name = "SpearHead", Size = V3(0.25, 0.8, 0.08), CFrame = at * CFrame.new(0, 3.3, 0), Color = Color3.fromRGB(176, 180, 186), Material = Enum.Material.Metal, CanCollide = false })
+	end
+end
+
+function Builders.DecorTotem(model, _w, _d)
+	-- a stout post with three stacked faces, outstretched wings and a raven on top
+	post(model, V3(0, 0, 0), 9, 1.3, Color3.fromRGB(96, 70, 48))
+	for i, y in { 2.2, 4.6, 7.0 } do
+		local face = Color3.fromRGB(116, 84, 56):Lerp(Color3.new(0, 0, 0), i * 0.05)
+		addPart(model, { Name = "Face", Size = V3(1.5, 1.6, 0.4), Position = V3(0, y, -0.55), Color = face, Material = Enum.Material.Wood })
+		for _, x in { -0.35, 0.35 } do
+			noShadow(addPart(model, { Name = "Eye", Size = V3(0.3, 0.2, 0.1), Position = V3(x, y + 0.3, -0.78), Color = i == 2 and Color3.fromRGB(196, 160, 80) or Color3.fromRGB(30, 26, 24), CanCollide = false }))
+		end
+		noShadow(addPart(model, { Name = "Mouth", Size = V3(0.7, 0.15, 0.1), Position = V3(0, y - 0.45, -0.78), Color = Color3.fromRGB(150, 40, 36), CanCollide = false }))
+	end
+	for _, x in { -1, 1 } do
+		addPart(model, { Name = "Wing", Size = V3(2.2, 0.5, 0.3), CFrame = CFrame.new(x * 1.4, 8.2, 0) * CFrame.Angles(0, 0, math.rad(x * 20)), Color = Colors.DarkWood, Material = Enum.Material.Wood })
+	end
+	local raven = Color3.fromRGB(28, 28, 32)
+	addPart(model, { Name = "Raven", Shape = Enum.PartType.Ball, Size = V3(0.9, 0.9, 0.9), Position = V3(0, 9.4, 0), Color = raven })
+	addPart(model, { Name = "Raven", Size = V3(0.6, 0.4, 1.2), Position = V3(0, 9.3, 0.4), Color = raven })
+	addPart(model, { Name = "Beak", Size = V3(0.2, 0.2, 0.5), Position = V3(0, 9.5, -0.6), Color = Color3.fromRGB(60, 56, 50) })
+end
+
+function Builders.DecorAntlers(model, _w, _d)
+	for _, x in { -3, 3 } do
+		post(model, V3(x, 0, 0), 7.5, 0.6, Colors.DarkWood)
+	end
+	addPart(model, { Name = "Beam", Size = V3(7.4, 0.6, 0.6), Position = V3(0, 7.6, 0), Color = Colors.DarkWood })
+	local bone = Color3.fromRGB(220, 205, 180)
+	addPart(model, { Name = "Skull", Size = V3(0.9, 0.9, 1.2), Position = V3(0, 8.3, -0.2), Color = bone })
+	for _, x in { -1, 1 } do
+		for k = 0, 2 do
+			addPart(model, { Name = "Antler", Size = V3(0.18, 1.6 - k * 0.3, 0.18), CFrame = CFrame.new(x * (0.6 + k * 0.5), 9 + k * 0.45, -0.2) * CFrame.Angles(0, 0, -x * (0.5 + k * 0.25)), Color = bone, CanCollide = false })
+		end
+	end
+	flameAt(model, V3(-3, 7.9, -0.6), 1.2, 12)
+	flameAt(model, V3(3, 7.9, -0.6), 1.2, 12)
+end
+
+function Builders.DecorWoodpile(model, _w, _d)
+	for row = 0, 2 do
+		for i = 0, 4 - row do
+			addPart(model, {
+				Name = "Log",
+				Shape = Enum.PartType.Cylinder,
+				Size = V3(4.2, 0.9, 0.9),
+				CFrame = CFrame.new(0, 0.45 + row * 0.8, -1.8 + i * 0.9 + row * 0.45) * CFrame.Angles(0, 0, 0),
+				Color = (i + row) % 2 == 0 and Colors.Wood or Color3.fromRGB(150, 112, 74),
+				Material = Enum.Material.Wood,
+			})
+		end
+	end
+	addPart(model, { Name = "Axe", Size = V3(0.15, 0.15, 2.4), CFrame = CFrame.new(2.6, 0.8, 1.5) * CFrame.Angles(math.rad(50), 0, 0), Color = Colors.Wood, CanCollide = false })
+end
+
 function Builders.Watchtower(model, w, d)
 	-- four tall legs, a plank deck with a railing and a little shingle roof
 	local h = 14

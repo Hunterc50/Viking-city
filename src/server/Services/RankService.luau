@@ -24,7 +24,7 @@ local function counts(colony)
 		pop += 1
 	end
 	for _, b in colony.buildings do
-		if b.type ~= "Palisade" then
+		if b.type ~= "Palisade" and not Config.Buildings[b.type].Decor then
 			buildings += 1
 		end
 	end
