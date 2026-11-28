@@ -14,13 +14,20 @@ if not okCollect then
 	warn("[VikingCity] couldn't use ModelWorkshop: " .. tostring(errCollect))
 end
 
--- Our uploaded textures arrive as decals: find the image inside each one
--- before any building is made.
+-- Our uploaded textures arrive as decals: find the image inside each one in
+-- the background (never holding up the world), then dress what is built.
 local AssetIds = require(game:GetService("ReplicatedStorage").Shared.AssetIds)
-local okTex, errTex = pcall(AssetIds.resolveTextures, 8)
-if not okTex then
-	warn("[VikingCity] couldn't look up textures: " .. tostring(errTex))
-end
+task.spawn(function()
+	local okTex, errTex = pcall(AssetIds.resolveTextures, 20)
+	if not okTex then
+		warn("[VikingCity] couldn't look up textures: " .. tostring(errTex))
+		return
+	end
+	local okDress, errDress = pcall(ModelFactory.textureAll, workspace)
+	if not okDress then
+		warn("[VikingCity] couldn't put textures on: " .. tostring(errDress))
+	end
+end)
 
 local services = {}
 for _, module in servicesFolder:GetChildren() do

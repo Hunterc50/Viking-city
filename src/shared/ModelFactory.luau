@@ -2341,6 +2341,21 @@ local function applyTexture(part: MeshPart, name: string, studs: number)
 end
 ModelFactory.applyTexture = applyTexture
 
+-- Textures every mesh piece under `root` that has none yet (used once the
+-- uploaded textures have been looked up, for things built before that).
+function ModelFactory.textureAll(root: Instance)
+	for _, d in root:GetDescendants() do
+		if d:IsA("MeshPart") and not d:FindFirstChild("OwnTexture") then
+			local kind = string.match(d.Name, "^Mat_(%a+)_%x%x%x%x%x%x")
+			local tex = kind and MESH_TEXTURES[kind]
+			if tex then
+				applyTexture(d, tex[1], tex[2])
+				ModelFactory.retintTexture(d)
+			end
+		end
+	end
+end
+
 -- After a piece changes colour (seasons, clan colours), match its texture;
 -- under snow the texture steps aside so the white shows.
 function ModelFactory.retintTexture(part: BasePart)
