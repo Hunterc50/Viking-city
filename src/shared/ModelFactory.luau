@@ -2411,8 +2411,9 @@ function ModelFactory.tool(kind: string): Tool
 		head(V3(0.2, 0.3, 0.6), CFrame.new(0, 1.5, -1.6) * CFrame.Angles(math.rad(25), 0, 0))
 		head(V3(0.2, 0.3, 0.6), CFrame.new(0, 1.5, 1.6) * CFrame.Angles(math.rad(-25), 0, 0))
 	end
-	-- hold it near the bottom of the shaft
-	tool.Grip = CFrame.new(0, -1.2, 0)
+	-- hold it near the bottom of the shaft; the axe is turned round so its
+	-- blade faces out, away from the player
+	tool.Grip = CFrame.new(0, -1.2, 0) * (kind == "Axe" and CFrame.Angles(0, math.pi, 0) or CFrame.identity)
 	return tool
 end
 

@@ -85,7 +85,8 @@ local function swing(tool: Tool)
 	end
 	local function step(duration: number, style: Enum.EasingStyle, dir: Enum.EasingDirection, armDeg: number, leanDeg: number, twist: number, gripDeg: number)
 		local info = TweenInfo.new(duration, style, dir)
-		local tweens = { TweenService:Create(tool, info, { Grip = baseGrip * CFrame.Angles(math.rad(gripDeg), 0, 0) }) }
+		-- tilt in the hand's own frame, so a tool turned round in its grip (the axe) still chops forward
+		local tweens = { TweenService:Create(tool, info, { Grip = CFrame.new(baseGrip.Position) * CFrame.Angles(math.rad(gripDeg), 0, 0) * baseGrip.Rotation }) }
 		if shoulder then
 			table.insert(tweens, TweenService:Create(shoulder, info, { C0 = arm(armDeg) }))
 		end

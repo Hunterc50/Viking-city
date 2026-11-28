@@ -3418,8 +3418,9 @@ function ModelFactory.tool(kind: string): Tool
 		head(V3(0.2, 0.3, 0.6), CFrame.new(0, 1.5, -1.6) * CFrame.Angles(math.rad(25), 0, 0))
 		head(V3(0.2, 0.3, 0.6), CFrame.new(0, 1.5, 1.6) * CFrame.Angles(math.rad(-25), 0, 0))
 	end
-	-- hold it near the bottom of the shaft
-	tool.Grip = CFrame.new(0, -1.2, 0)
+	-- hold it near the bottom of the shaft; the axe is turned round so its
+	-- blade faces out, away from the player
+	tool.Grip = CFrame.new(0, -1.2, 0) * (kind == "Axe" and CFrame.Angles(0, math.pi, 0) or CFrame.identity)
 	return tool
 end
 
@@ -17503,7 +17504,8 @@ local function swing(tool: Tool)
 	end
 	local function step(duration: number, style: Enum.EasingStyle, dir: Enum.EasingDirection, armDeg: number, leanDeg: number, twist: number, gripDeg: number)
 		local info = TweenInfo.new(duration, style, dir)
-		local tweens = { TweenService:Create(tool, info, { Grip = baseGrip * CFrame.Angles(math.rad(gripDeg), 0, 0) }) }
+		-- tilt in the hand's own frame, so a tool turned round in its grip (the axe) still chops forward
+		local tweens = { TweenService:Create(tool, info, { Grip = CFrame.new(baseGrip.Position) * CFrame.Angles(math.rad(gripDeg), 0, 0) * baseGrip.Rotation }) }
 		if shoulder then
 			table.insert(tweens, TweenService:Create(shoulder, info, { C0 = arm(armDeg) }))
 		end
