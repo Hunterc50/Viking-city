@@ -38,7 +38,7 @@ Sounds.Slots = {
 	Build = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.8, Pitch = 0.6 },
 	Splash = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 1, Pitch = 0.7 },
 	QuestDone = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.5, Pitch = 1 },
-	WarHorn = { Id = "", Volume = 1 }, -- a long horn blast when a raid begins
+	WarHorn = { Id = "", Volume = 2.5, Range = 900, Life = 14 }, -- a long, loud horn blast when a raid begins
 }
 
 -- A slot left empty can still be filled from Studio: upload the game's own
@@ -88,7 +88,10 @@ function Sounds.play(name: string, where: (Instance | Vector3)?)
 	sound.SoundId = id
 	sound.Volume = slot.Volume or 0.5
 	sound.PlaybackSpeed = slot.Pitch or 1
-	sound.RollOffMaxDistance = 160
+	sound.RollOffMaxDistance = slot.Range or 160
+	if slot.Range then
+		sound.RollOffMinDistance = 60 -- loud for a long way, then fading
+	end
 	local holder
 	if typeof(where) == "Vector3" then
 		holder = Instance.new("Attachment")
@@ -101,7 +104,7 @@ function Sounds.play(name: string, where: (Instance | Vector3)?)
 		sound.Parent = workspace
 	end
 	sound:Play()
-	task.delay(8, function()
+	task.delay(slot.Life or 8, function()
 		sound:Destroy()
 		if holder then
 			holder:Destroy()

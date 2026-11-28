@@ -2,7 +2,10 @@
 	VillageDefenseService
 	Every few days (Config.VillageRaids) a warband from one of the rival
 	holds raids YOUR village:
-	  - you get a warning first, then they march in from the edge of your plot
+	  - a war horn sounds and their longship comes sailing up the fjord; it
+	    runs aground on your beach and the raiders pour out over the bow
+	  - your grown settlers take up arms and fight them (WarbandService);
+	    anyone struck down is back on their feet after two minutes
 	  - they head for your stores (Storehouse, or your Longhouse)
 	  - Palisades are in the way: they have to stop and hack through (the
 	    wall is down for a while, then your people put it back up)
@@ -28,6 +31,7 @@ local services
 local rng = Random.new()
 local folder: Folder
 local raids = {} -- [colony] = raid
+local sail -- (function, below)
 local WALK_ANIM = "rbxassetid://507777826"
 
 function VillageDefenseService:Init(allServices)
@@ -146,6 +150,48 @@ end
 
 -- Raid lifecycle ----------------------------------------------------------------
 
+-- Moves a ship model smoothly from one CFrame to another over `seconds`,
+-- slowing as it arrives. Calls done() at the end.
+sail = function(ship: Model, from: CFrame, to: CFrame, seconds: number, done: (() -> ())?)
+	task.spawn(function()
+		local start = os.clock()
+		while ship.Parent do
+			local t = math.min((os.clock() - start) / seconds, 1)
+			local e = 1 - (1 - t) * (1 - t) -- ease out
+			local cf = from:Lerp(to, e)
+			-- a gentle roll on the swell
+			ship:PivotTo(cf * CFrame.Angles(0, 0, math.sin(os.clock() * 1.3) * 0.03 * (1 - t)))
+			if t >= 1 then
+				break
+			end
+			task.wait(0.05)
+		end
+		if done then
+			done()
+		end
+	end)
+end
+
+-- Where the raiders' longship comes ashore: on the beach in front of the
+-- plot, clear of the jetty and the moored ships. Bow toward the land (+Z).
+local function landing(colony): (CFrame, CFrame)
+	local o = colony.origin
+	local x = o.X + Grid.PLOT_SIZE * 0.68
+	local beached = CFrame.new(x, -0.6, -61) * CFrame.Angles(math.rad(-3), math.pi, 0)
+	local out = CFrame.new(x + 60, 0, -320) * CFrame.Angles(0, math.pi, 0)
+	return beached, out
+end
+
+-- The war horn: loud at the ship, and right by your ear wherever you are.
+local function horn(colony, at: Vector3)
+	Sounds.play("WarHorn", at)
+	local character = colony.player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root then
+		Sounds.play("WarHorn", root)
+	end
+end
+
 local function endRaid(raid, text: string?, kind: string?)
 	if raid.over then
 		return
@@ -158,13 +204,22 @@ local function endRaid(raid, text: string?, kind: string?)
 		end
 	end
 	raid.colony.nextRaidDay = raid.colony.day + rng:NextInteger(VR.EveryDays[1], VR.EveryDays[2])
+	if raid.ship then
+		local ship = raid.ship
+		raid.ship = nil
+		task.delay(4, function()
+			sail(ship, ship:GetPivot(), raid.shipFrom, 24, function()
+				ship:Destroy()
+			end)
+		end)
+	end
 	if text then
 		notify(raid.colony, text, kind)
 	end
 end
 
 function VillageDefenseService:CheckBeaten(raid)
-	if raid.over then
+	if raid.over or raid.landing then
 		return
 	end
 	local fought = 0
@@ -246,31 +301,35 @@ local function breach(colony, near: Vector3): boolean
 	return false
 end
 
-local function startRaid(colony, hold)
+local function startRaid(colony, hold, ship: Model?)
 	local count = math.min(VR.BaseRaiders + math.floor(colony.day / 4), VR.MaxRaiders)
-	local raid = { colony = colony, raiders = {}, stolen = 0, hold = hold.Name, startedAt = os.clock() }
+	local raid = { colony = colony, raiders = {}, stolen = 0, hold = hold.Name, startedAt = os.clock(), ship = ship }
 	raids[colony] = raid
-	-- they come from the side of the plot nearest their hold
-	local o = colony.origin
-	local fromWest = hold.Center.X < o.X
-	-- the middle of the gap beside the plot, clear of even the biggest land
-	local x = fromWest and (o.X - Config.PLOT_GAP / 2) or (o.X + Grid.PLOT_SIZE + Config.PLOT_GAP / 2)
-	for i = 1, count do
-		local z = o.Z + Grid.PLOT_SIZE * 0.3 + i * 6
-		local y = services.WorldService:GroundHeight(x, z)
-		spawnRaider(raid, Vector3.new(x + rng:NextNumber(-3, 3), y, z), hold.Name)
-	end
-	Sounds.play("WarHorn", Vector3.new(x, o.Y, o.Z + Grid.PLOT_SIZE / 2))
-	notify(colony, "RAID! " .. count .. " " .. hold.Name .. " raiders storm your village!", "raid")
+	local beached, out = landing(colony)
+	raid.shipFrom = out
+	-- they jump down off the bow onto the sand, one after another
+	local bow = beached.Position + Vector3.new(0, 0, 19)
+	horn(colony, bow)
+	notify(colony, "RAID! " .. count .. " " .. hold.Name .. " raiders leap from their longship onto your beach! Your people take up arms!", "raid")
+	raid.landing = true
+	task.spawn(function()
+		for _ = 1, count do
+			if raid.over then
+				return
+			end
+			local x = bow.X + rng:NextNumber(-3.5, 3.5)
+			local z = bow.Z + 2 + rng:NextNumber(0, 3)
+			local y = services.WorldService:GroundHeight(x, z)
+			spawnRaider(raid, Vector3.new(x, y, z), hold.Name)
+			task.wait(0.45)
+		end
+		raid.landing = false
+		VillageDefenseService:CheckBeaten(raid)
+	end)
 end
 
--- Warbands march overland, so only the valley holds send them.
-local landHolds = {}
-for _, r in Config.Rivals do
-	if not r.Sea then
-		table.insert(landHolds, r)
-	end
-end
+-- Every hold sends its raiders by sea.
+local landHolds = Config.Rivals
 
 local function warnOf(colony)
 	-- allies and holds paying you tribute don't raid you (DiplomacyService)
@@ -286,11 +345,27 @@ local function warnOf(colony)
 	end
 	local hold = hostile[rng:NextInteger(1, #hostile)]
 	colony.raidWarned = true
-	notify(colony, "Scouts report a " .. hold.Name .. " warband marching on your village! They arrive in " .. VR.WarningSeconds .. " seconds.", "raid")
+	notify(colony, "A " .. hold.Name .. " longship is sailing for your beach! They land in " .. VR.WarningSeconds .. " seconds. To arms!", "raid")
+	-- the longship comes up the fjord, oars beating, and runs aground on the sand
+	local beached, out = landing(colony)
+	local ship = ModelFactory.longship(40, Color3.fromRGB(40, 36, 34))
+	ship.Name = hold.Name .. " Longship"
+	pcall(ModelFactory.addCrew, ship, 8, rng, 3)
+	ship:PivotTo(out)
+	ship.Parent = folder
+	horn(colony, out.Position)
+	sail(ship, out, beached, VR.WarningSeconds - 1)
 	task.delay(VR.WarningSeconds, function()
 		colony.raidWarned = false
 		if colony.player.Parent and services.ColonyService:Get(colony.player) == colony then
-			startRaid(colony, hold)
+			-- the crew jump down: the rowers on deck become the raiders on the beach
+			local crew = ship:FindFirstChild("Crew")
+			if crew then
+				crew:Destroy()
+			end
+			startRaid(colony, hold, ship)
+		else
+			ship:Destroy()
 		end
 	end)
 end
@@ -329,7 +404,17 @@ local function tickRaid(raid, now: number, step: number)
 			local pos = r.root.Position
 			local goal = stores and stores.center or (colony.origin + Vector3.new(Grid.PLOT_SIZE / 2, 0, Grid.PLOT_SIZE / 2))
 			local nearPlayer = proot and phum and phum.Health > 0 and (proot.Position - pos).Magnitude < 22
-			if nearPlayer then
+			-- a settler or warrior standing against them: stop and fight
+			local foe
+			for _, v in colony.villagers do
+				if (v.militia or v.warrior) and not v.down and v.body and v.model and v.model.Parent and flat(v.body.Position - pos).Magnitude < 7 then
+					foe = v
+					break
+				end
+			end
+			if foe and not nearPlayer then
+				r.humanoid:MoveTo(foe.body.Position)
+			elseif nearPlayer then
 				r.humanoid:MoveTo(proot.Position)
 				if (proot.Position - pos).Magnitude < 6 and now - r.lastHit > 1.2 then
 					r.lastHit = now
@@ -431,6 +516,12 @@ function VillageDefenseService:NearestRaider(colony, position: Vector3, range: n
 		end
 	end
 	return best, bestRoot
+end
+
+-- True while raiders are in (or landing at) this colony's village.
+function VillageDefenseService:Raiding(colony): boolean
+	local raid = raids[colony]
+	return raid ~= nil and not raid.over
 end
 
 function VillageDefenseService:DamageRaider(model: Model, amount: number)

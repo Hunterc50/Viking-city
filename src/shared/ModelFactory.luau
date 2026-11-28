@@ -1816,6 +1816,58 @@ function ModelFactory.wolf(rng: Random): Model
 	return model
 end
 
+-- A wild boar, facing -Z: a dark bristly barrel of a body, a long snout with
+-- tusks, short legs. GroundOffset = body centre height above the trotters.
+function ModelFactory.boar(rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "Boar"
+	local g = 66 + rng:NextInteger(-8, 8)
+	local coat = Color3.fromRGB(g + 8, g - 4, g - 14)
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Anchored = true
+	body.CanCollide = false
+	body.Size = V3(1.8, 1.9, 3.6)
+	body.Color = coat
+	body.Material = Enum.Material.Fabric
+	body.CFrame = CFrame.new(0, 2.05, 0)
+	body.Parent = model
+	local function attach(name, size, offset: CFrame, color, material)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color or coat
+		p.Material = material or Enum.Material.Fabric
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = body.CFrame * offset
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	for _, x in { -0.5, 0.5 } do
+		for _, z in { -1.1, 1.2 } do
+			attach("Leg", V3(0.4, 1.3, 0.4), CFrame.new(x, -1.35, z), coat:Lerp(Color3.new(0, 0, 0), 0.3))
+		end
+	end
+	attach("Bristles", V3(0.3, 0.5, 3), CFrame.new(0, 1.05, -0.2), coat:Lerp(Color3.new(0, 0, 0), 0.35))
+	attach("Head", V3(1.2, 1.2, 1.3), CFrame.new(0, 0.1, -2.3))
+	attach("Snout", V3(0.6, 0.55, 0.8), CFrame.new(0, -0.35, -3.2), Color3.fromRGB(120, 92, 84))
+	for _, x in { -1, 1 } do
+		attach("Tusk", V3(0.12, 0.45, 0.12), CFrame.new(x * 0.32, -0.3, -3.1) * CFrame.Angles(0, 0, x * -0.4), Color3.fromRGB(230, 220, 196), Enum.Material.SmoothPlastic)
+		attach("Ear", V3(0.25, 0.4, 0.15), CFrame.new(x * 0.4, 0.8, -1.9))
+		attach("Eye", V3(0.1, 0.1, 0.05), CFrame.new(x * 0.35, 0.3, -2.96), Color3.fromRGB(20, 14, 12))
+	end
+	attach("Tail", V3(0.12, 0.6, 0.12), CFrame.new(0, 0.3, 1.85) * CFrame.Angles(math.rad(30), 0, 0))
+	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", 2.05)
+	return model
+end
+
 -- A flying arrow (visual only).
 function ModelFactory.arrow(): BasePart
 	local shaft = Instance.new("Part")
@@ -2426,7 +2478,7 @@ end
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
 	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse", "TraderStall",
-	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
+	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer", "Boar",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
 	"PalisadeGate", "Jetty", "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile",
@@ -2501,6 +2553,7 @@ local MESH_MATERIALS = {
 	Leaves = Enum.Material.LeafyGrass,
 	Cloth = Enum.Material.Fabric,
 	Metal = Enum.Material.Metal,
+	Glow = Enum.Material.Neon, -- embers and hot iron
 }
 -- Our own textures (textures/*.png, uploaded; see AssetIds) for each piece kind,
 -- and how many studs one copy of the texture covers.
@@ -2931,17 +2984,18 @@ function ModelFactory.dock(length: number): Model
 	return model
 end
 
-function ModelFactory.deer(rng: Random): Model
-	local custom = customAsset("Deer")
+-- An animal with a custom mesh (Deer, Boar), sized like the built-in one,
+-- welded to one body part that the game moves around.
+local function animalMesh(slot: string, reference: Model): Model?
+	local custom = customAsset(slot)
 	if not custom then
-		return partBuilt.deer(rng)
+		return nil
 	end
-	local reference = partBuilt.deer(rng)
 	local model = wrap(custom)
 	setAnchored(model, false)
 	fitTo(model, reference, "height")
 	reference:Destroy()
-	model.Name = "Deer"
+	model.Name = slot
 	local body = model.PrimaryPart or largestPart(model)
 	for _, d in model:GetDescendants() do
 		if d:IsA("BasePart") then
@@ -2961,6 +3015,17 @@ function ModelFactory.deer(rng: Random): Model
 	local boxCF, boxSize = model:GetBoundingBox()
 	model:SetAttribute("GroundOffset", body.Position.Y - (boxCF.Position.Y - boxSize.Y / 2))
 	return model
+end
+
+function ModelFactory.deer(rng: Random): Model
+	local reference = partBuilt.deer(rng)
+	return animalMesh("Deer", reference) or reference
+end
+
+local partBoar = ModelFactory.boar
+function ModelFactory.boar(rng: Random): Model
+	local reference = partBoar(rng)
+	return animalMesh("Boar", reference) or reference
 end
 
 local partLongship = ModelFactory.longship

@@ -6,6 +6,8 @@
 	In winter a wolf pack prowls the meadow behind each settled plot. Wolves
 	slink closer when you are near and circle you at a distance; shoot one
 	for its pelt (Hides). They leave when winter ends.
+	Wild boars root about too. Hit one and it charges and gores you until one
+	of you goes down; a boar gives plenty of meat and its hide.
 ]]
 
 local Players = game:GetService("Players")
@@ -95,6 +97,54 @@ function WildlifeService:Spawn(area)
 	}
 end
 
+local function spawnBoar(area)
+	nextId += 1
+	local model = ModelFactory.boar(rng)
+	model:SetAttribute("DeerId", nextId) -- so arrows and blows find it
+	model:SetAttribute("Boar", true)
+	local x = rng:NextNumber(area.minX, area.maxX)
+	local z = rng:NextNumber(area.minZ, area.maxZ)
+	local offset = model:GetAttribute("GroundOffset")
+	model:PivotTo(CFrame.new(x, services.WorldService:GroundHeight(x, z) + offset, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+	model.Parent = folder
+	herd[model] = { model = model, body = model.PrimaryPart, offset = offset, area = area, busyUntil = 0, boar = true, hp = W.BoarHealth, lastGore = 0 }
+end
+
+-- Called by ToolService when an arrow or a blow lands on an animal. Deer and
+-- wolves drop at once; a boar takes a beating, and turns on whoever hit it.
+function WildlifeService:Hit(model: Model, damage: number, hunter: Player)
+	local rec = herd[model]
+	if not rec then
+		return
+	end
+	if not rec.boar then
+		self:Kill(model, hunter)
+		return
+	end
+	rec.hp -= damage
+	if rec.hp <= 0 then
+		self:Kill(model, hunter)
+		return
+	end
+	rec.target = hunter
+	rec.angryUntil = os.clock() + W.BoarAngrySeconds
+	rec.busyUntil = 0
+end
+
+-- Animals in front of `position` within `range` (for melee blows).
+function WildlifeService:AnimalsNear(position: Vector3, look: Vector3, range: number): { Model }
+	local found = {}
+	local flatLook = Vector3.new(look.X, 0, look.Z)
+	for model, rec in herd do
+		local offset = rec.body.Position - position
+		offset = Vector3.new(offset.X, 0, offset.Z)
+		if offset.Magnitude <= range + 1.5 and (offset.Magnitude < 2.5 or flatLook.Magnitude < 0.1 or offset.Unit:Dot(flatLook.Unit) > 0.2) then
+			table.insert(found, model)
+		end
+	end
+	return found
+end
+
 -- Called by ToolService when an arrow hits a deer.
 function WildlifeService:Kill(model: Model, hunter: Player)
 	local deer = herd[model]
@@ -114,6 +164,19 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 
 	local ColonyService = services.ColonyService
 	local colony = ColonyService:Get(hunter)
+	if deer.boar then
+		if colony then
+			local mult = ColonyService:Has(colony, "PathWoods") and 2 or 1
+			ColonyService:Add(colony, "Food", W.BoarMeat * mult)
+			ColonyService:Add(colony, "Hides", W.BoarHides * mult)
+			ColonyService:Notify(colony, "A wild boar brought down! +" .. W.BoarMeat * mult .. " Food, +" .. W.BoarHides * mult .. " Hides", "gain")
+			ColonyService:Sync(colony)
+		end
+		task.delay(W.BoarRespawnSeconds, function()
+			spawnBoar(deer.area)
+		end)
+		return
+	end
 	if deer.wolf then
 		if colony then
 			ColonyService:Add(colony, "Hides", W.WolfHides)
@@ -214,6 +277,9 @@ function WildlifeService:Start()
 		for _ = 1, W.DeerPerPlot do
 			self:Spawn(area)
 		end
+		for _ = 1, W.BoarsPerPlot or 0 do
+			spawnBoar(area)
+		end
 	end
 
 	local packTimer = 0
@@ -228,6 +294,33 @@ function WildlifeService:Start()
 		for _, deer in herd do
 			local pos = deer.body.Position
 			local threat, dist = nearestPlayer(pos)
+			if deer.boar then
+				local target = deer.target
+				local troot = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+				local thum = target and target.Character and target.Character:FindFirstChildOfClass("Humanoid")
+				if troot and thum and thum.Health > 0 and now < (deer.angryUntil or 0) and (troot.Position - pos).Magnitude < 120 then
+					-- charge! and gore when close
+					local gap = Vector3.new(troot.Position.X - pos.X, 0, troot.Position.Z - pos.Z)
+					if gap.Magnitude < 4.5 then
+						if now - deer.lastGore >= W.BoarGoreCooldown then
+							deer.lastGore = now
+							thum:TakeDamage(W.BoarDamage)
+							-- toss them back a little
+							troot.AssemblyLinearVelocity += gap.Unit * 40 + Vector3.new(0, 25, 0)
+						end
+					else
+						moveTo(deer, troot.Position.X, troot.Position.Z, W.BoarChargeSpeed)
+					end
+					deer.busyUntil = now + 0.4
+				elseif now >= deer.busyUntil then
+					deer.target = nil
+					-- root about, slow and unbothered
+					local x, z = clampToArea(deer.area, pos.X + rng:NextNumber(-18, 18), pos.Z + rng:NextNumber(-18, 18))
+					local t = moveTo(deer, x, z, W.BoarSpeed * rng:NextNumber(0.5, 1))
+					deer.busyUntil = now + t + rng:NextNumber(3, 8)
+				end
+				continue
+			end
 			if deer.wolf then
 				if threat and dist < W.WolfStalk and now >= deer.busyUntil then
 					-- slink to a spot on a ring around you, a little further round each time

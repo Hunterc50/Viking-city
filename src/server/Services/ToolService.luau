@@ -180,7 +180,7 @@ local function shoot(player: Player, aim)
 	local deer = hit and findDeer(hit.Instance)
 	if deer then
 		task.delay(flight, function()
-			services.WildlifeService:Kill(deer, player)
+			services.WildlifeService:Hit(deer, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
 		end)
 	end
 	local guard = hit and services.RaidService:FindDefender(hit.Instance)
@@ -243,6 +243,9 @@ local function strike(player: Player)
 	end
 	for _, raider in services.VillageDefenseService:RaidersNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.VillageDefenseService:DamageRaider(raider, damage)
+	end
+	for _, animal in services.WildlifeService:AnimalsNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
+		services.WildlifeService:Hit(animal, damage, player)
 	end
 	for _, militia in services.TownRaidService:MilitiaNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.TownRaidService:DamageMilitia(militia, damage, player)

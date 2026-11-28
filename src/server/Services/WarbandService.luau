@@ -295,9 +295,17 @@ local function hit(colony, kind: string, model: Model, amount: number)
 	end
 end
 
+-- Struck down: they're carried off to be tended, and are back on their feet
+-- after Config.Villagers.RecoverSeconds (see recover).
 local function fall(colony, v)
-	services.ColonyService:Notify(colony, v.name .. " fell in battle. Their name will be sung in the hall.", "bad")
-	services.VillagerService:Remove(colony, v)
+	local back = Config.Villagers.RecoverSeconds or 120
+	services.ColonyService:Notify(colony, v.name .. " has fallen! They'll be back on their feet in " .. math.floor(back / 60 + 0.5) .. " minutes.", "bad")
+	v.down = true
+	v.downUntil = os.clock() + back
+	v.militia = nil
+	if v.model then
+		v.model.Parent = nil
+	end
 end
 
 -- One fighting step for a warrior near an enemy. Returns true if it fought.
@@ -335,6 +343,55 @@ local function fight(colony, v, now: number, dt: number, anchor: Vector3, f): bo
 	end
 	v.fighting = now
 	return true
+end
+
+-- Fallen villagers and warriors get up again at home when their time is up.
+local function recover(colony, now: number)
+	for _, v in colony.villagers do
+		if v.down and now >= (v.downUntil or 0) then
+			v.down = nil
+			v.hp = nil
+			local corner, size = Grid.landRect(colony.origin, colony.land)
+			local spot = corner + Vector3.new(size.X / 2 + rng:NextNumber(-8, 8), 0, size.Z * 0.4 + rng:NextNumber(-8, 8))
+			if v.body then
+				v.body.CFrame = CFrame.new(spot + Vector3.new(0, v.height or 2, 0))
+			end
+			services.VillagerService:Rebuild(colony, v)
+			services.ColonyService:Notify(colony, v.name .. " is back on their feet.", "good")
+		end
+	end
+end
+
+-- Settlers take up arms: while raiders are in the village, grown villagers
+-- near them grab a weapon and fight. When the raid is over they go back to work.
+local function militia(colony, now: number, dt: number)
+	local raiding = services.VillageDefenseService:Raiding(colony)
+	local corner, size = Grid.landRect(colony.origin, colony.land)
+	local middle = corner + size / 2
+	for _, v in colony.villagers do
+		if v.warrior or v.down or v.away or not v.body or not v.model or not v.model.Parent then
+			continue
+		end
+		local grown = v.stage == "adult" or v.stage == "elder"
+		if raiding and grown then
+			local enemy = services.VillageDefenseService:NearestRaider(colony, v.body.Position, Config.Villagers.MilitiaSight or 34)
+			if enemy or v.militia then
+				if not v.militia then
+					v.militia = true
+					v.model:SetAttribute("Task", nil)
+					v.model:SetAttribute("Carry", nil)
+					ModelFactory.armWarrior(v.model)
+				end
+				-- settlers hit softer than trained warriors, and take it harder
+				fight(colony, v, now, dt, middle, { Sight = (Config.Villagers.MilitiaSight or 34) / W.Sight, Leash = 400, Damage = 0.7, DamageTaken = 1.2 })
+			end
+		elseif v.militia then
+			-- the raid is over: put the weapon down and go back to work
+			v.militia = nil
+			v.hp = nil
+			services.VillagerService:Rebuild(colony, v)
+		end
+	end
 end
 
 -- Places for the band on the deck of the player's longship.
@@ -688,6 +745,8 @@ function WarbandService:Start()
 				else
 					stepColony(colony, now, step)
 				end
+				militia(colony, now, step)
+				recover(colony, now)
 			end)
 			if not ok then
 				warn("[WarbandService] " .. tostring(err))

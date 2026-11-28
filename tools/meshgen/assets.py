@@ -873,6 +873,47 @@ def deer(seed=51):
     return m
 
 
+def boar(seed=57):
+    """A wild boar, facing -Z: a heavy bristled body high at the shoulders,
+    a long snout with tusks, short legs, small ears and a tufted tail."""
+    m = Mesh(seed)
+    rng = m.rng
+    coat = (74, 60, 50)
+    m.add(blob(1.0, coat, rng, 2, 0.08, 0.04, (0.95, 1.05, 1.75)), T(0, 2.0, 0.2))
+    m.add(blob(1.0, coat, rng, 1, 0.08, 0.04, (1.0, 1.15, 0.95)), T(0, 2.25, -0.9))  # shoulders
+    m.add(blob(1.0, coat, rng, 1, 0.08, 0.04, (0.9, 0.95, 0.9)), T(0, 1.95, 1.2))  # rump
+    # the bristly ridge down the back
+    for k in range(9):
+        z = -1.5 + k * 0.38
+        add_box(m, (0, 3.2 - abs(z + 0.6) * 0.18, z), (0.18, 0.4, 0.3), (46, 38, 32), RX(-0.3))
+    # head: a wedge running down to the snout
+    head = [V(0.55, 2.6, -1.6), V(-0.55, 2.6, -1.6), V(0.6, 1.6, -1.7), V(-0.6, 1.6, -1.7), V(0.25, 1.75, -3.1), V(-0.25, 1.75, -3.1), V(0.22, 1.3, -3.05), V(-0.22, 1.3, -3.05), V(0, 2.45, -2.4)]
+    m.add(hull(head, (66, 54, 46), rng, 0.04))
+    add_cyl(m, (0, 1.52, -3.05), (0, 1.52, -3.25), 0.26, (120, 92, 84), 8)  # snout disc
+    for s in (-1, 1):
+        add_box(m, (s * 0.09, 1.55, -3.27), (0.07, 0.1, 0.03), (30, 22, 20))
+        add_box(m, (s * 0.35, 2.15, -2.3), (0.08, 0.1, 0.12), (16, 12, 10))  # eyes
+        m.add(hull([V(s * 0.35, 2.55, -1.8), V(s * 0.75, 2.95, -1.6), V(s * 0.6, 2.6, -1.45), V(s * 0.4, 2.7, -1.6)], (58, 46, 40)))  # ears
+        # curved tusks
+        t0 = V(s * 0.25, 1.45, -2.8)
+        t1 = t0 + V(s * 0.15, 0.18, -0.15)
+        t2 = t1 + V(s * 0.05, 0.28, 0.05)
+        add_cyl(m, t0, t1, 0.07, (230, 220, 196), 5, 0.06)
+        add_cyl(m, t1, t2, 0.06, (230, 220, 196), 5, 0.015)
+    # short, stout legs and trotters
+    for x in (-0.45, 0.45):
+        for z in (-1.0, 1.3):
+            add_cyl(m, (x, 1.6, z), (x, 0.55, z + 0.05), 0.24, coat, 6, 0.15)
+            add_cyl(m, (x, 0.55, z + 0.05), (x, 0.12, z + 0.05), 0.14, (60, 50, 42), 6, 0.12)
+            add_box(m, (x, 0.08, z), (0.24, 0.16, 0.3), (32, 26, 22))
+    # tail with a tuft
+    add_cyl(m, (0, 2.3, 1.95), (0, 1.7, 2.25), 0.05, coat, 4)
+    m.add(blob(0.12, (40, 32, 28), rng, 0, 0.2, 0.02, (1, 1.6, 1)), T(0, 1.62, 2.28))
+    # paler belly
+    recolour(m, lambda rgb, n, c: mix(rgb, (120, 104, 90), 0.45) if rgb == coat and n[1] < -0.55 else rgb)
+    return m
+
+
 # ----------------------------------------------------------------------------- tools (handle space)
 
 
@@ -1432,104 +1473,166 @@ def gable_roof(m, x0, x1, half, eave_y, ridge_y, rgb, courses=5, thick=0.3, sag=
 
 
 def smithy():
-    """A smithy: a stone-footed timber forge shed with a shingle roof and a
-    smoke louvre, plank walls at the back and one side, a big stone forge with
-    a hood and chimney, bellows, anvil, grindstone, quench tub, racks of tools
-    and a heap of charcoal. The game puts its glowing coals on the forge at
-    (-3, 3.1, 2.5) and its smoke at the chimney top (-3, 9.6, 2.5)."""
+    """The smithy: a proper timber forge-house. Stone footing and tarred stave
+    walls on three sides, a wide open front bay under a tall front eave, a
+    steep shingle roof with carved gable boards, and a great stone chimney
+    rising through it from the forge. Inside, the forge's mouth glows; out
+    front stand the anvil, quench trough, grindstone and a weapon rack, with
+    a hanging hammer sign. The game adds its own coals, fire and smoke on the
+    forge at (-3, 3.1, 2.5)."""
     m = Mesh(99)
     rng = m.rng
-    # flagstone floor
-    for i in range(9):
-        for j in range(9):
-            x, z = -7.2 + (i + 0.5) * 1.6, -7.2 + (j + 0.5) * 1.6
-            add_box(m, (x + rng.uniform(-0.05, 0.05), 0.15, z), (1.5, 0.3 + rng.uniform(0, 0.08), 1.5), shade((92, 86, 78), 0.12, rng), RY(rng.uniform(-0.06, 0.06)), bevel=0.06)
-    # stone footing along the back and the left side
-    for z in np.arange(-6.6, 7.0, 1.1):
-        m.add(blob(0.62, shade(STONE, 0.14, rng), rng, 0, 0.3, 0.1, (1, 0.8, 1.1)), T(-6.6, 0.45, z))
-    for x in np.arange(-6.6, 7.0, 1.1):
-        m.add(blob(0.62, shade(STONE, 0.14, rng), rng, 0, 0.3, 0.1, (1.1, 0.8, 1)), T(x, 0.45, 6.6))
-    # frame: six posts, wall plates, tie beams and knee braces
-    posts = [(x, z) for x in (-6.6, 0, 6.6) for z in (-6.6, 6.6)]
-    for x, z in posts:
-        add_cyl(m, (x, 0.3, z), (x, 7.0, z), 0.42, shade(DARK, 0.06, rng), 8)
-    for z in (-6.6, 6.6):
-        add_beam(m, (-7.2, 7.0, z), (7.2, 7.0, z), 0.5, DARK)
-        for x in (-6.6, 0, 6.6):
-            for s_ in (-1, 1):
-                if -6.6 <= x + s_ * 1.4 <= 6.6:
-                    add_beam(m, (x, 5.6, z), (x + s_ * 1.4, 6.9, z), 0.22, DARK)
-    for x in (-6.6, 0, 6.6):
-        add_beam(m, (x, 7.0, -7.0), (x, 7.0, 7.0), 0.4, DARK)
-    # plank walls: the whole back and the left side (the front and right stay open)
-    plank_wall(m, (-6.6, 0, 6.75), (6.6, 0, 6.75), 0.6, 6.9, WEATHER)
-    plank_wall(m, (-6.75, 0, -6.6), (-6.75, 0, 6.6), 0.6, 6.9, WEATHER)
-    # gable infill at the ends
-    for x in (-6.7, 6.7):
-        for k in range(8):
-            z = -6.6 + (k + 0.5) * 13.2 / 8
-            top = 10.3 - 3.2 * abs(z) / 8.4
-            if top > 7.1:
-                add_box(m, (x, (7.0 + top) / 2, z), (0.25, top - 7.0, 13.2 / 8 + 0.03), shade(WEATHER, 0.08, rng))
-    # shingle roof, ridge along X, with a raised smoke louvre over the forge
-    gable_roof(m, -8.2, 8.2, 8.3, 7.0, 10.4, (92, 70, 52), courses=5)
-    m.add(hull([V(-4.4, 10.6, -1.2), V(-1.6, 10.6, -1.2), V(-4.4, 10.6, 1.2), V(-1.6, 10.6, 1.2), V(-4.7, 11.6, 0), V(-1.3, 11.6, 0)], (84, 62, 46)))
-    # the forge: a rough stone hearth, waist high, with a hood and chimney
+    EMBER, HOT = (255, 150, 50), (255, 96, 28)
+    # cobbled yard and floor
+    for i in range(10):
+        for j in range(10):
+            x, z = -7.6 + (i + 0.5) * 1.52, -7.8 + (j + 0.5) * 1.56
+            add_box(m, (x + rng.uniform(-0.06, 0.06), 0.12, z + rng.uniform(-0.06, 0.06)), (1.4, 0.24 + rng.uniform(0, 0.08), 1.44), shade((96, 90, 82), 0.12, rng), RY(rng.uniform(-0.1, 0.1)), bevel=0.06)
+    # stone footing course under the three walls
+    hx, front, back = 6.4, -3.2, 6.4
+    for z in np.arange(front, back + 0.1, 1.05):
+        for x in (-hx, hx):
+            m.add(blob(0.62, shade(STONE, 0.14, rng), rng, 0, 0.28, 0.1, (0.9, 0.95, 1.1)), T(x, 0.6, z))
+    for x in np.arange(-hx, hx + 0.1, 1.05):
+        m.add(blob(0.62, shade(STONE, 0.14, rng), rng, 0, 0.28, 0.1, (1.1, 0.95, 0.9)), T(x, 0.6, back))
+    # stave walls, tarred dark, from the footing to the eaves
+    wall_top = 5.0
+    plank_wall(m, (-hx, 0, back + 0.05), (hx, 0, back + 0.05), 1.0, wall_top, (70, 52, 38), along=0.62, thick=0.34)
+    for x in (-hx, hx):
+        plank_wall(m, (x, 0, front), (x, 0, back), 1.0, wall_top, (70, 52, 38), along=0.62, thick=0.34)
+    # a small shuttered window in the right wall
+    add_box(m, (hx + 0.2, 3.2, 2.0), (0.12, 1.2, 1.6), DARK)
+    add_box(m, (hx + 0.3, 3.2, 1.0), (0.1, 1.2, 0.75), WEATHER, RY(0.6))
+    # corner posts and the open front bay: three stout posts, a heavy lintel
+    for x, z in ((-hx, back), (hx, back), (-hx, front), (hx, front)):
+        add_cyl(m, (x, 0.2, z), (x, wall_top + 0.2, z), 0.42, shade(DARK, 0.06, rng), 8)
+    front_eave = 7.0
+    for x in (-hx, 0.0, hx):
+        add_cyl(m, (x, 0.2, -6.8), (x, front_eave, -6.8), 0.42, shade(DARK, 0.06, rng), 8)
+        add_beam(m, (x, front_eave - 1.6, -6.8), (x, front_eave - 0.1, -5.4), 0.22, DARK)
+    add_beam(m, (-hx - 0.6, front_eave, -6.8), (hx + 0.6, front_eave, -6.8), 0.55, DARK)
+    for x in (-hx, hx):  # side walls run on out to the front posts as low rails
+        add_beam(m, (x, 1.2, front), (x, 1.2, -6.8), 0.25, DARK)
+        add_beam(m, (x, wall_top, front), (x, front_eave, -6.8), 0.4, DARK)
+    add_beam(m, (-hx - 0.4, wall_top, back), (hx + 0.4, wall_top, back), 0.5, DARK)
+    # carved knot band along the lintel
+    for k in range(13):
+        add_box(m, (-hx + 0.4 + k * 1.0, front_eave, -7.1), (0.5, 0.3, 0.05), (150, 40, 36) if k % 2 else GOLD)
+    # steep shingle roof: ridge along X, a tall front slope over the open bay
+    ridge, ridge_z = 11.4, 0.6
+    xs = [-8.3 + 16.6 * i / 6 for i in range(7)]
+    for eave_y, eave_z, n in ((front_eave - 0.3, -8.55, 6), (wall_top - 0.4, 8.55, 5)):
+        for c in range(n):
+            v0, v1 = c / n, (c + 1) / n + 0.05
+            a = [V(x, ridge + (eave_y - ridge) * v0, ridge_z + (eave_z - ridge_z) * v0) for x in xs]
+            b = [V(x, ridge + (eave_y - ridge) * v1 - 0.1, ridge_z + (eave_z - ridge_z) * v1) for x in xs]
+            m.add(slab_between(a, b, 0.32, shade((86, 64, 48), 0.08, rng), rng, 0.05))
+    add_cyl(m, (-8.5, ridge + 0.32, ridge_z), (8.5, ridge + 0.32, ridge_z), 0.3, DARK, 6)
+    # gable ends: plank infill and crossed bargeboards with carved heads
+    for x in (-hx - 0.05, hx + 0.05):
+        for k in range(12):
+            z = -6.8 + (k + 0.5) * (back + 6.8) / 12
+            if z < ridge_z:
+                top = ridge - (ridge - front_eave) * (ridge_z - z) / (ridge_z + 6.8)
+                bot = front_eave if z < front else wall_top
+            else:
+                top = ridge - (ridge - wall_top) * (z - ridge_z) / (back - ridge_z)
+                bot = wall_top
+            if top > bot + 0.1 and z >= front:
+                add_box(m, (x, (bot + top) / 2, z), (0.25, top - bot, (back + 6.8) / 12 + 0.03), shade((96, 74, 54), 0.08, rng))
+        s_ = 1 if x > 0 else -1
+        ex = s_ * 8.4  # bargeboards along the roof's own edge
+        for sz, ey, ez in ((-1, front_eave - 0.3, -8.55), (1, wall_top - 0.4, 8.55)):
+            add_beam(m, (ex, ey + 0.25, ez), (ex, ridge + 0.6, ridge_z - sz * 0.5), 0.3, DARK)
+        tip = V(ex, ridge + 1.3, ridge_z)
+        add_cyl(m, V(ex, ridge + 0.4, ridge_z), tip, 0.2, DARK, 6, 0.14)
+        m.add(hull([tip, tip + V(0, 0.2, -0.9), tip + V(0, 0.6, -0.2), tip + V(0.15, 0.3, -0.3), tip + V(-0.15, 0.3, -0.3)], (150, 40, 36)))
+    # the forge: a big rough-stone hearth against the back-left, its glowing mouth to the front
+    fx, fz = -3.0, 2.5
     for i in range(4):
         for j in range(3):
-            add_box(m, (-3 + (i - 1.5) * 1.05, 0.55 + j * 0.85, 2.5), (1.0 + rng.uniform(0, 0.12), 0.8, 3.6 + rng.uniform(-0.1, 0.1)), shade(STONE, 0.14, rng), RY(rng.uniform(-0.04, 0.04)), bevel=0.1)
-    add_box(m, (-3, 2.85, 2.5), (4.4, 0.25, 3.8), shade((96, 92, 86), 0.05, rng), bevel=0.06)
-    add_box(m, (-3, 3.0, 2.5), (3.2, 0.12, 2.6), (40, 34, 30))  # the coal bed
-    for x in (-4.9, -1.1):
-        add_box(m, (x, 4.2, 3.8), (0.7, 2.6, 0.9), shade(STONE, 0.1, rng), bevel=0.08)
-    m.add(hull([V(-5.2, 5.4, 0.9), V(-0.8, 5.4, 0.9), V(-5.2, 5.4, 4.3), V(-0.8, 5.4, 4.3), V(-3.6, 7.6, 2.0), V(-2.4, 7.6, 2.0), V(-3.6, 7.6, 3.0), V(-2.4, 7.6, 3.0)], shade(STONE, 0.05, rng)))
-    for k in range(5):
-        add_box(m, (-3, 7.9 + k * 0.4, 2.5), (1.35 - k * 0.03, 0.4, 1.15 - k * 0.03), shade(STONE, 0.1, rng), RY(rng.uniform(-0.05, 0.05)), bevel=0.05)
-    add_box(m, (-3, 9.95, 2.5), (1.5, 0.2, 1.3), DARK)
-    # leather bellows on a frame, pumped by a pole
-    m.add(hull([V(-5.4, 1.5, 3.6), V(-5.4, 2.7, 3.6), V(-5.4, 1.5, 1.6), V(-5.4, 2.7, 1.6), V(-6.4, 2.1, 2.6)], LEATHER))
-    add_box(m, (-5.9, 2.75, 2.6), (1.2, 0.12, 2.2), WOOD)
-    add_cyl(m, (-6.2, 2.8, 2.6), (-6.3, 5.2, 1.4), 0.08, WOOD, 5)
-    # anvil on a stump
-    add_cyl(m, (3, 0.3, 0), (3, 1.9, 0), 0.9, WEATHER, 10, 0.85, vary=0.05, noise=0.05)
-    m.add(hull([V(x, y, z) for x in (2.1, 3.9) for y in (1.9, 2.15) for z in (-0.55, 0.55)], IRON))
-    m.add(hull([V(x, y, z) for x in (2.4, 3.6) for y in (2.15, 2.55) for z in (-0.3, 0.3)], IRON))
-    m.add(hull([V(x, y, z) for x in (2.0, 3.9) for y in (2.55, 2.95) for z in (-0.45, 0.45)] + [V(5.0, 2.85, 0), V(5.0, 2.95, 0)], IRON))
-    add_cyl(m, (3.4, 3.0, 0.2), (3.1, 3.0, 1.2), 0.07, (138, 100, 64), 5)
-    add_box(m, (3.45, 3.08, 0.15), (0.45, 0.28, 0.28), IRON)
-    # quenching tub
-    m.add(barrel_tris(rng, 1.7, 1.0), T(4.6, 0.3, 4.6))
-    add_box(m, (4.6, 1.95, 4.6), (1.6, 0.05, 1.6), (60, 84, 100))
-    # grindstone on a trestle
-    for z in (-3.6, -2.8):
-        add_beam(m, (5.2, 0.3, z), (5.2, 1.7, z), 0.22, DARK)
-    m.add(lathe([(0.0, -0.18), (1.0, -0.18), (1.05, 0.0), (1.0, 0.18), (0.0, 0.18)], 14, (150, 142, 128)), M(T(5.2, 1.75, -3.2), RX(math.pi / 2)))
-    add_cyl(m, (5.2, 1.75, -4.0), (5.2, 1.75, -2.2), 0.08, IRON, 5)
-    add_cyl(m, (5.2, 1.75, -2.2), (5.2, 1.0, -1.9), 0.06, WOOD, 4)
-    # tool rack on the back wall: tongs, hammers, a half-made blade
-    add_beam(m, (0.8, 4.2, 6.35), (5.8, 4.2, 6.35), 0.2, DARK)
-    for i, x in enumerate((1.4, 2.2, 3.0, 3.8, 4.6, 5.3)):
-        add_cyl(m, (x, 4.15, 6.3), (x + 0.15, 2.3, 6.25), 0.06, (138, 100, 64), 4)
-        if i % 2 == 0:
-            add_box(m, (x + 0.15, 2.3, 6.2), (0.5, 0.28, 0.25), IRON)
-        else:
-            add_cyl(m, (x - 0.1, 2.3, 6.2), (x + 0.3, 2.3, 6.2), 0.06, IRON, 4)
-    add_box(m, (-0.5, 3.2, 6.35), (0.12, 2.6, 0.06), STEEL)
-    # iron bars and a heap of charcoal by the left wall
-    for k in range(5):
-        add_box(m, (-5.6, 0.45 + (k // 3) * 0.22, -3.8 + (k % 3) * 0.3), (0.2, 0.2, 2.4), (86, 80, 78))
-    m.add(blob(1.2, (40, 38, 38), rng, 1, 0.2, 0.08, (1.1, 0.5, 1.0)), T(-5.2, 0.65, -1.4))
-    # a cart wheel waiting for its rim, leaning on the side wall
-    c = V(-6.3, 1.4, -5.2)
-    for k in range(12):
-        a0, a1 = k / 12 * math.tau, (k + 1) / 12 * math.tau
-        add_beam(m, c + V(0, math.cos(a0) * 1.1, math.sin(a0) * 1.1), c + V(0, math.cos(a1) * 1.1, math.sin(a1) * 1.1), 0.2, DARK)
+            for side in (-1, 1):
+                add_box(m, (fx + side * (1.55 + 0.25 * (i % 2)), 0.55 + j * 0.85, fz - 1.2 + i * 0.95), (0.9, 0.82, 0.95), shade(STONE, 0.14, rng), RY(rng.uniform(-0.05, 0.05)), bevel=0.1)
+    for i in range(4):
+        add_box(m, (fx - 1.5 + i * 1.0, 0.55 + 1 * 0.85, fz + 1.6), (0.95, 2.5, 0.9), shade(STONE, 0.14, rng), bevel=0.1)
+    add_box(m, (fx, 0.6, fz), (2.4, 1.0, 2.6), shade(STONE, 0.1, rng), bevel=0.08)
+    add_box(m, (fx, 2.85, fz), (4.6, 0.3, 3.9), shade((100, 96, 90), 0.05, rng), bevel=0.08)
+    add_box(m, (fx, 2.95, fz), (3.0, 0.12, 2.4), (48, 36, 30))
+    # the glowing mouth of the firebox under the hearth, and embers spilling out
+    add_box(m, (fx, 1.6, fz - 1.3), (1.8, 1.1, 0.1), HOT)
+    add_box(m, (fx, 1.6, fz - 1.25), (2.2, 1.4, 0.06), (40, 34, 30))
     for k in range(6):
-        a = k / 6 * math.tau
-        add_cyl(m, c, c + V(0, math.cos(a) * 1.05, math.sin(a) * 1.05), 0.06, WOOD, 4)
-    # a horseshoe nailed over the open front
-    m.add(lathe([(0.32, 0), (0.32, 0.08), (0.22, 0.08), (0.22, 0)], 10, IRON), M(T(0, 6.4, -6.9), RX(math.pi / 2)))
+        m.add(blob(0.18, EMBER if k % 2 else HOT, rng, 0, 0.3, 0.05), T(fx + rng.uniform(-0.8, 0.8), 1.15, fz - 1.1 + rng.uniform(-0.1, 0.1)))
+    # the hood and the great chimney up through the roof
+    m.add(hull([V(fx - 2.3, 5.2, fz - 1.9), V(fx + 2.3, 5.2, fz - 1.9), V(fx - 2.3, 5.2, fz + 1.9), V(fx + 2.3, 5.2, fz + 1.9), V(fx - 1.0, 7.4, fz - 0.8), V(fx + 1.0, 7.4, fz - 0.8), V(fx - 1.0, 7.4, fz + 0.8), V(fx + 1.0, 7.4, fz + 0.8)], shade(STONE, 0.05, rng)))
+    for x in (fx - 1.95, fx + 1.95):
+        add_box(m, (x, 4.05, fz - 1.5), (0.7, 2.3, 0.7), shade(STONE, 0.1, rng), bevel=0.08)
+    y = 7.4
+    while y < 13.2:
+        w = 2.1 - (y - 7.4) * 0.06
+        add_box(m, (fx + rng.uniform(-0.05, 0.05), y + 0.3, fz), (w, 0.62, w * 0.9), shade(STONE, 0.12, rng), RY(rng.uniform(-0.06, 0.06)), bevel=0.06)
+        y += 0.6
+    add_box(m, (fx, 13.35, fz), (2.0, 0.22, 1.8), shade((96, 92, 86), 0.04, rng))
+    for x in (fx - 0.75, fx + 0.75):
+        add_box(m, (x, 13.75, fz), (0.3, 0.6, 1.4), STONE)
+    add_box(m, (fx, 14.15, fz), (2.0, 0.2, 1.7), (80, 76, 72))
+    # bellows beside the forge with a pump pole
+    m.add(hull([V(fx + 2.3, 1.4, fz - 0.6), V(fx + 2.3, 2.6, fz - 0.6), V(fx + 2.3, 1.4, fz + 1.4), V(fx + 2.3, 2.6, fz + 1.4), V(fx + 3.7, 2.0, fz + 0.4)], LEATHER))
+    add_box(m, (fx + 3.0, 2.68, fz + 0.4), (1.5, 0.12, 2.1), WOOD)
+    add_cyl(m, (fx + 3.6, 2.75, fz + 0.4), (fx + 4.2, 5.6, fz + 0.4), 0.08, WOOD, 5)
+    add_cyl(m, (fx + 4.2, 5.6, fz + 0.4), (fx + 4.2, wall_top + 2.2, fz + 0.4), 0.03, (176, 150, 104), 3)
+    # tools hung on the back wall
+    add_beam(m, (0.6, 4.0, back - 0.3), (5.6, 4.0, back - 0.3), 0.2, DARK)
+    for i, x in enumerate((1.2, 2.0, 2.8, 3.6, 4.4, 5.1)):
+        add_cyl(m, (x, 3.95, back - 0.35), (x + 0.15, 2.2, back - 0.4), 0.06, (138, 100, 64), 4)
+        if i % 2 == 0:
+            add_box(m, (x + 0.15, 2.2, back - 0.42), (0.55, 0.3, 0.28), IRON)
+        else:
+            add_cyl(m, (x - 0.12, 2.2, back - 0.42), (x + 0.32, 2.2, back - 0.42), 0.06, IRON, 4)
+    # anvil on a great stump, under the front of the roof
+    ax, az = 3.0, 0.0
+    add_cyl(m, (ax, 0.2, az), (ax, 1.9, az), 0.95, WEATHER, 11, 0.88, vary=0.05, noise=0.05)
+    m.add(lathe([(0.0, 1.88), (0.9, 1.88), (0.9, 1.92), (0.0, 1.92)], 11, (190, 156, 110)), T(ax, 0, az))
+    for k in range(5):
+        a = k / 5 * math.tau
+        add_cyl(m, (ax + math.cos(a) * 0.8, 0.2, az + math.sin(a) * 0.8), (ax + math.cos(a) * 1.3, 0.25, az + math.sin(a) * 1.3), 0.2, WEATHER, 5, 0.05)
+    m.add(hull([V(x, y, z) for x in (ax - 0.9, ax + 0.9) for y in (1.92, 2.15) for z in (-0.55, 0.55)], IRON))
+    m.add(hull([V(x, y, z) for x in (ax - 0.6, ax + 0.6) for y in (2.15, 2.55) for z in (-0.3, 0.3)], IRON))
+    m.add(hull([V(x, y, z) for x in (ax - 1.0, ax + 0.9) for y in (2.55, 2.95) for z in (-0.48, 0.48)] + [V(ax + 2.0, 2.85, 0), V(ax + 2.0, 2.95, 0)], (74, 76, 80)))
+    add_box(m, (ax - 0.3, 3.0, 0.0), (0.9, 0.08, 0.3), EMBER)  # a hot bar on the anvil
+    add_cyl(m, (ax + 0.4, 3.05, 0.25), (ax + 0.1, 3.05, 1.3), 0.07, (138, 100, 64), 5)
+    add_box(m, (ax + 0.45, 3.12, 0.2), (0.48, 0.3, 0.3), IRON)
+    # quench trough of planks, full of dark water
+    add_box(m, (5.2, 0.75, -3.6), (1.4, 1.1, 3.0), shade(WOOD, 0.06, rng), bevel=0.05)
+    add_box(m, (5.2, 1.25, -3.6), (1.1, 0.05, 2.7), (52, 72, 88))
+    for z in (-4.8, -2.4):
+        add_box(m, (5.2, 0.75, z), (1.5, 1.15, 0.12), IRON)
+    # grindstone on a trestle, out in the yard
+    for z in (-6.0, -5.2):
+        add_beam(m, (-4.8, 0.2, z), (-4.8, 1.7, z), 0.22, DARK)
+    m.add(lathe([(0.0, -0.2), (1.0, -0.2), (1.06, 0.0), (1.0, 0.2), (0.0, 0.2)], 14, (150, 142, 128)), M(T(-4.8, 1.75, -5.6), RX(math.pi / 2)))
+    add_cyl(m, (-4.8, 1.75, -6.4), (-4.8, 1.75, -4.6), 0.08, IRON, 5)
+    add_cyl(m, (-4.8, 1.75, -4.6), (-4.8, 1.0, -4.3), 0.06, WOOD, 4)
+    # a rack of new-made weapons by the open front
+    for x in (-2.6, -0.6):
+        add_beam(m, (x, 0.2, -7.6), (x, 2.4, -7.6), 0.18, DARK)
+    add_beam(m, (-2.8, 2.2, -7.6), (-0.4, 2.2, -7.6), 0.16, DARK)
+    for k, x in enumerate((-2.3, -1.7, -1.1)):
+        add_cyl(m, (x, 0.25, -7.45), (x + 0.05, 1.2, -7.5), 0.05, (138, 100, 64), 4)
+        add_box(m, (x + 0.06, 2.2, -7.5), (0.12, 2.0, 0.24) if k != 1 else (0.1, 0.9, 0.7), STEEL)
+    # iron bars, a heap of charcoal and charcoal sacks along the left
+    for k in range(6):
+        add_box(m, (-5.4, 0.4 + (k // 3) * 0.2, -1.6 + (k % 3) * 0.3), (0.18, 0.18, 2.4), (86, 80, 78))
+    m.add(blob(1.1, (38, 36, 36), rng, 1, 0.2, 0.08, (1.1, 0.55, 1.0)), T(-5.0, 0.7, 5.0))
+    for p in ((-5.4, -4.2), (-5.9, -3.3)):
+        m.add(blob(0.55, (120, 104, 84), rng, 1, 0.1, 0.05, (1, 1.25, 1)), T(p[0], 0.75, p[1]))
+    # a hanging sign: an anvil cut out on a board, under an iron bracket
+    add_beam(m, (hx, 6.0, -6.8), (hx + 1.6, 6.0, -6.8), 0.12, IRON)
+    add_box(m, (hx + 1.1, 5.1, -6.8), (1.2, 1.0, 0.12), (196, 160, 80))
+    add_box(m, (hx + 1.1, 5.1, -6.88), (0.7, 0.35, 0.05), (40, 36, 34))
+    add_box(m, (hx + 1.1, 4.85, -6.88), (0.3, 0.3, 0.05), (40, 36, 34))
     return m
+
 
 
 def brewhouse():
@@ -1994,6 +2097,7 @@ ASSETS = {
     "Bush": bush,
     "Longship": longship,
     "Deer": deer,
+    "Boar": boar,
     "Axe": axe,
     "Pickaxe": pickaxe,
     "Bow": bow,

@@ -25,6 +25,8 @@ Config.BaseStorage = 200 -- max of each resource before any storehouse
 -- Villagers ---------------------------------------------------------------
 Config.Villagers = {
 	Starting = 3,
+	RecoverSeconds = 120, -- a settler or warrior struck down is back on their feet after this
+	MilitiaSight = 34, -- during a raid, grown settlers this close to a raider take up arms
 	FoodPerAdultPerSecond = 0.1, -- 6 food per adult per day
 	FoodPerChildPerSecond = 0.05,
 	BabyDays = 1, -- babies toddle after a parent for their first day
@@ -327,6 +329,18 @@ Config.Wildlife = {
 	WolfKeepAway = 14, -- ...but keep this far off, circling you
 	WolfHides = 4,
 	WolfRespawnSeconds = 90,
+	-- wild boars root about the meadow too. Leave them be, or they fight back:
+	-- hit one and it charges and gores you until one of you goes down
+	BoarsPerPlot = 2,
+	BoarHealth = 120,
+	BoarDamage = 14, -- per goring
+	BoarGoreCooldown = 1.4,
+	BoarSpeed = 7,
+	BoarChargeSpeed = 23,
+	BoarAngrySeconds = 14, -- how long it keeps charging after it was last hit
+	BoarMeat = 40,
+	BoarHides = 3,
+	BoarRespawnSeconds = 90,
 }
 
 -- The rival village you can raid ---------------------------------------------

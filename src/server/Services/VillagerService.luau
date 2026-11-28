@@ -152,7 +152,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 		ModelFactory.armWarrior(v.model)
 	end
 	-- away on an expedition: the figure waits until they come home
-	v.model.Parent = (not v.away) and colony.plot.Villagers or nil
+	v.model.Parent = (not v.away and not v.down) and colony.plot.Villagers or nil
 	v.busyUntil = 0
 	updateLabel(colony, v)
 end
@@ -649,7 +649,8 @@ function VillagerService:Tick(colony, dt: number)
 
 	local now = os.clock()
 	for _, v in colony.villagers do
-		if not v.warrior then -- the war band moves itself (WarbandService)
+		-- the war band, settlers fighting raiders and the fallen are moved by WarbandService
+		if not v.warrior and not v.militia and not v.down then
 			walk(colony, v, now)
 		end
 	end

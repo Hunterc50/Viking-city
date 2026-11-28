@@ -13,13 +13,15 @@ import colorsys
 from mesh import Mesh
 
 # shades per material: more keeps variety, fewer keeps the part count low
-SHADES = {"Wood": 3, "Stone": 2, "Thatch": 2, "Leaves": 3, "Cloth": 3, "Metal": 1}
+SHADES = {"Glow": 1, "Wood": 3, "Stone": 2, "Thatch": 2, "Leaves": 3, "Cloth": 3, "Metal": 1}
 
 
 def classify(rgb):
     r, g, b = (c / 255 for c in rgb)
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
     hue = h * 360
+    if v >= 0.97 and s > 0.6 and 10 <= hue <= 48:
+        return "Glow"  # embers and hot iron: shown as Neon, so they shine
     if v > 0.75 and s < 0.3 and 25 <= hue <= 65:
         return "Cloth"  # cream: sail canvas, linen
     if s < 0.16:
