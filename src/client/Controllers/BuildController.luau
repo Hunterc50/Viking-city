@@ -151,7 +151,8 @@ local function updatePlacement()
 	end
 	ghost.Parent = workspace
 
-	local sx, sz = Grid.footprint(mode.type, rot)
+	local r = Config.Buildings[mode.type].Shore and 0 or rot -- a jetty always points out to sea
+	local sx, sz = Grid.footprint(mode.type, r)
 	local cx, cz = Grid.worldToCell(origin, hit.Position, sx, sz)
 	-- keep the preview inside the plot so it doesn't jump off the edge
 	local state = controllers.StateController.State
@@ -160,11 +161,11 @@ local function updatePlacement()
 	cx = math.clamp(cx, minX, maxX - sx)
 	cz = math.clamp(cz, minZ, maxZ - sz)
 
-	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz, land)
+	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz, land, mode.type)
 	local affordable = state ~= nil and Grid.canAfford(state.resources, Config.Buildings[mode.type].Cost)
 	local ok = free and affordable
 
-	ghost:PivotTo(Grid.buildingCFrame(origin, cx, cz, sx, sz, rot))
+	ghost:PivotTo(Grid.buildingCFrame(origin, cx, cz, sx, sz, r))
 	highlight.FillColor = ok and GOOD or BAD
 	highlight.OutlineColor = ok and GOOD or BAD
 	current = { cx = cx, cz = cz, ok = ok, affordable = affordable }

@@ -419,6 +419,15 @@ Config.Buildings = {
 		Cost = { Wood = 6 },
 		Decor = true,
 	},
+	-- Shore: only on the front row of your beach, always pointing out to sea.
+	Jetty = {
+		Display = "Jetty",
+		Description = "A plank jetty on piles, running from your beach out over the water. Place it on the front row of the sand.",
+		Size = { 1, 1 },
+		Cost = { Wood = 25 },
+		Decor = true,
+		Shore = true,
+	},
 	Watchtower = {
 		Display = "Watchtower",
 		Description = "A tall lookout. Its archer shoots at raiders who attack your village.",
@@ -435,14 +444,14 @@ Config.BuildCategories = {
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
-	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "PalisadeGate", "Watchtower", "Shipyard" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "PalisadeGate", "Watchtower", "Shipyard", "Jetty" } },
 	{ Name = "Decorations", Icon = "🪵", Buildings = { "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", PalisadeGate = "🚪", Watchtower = "🏹", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", PalisadeGate = "🚪", Watchtower = "🏹", Shipyard = "⛵", Jetty = "⚓",
 	DecorTorch = "🔥", DecorBrazier = "🔥", DecorRuneStone = "🪨", DecorBanner = "🚩", DecorShieldRack = "🛡️", DecorTotem = "🗿", DecorAntlers = "🦌", DecorWoodpile = "🪵",
 }
 
@@ -658,14 +667,16 @@ Config.Ranks = {
 
 -- Land ----------------------------------------------------------------------
 -- Buy bigger land in stages (Jarl's Table > Land). Cells are counted from the
--- plot's front-left corner; MinX below 0 grows the land sideways into the gap
+-- plot's front-left corner. MinZ below 0 is the beach in front of the plot,
+-- down to the water's edge (yours from the start, so jetties and boat sheds
+-- can go on the sand). MinX below 0 grows the land sideways into the gap
 -- between plots, MaxZ grows it back toward the meadow. Never overlaps a
 -- neighbour: the gap between plots is 6 cells and each side takes at most 2.
 Config.LandStages = {
-	{ Name = "Homestead", MinX = 0, MaxX = 20, MaxZ = 20 },
-	{ Name = "Farmstead", MinX = 0, MaxX = 20, MaxZ = 23, Cost = { Silver = 40, Wood = 60 }, Rank = 1 },
-	{ Name = "Steading", MinX = -2, MaxX = 22, MaxZ = 23, Cost = { Silver = 90, Stone = 50 }, Rank = 2 },
-	{ Name = "Great Steading", MinX = -2, MaxX = 22, MaxZ = 26, Cost = { Silver = 160, Wood = 100, Stone = 80 }, Rank = 3 },
+	{ Name = "Homestead", MinX = 0, MaxX = 20, MinZ = -4, MaxZ = 20 },
+	{ Name = "Farmstead", MinX = 0, MaxX = 20, MinZ = -4, MaxZ = 24, Cost = { Silver = 40, Wood = 60 }, Rank = 1 },
+	{ Name = "Steading", MinX = -2, MaxX = 22, MinZ = -4, MaxZ = 26, Cost = { Silver = 90, Stone = 50 }, Rank = 2 },
+	{ Name = "Great Steading", MinX = -2, MaxX = 22, MinZ = -4, MaxZ = 28, Cost = { Silver = 160, Wood = 100, Stone = 80 }, Rank = 3 },
 }
 
 -- War band ------------------------------------------------------------------
@@ -887,10 +898,11 @@ function Grid.footprint(buildingType: string, rot: number): (number, number)
 end
 
 -- The cell bounds of a plot at land stage `land` (1 = starting size):
--- minX, minZ, maxX, maxZ, with max exclusive. Cells may be negative.
+-- minX, minZ, maxX, maxZ, with max exclusive. Cells may be negative
+-- (minZ < 0 is the beach in front of the plot).
 function Grid.bounds(land: number?): (number, number, number, number)
 	local stage = Config.LandStages[land or 1] or Config.LandStages[1]
-	return stage.MinX, 0, stage.MaxX, stage.MaxZ
+	return stage.MinX, stage.MinZ or 0, stage.MaxX, stage.MaxZ
 end
 
 -- The world-space box of the land: min corner and size (studs).
@@ -903,7 +915,8 @@ end
 function Grid.maxBounds(): (number, number, number, number)
 	local a, b, c, d = 0, 0, N, N
 	for _, stage in Config.LandStages do
-		a, c, d = math.min(a, stage.MinX), math.max(c, stage.MaxX), math.max(d, stage.MaxZ)
+		a, b = math.min(a, stage.MinX), math.min(b, stage.MinZ or 0)
+		c, d = math.max(c, stage.MaxX), math.max(d, stage.MaxZ)
 	end
 	return a, b, c, d
 end
@@ -923,9 +936,18 @@ function Grid.eachCell(cx: number, cz: number, sx: number, sz: number, fn: (numb
 end
 
 -- `blocked` is a set: { ["x,z"] = true/anything }.
-function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number, land: number?): (boolean, string?)
+-- `buildingType` (optional) adds that building's own rules, like a jetty's
+-- place at the water's edge.
+function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number, land: number?, buildingType: string?): (boolean, string?)
 	if not Grid.inBounds(cx, cz, sx, sz, land) then
 		return false, "Outside your land"
+	end
+	local def = buildingType and Config.Buildings[buildingType]
+	if def and def.Shore then
+		local _, minZ = Grid.bounds(land)
+		if cz ~= minZ then
+			return false, "A jetty goes on the front row of your beach, by the water"
+		end
 	end
 	local free = true
 	Grid.eachCell(cx, cz, sx, sz, function(x, z)
@@ -2434,6 +2456,24 @@ function ModelFactory.dock(length: number): Model
 	return model
 end
 
+-- A jetty you build yourself: a shorter dock starting at the back of its
+-- cell (on the sand) and running out along -Z over the water. Its piles go
+-- down to the sea bed, so it keeps its own floor (see ModelFactory.building).
+local partDock = ModelFactory.dock -- the block-built one (a mesh may replace ModelFactory.dock)
+function Builders.Jetty(model, _w, d)
+	local dock = partDock(28)
+	for _, child in dock:GetChildren() do
+		child.Parent = model
+	end
+	dock:Destroy()
+	-- the building's pivot sits on the ground (GROUND_Y); a dock's at the waterline
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CFrame = CFrame.new(0, -Config.GROUND_Y, d / 2) * part.CFrame
+		end
+	end
+end
+
 -- A longship, bow toward local -Z, pivot at the waterline in the middle.
 function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 	local L = length or 44
@@ -3395,6 +3435,7 @@ ModelFactory.Slots = {
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
+	"PalisadeGate", "Jetty", "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile",
 }
 
 -- Models laid out in Workspace > ModelWorkshop (see bakeTemplates) are
@@ -3810,7 +3851,8 @@ function ModelFactory.building(buildingType: string): Model
 	local reference = partBuilt.building(buildingType)
 	local model = wrap(custom)
 	setAnchored(model, true)
-	fitTo(model, reference, "footprint", nil, 0)
+	-- buildings stand on the ground; a jetty's piles reach down into the water
+	fitTo(model, reference, "footprint", nil, not Config.Buildings[buildingType].Shore and 0 or nil)
 	keepGlow(model, reference)
 	reference:Destroy()
 	model.Name = buildingType
@@ -5433,8 +5475,11 @@ function BuildingService:TryPlace(player: Player, buildingType, cx, cz, rot)
 	if def.Requires and not ColonyService:Has(colony, def.Requires) then
 		return false, "Research " .. Config.Tech[def.Requires].Name .. " first (press T)"
 	end
+	if def.Shore then
+		rot = 0 -- a jetty always runs out to sea
+	end
 	local sx, sz = Grid.footprint(buildingType, rot)
-	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz, colony.land)
+	local ok, reason = Grid.canPlace(colony.blocked, cx, cz, sx, sz, colony.land, buildingType)
 	if not ok then
 		return false, reason
 	end
@@ -6645,11 +6690,12 @@ local function makePart(props)
 	return p
 end
 
--- Wooden posts at the corners and stakes along the edges, so you can see
--- your borders. Redrawn when the land grows.
+-- Your borders: tall carved posts with a red cloth at the corners, and a
+-- line of stakes joined by rope all the way round (across the beach too).
+-- Redrawn when the land grows.
 drawBorders = function(plot: Model, origin: Vector3, land: number)
 	for _, child in plot:GetChildren() do
-		if child.Name == "BorderPost" or child.Name == "BorderStake" then
+		if child.Name == "BorderPost" or child.Name == "BorderStake" or child.Name == "BorderRope" or child.Name == "BorderCloth" then
 			child:Destroy()
 		end
 	end
@@ -6659,35 +6705,69 @@ drawBorders = function(plot: Model, origin: Vector3, land: number)
 		for _, z in { 0, size.Z } do
 			local post = makePart({
 				Name = "BorderPost",
-				Size = Vector3.new(1, 6, 1),
-				Position = corner + Vector3.new(x, 3, z),
+				Size = Vector3.new(1.1, 7, 1.1),
+				Position = corner + Vector3.new(x, 3.5, z),
 				Color = Color3.fromRGB(78, 54, 36),
 				Material = Enum.Material.Wood,
+				Parent = plot,
+			})
+			makePart({
+				Name = "BorderCloth",
+				Size = Vector3.new(0.12, 2.2, 1.4),
+				Position = post.Position + Vector3.new(0, 2.2, 0.8),
+				Color = Color3.fromRGB(150, 36, 32),
+				Material = Enum.Material.Fabric,
+				CanCollide = false,
+				CastShadow = false,
 				Parent = plot,
 			})
 			first = first or post
 		end
 	end
-	-- low stakes every 4 cells along the sides and back
-	local step = Config.CELL * 4
+	-- stakes every 2 cells, a rope from each one to the next
+	local step = Config.CELL * 2
 	local function stake(p: Vector3)
 		makePart({
 			Name = "BorderStake",
-			Size = Vector3.new(0.5, 2.4, 0.5),
-			Position = p + Vector3.new(0, 1.2, 0),
+			Size = Vector3.new(0.45, 2.6, 0.45),
+			Position = p + Vector3.new(0, 1.3, 0),
 			Color = Color3.fromRGB(96, 70, 46),
 			Material = Enum.Material.Wood,
 			CanCollide = false,
 			Parent = plot,
 		})
 	end
-	for d = step, size.Z - 1, step do
-		stake(corner + Vector3.new(0, 0, d))
-		stake(corner + Vector3.new(size.X, 0, d))
+	local function rope(a: Vector3, b: Vector3)
+		local mid = (a + b) / 2 + Vector3.new(0, 2.1, 0)
+		makePart({
+			Name = "BorderRope",
+			Size = Vector3.new(0.14, 0.14, (b - a).Magnitude),
+			CFrame = CFrame.lookAt(mid, b + Vector3.new(0, 2.1, 0)),
+			Color = Color3.fromRGB(196, 170, 120),
+			Material = Enum.Material.Fabric,
+			CanCollide = false,
+			CastShadow = false,
+			Parent = plot,
+		})
 	end
-	for d = step, size.X - 1, step do
-		stake(corner + Vector3.new(d, 0, size.Z))
+	local function side(from: Vector3, to: Vector3)
+		local len = (to - from).Magnitude
+		local dir = (to - from).Unit
+		local last = from
+		for d = step, len - 1, step do
+			local p = from + dir * d
+			stake(p)
+			rope(last, p)
+			last = p
+		end
+		rope(last, to)
 	end
+	local c00, c10 = corner, corner + Vector3.new(size.X, 0, 0)
+	local c01, c11 = corner + Vector3.new(0, 0, size.Z), corner + Vector3.new(size.X, 0, size.Z)
+	side(c00, c10)
+	side(c10, c11)
+	side(c11, c01)
+	side(c01, c00)
 	local ground = plot:FindFirstChild("Ground")
 	if ground then
 		ground.Size = Vector3.new(size.X, 1, size.Z)
@@ -8255,7 +8335,7 @@ local function randomFreeCell(colony)
 	local minX, minZ, maxX, maxZ = Grid.bounds(colony.land)
 	for _ = 1, 60 do
 		local x = rng:NextInteger(minX, maxX - 1)
-		local z = rng:NextInteger(minZ, maxZ - 1)
+		local z = rng:NextInteger(math.max(minZ, 0), maxZ - 1) -- trees and rocks stay off the beach
 		if not colony.blocked[Grid.key(x, z)] then
 			return x, z
 		end
@@ -12268,7 +12348,7 @@ local herd = {} -- [model] = deer record
 local nextId = 0
 
 local _, _, _, LAND_MAX_Z = Grid.maxBounds()
-local MEADOW_MIN_Z, MEADOW_MAX_Z = LAND_MAX_Z * Config.CELL + 16, Grid.PLOT_SIZE + 105
+local MEADOW_MIN_Z, MEADOW_MAX_Z = LAND_MAX_Z * Config.CELL + 16, Grid.PLOT_SIZE + 135
 
 function WildlifeService:Init(allServices)
 	services = allServices
@@ -12530,9 +12610,9 @@ return WildlifeService
 
 	Layout (looking from the lake toward the mountains):
 	  z < -44      a fjord lake, with a far shore and peaks across the water
-	  z -44..0     sandy beach and docks, then a dirt path in front of each plot
-	  z 0..160     the row of player plots (grass)
-	  z 160..270   an open meadow where deer roam
+	  z -44..0     sandy beach and docks (the front of each plot's land)
+	  z 0..160     the row of player plots (grass), growing back to z 224
+	  z 240..300   an open meadow where deer roam
 	  z 270..470   pine forest, rolling hills and rock outcrops
 	  z 480+       snow-capped mountains
 	Also sets up warm afternoon light, haze, sky and colour grading.
@@ -12570,7 +12650,7 @@ for _, rival in Config.Rivals do
 	FLAT_MIN_X = math.min(FLAT_MIN_X, rival.Center.X - rival.Radius - 30)
 	FLAT_MAX_X = math.max(FLAT_MAX_X, rival.Center.X + rival.Radius + 30)
 end
-local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 115
+local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 145
 local SHORE_Z = -40 -- where the beach starts to slope into the fjord
 local SEED = 7.31
 
@@ -12810,7 +12890,7 @@ local function inPath(x: number, z: number): boolean
 end
 
 local function inApron(x: number, z: number): boolean
-	if z < -16 or z > 0 then
+	if z < -4 or z > 0 then
 		return false
 	end
 	for i = 1, Config.MAX_PLOTS do
@@ -12838,7 +12918,8 @@ local function surfaceMaterial(x: number, z: number, h: number, slope: number)
 		return M.Ground
 	end
 	if inPlotArea(x, z) then
-		return M.Grass
+		-- the front of every plot is beach, down to the water
+		return z < -4 and M.Sand or M.Grass
 	end
 	local rival = rivalAt(x, z)
 	if rival then
@@ -13077,7 +13158,7 @@ local function scatterScenery()
 		tries += 1
 		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(MIN_Z + 40, 640)
 		local density = fbm(x, z, 1 / 220, 3, 29) + 0.15
-		if z > FLAT_MAX_Z - 30 and z < FLAT_MAX_Z + 40 and x > FLAT_MIN_X and x < FLAT_MAX_X then
+		if z > FLAT_MAX_Z - 70 and z < FLAT_MAX_Z + 40 and x > FLAT_MIN_X and x < FLAT_MAX_X then
 			density -= 0.35 -- keep the deer meadow open
 		end
 		if rng:NextNumber() < density * 2 and plant(x, z) then
@@ -13184,34 +13265,6 @@ local function scatterScenery()
 			ship:PivotTo(CFrame.new(dockX + 9, 0, -62) * CFrame.Angles(0, math.rad(rng:NextNumber(-4, 4)), 0))
 			ship.Parent = folder
 		end
-		-- torches lighting the path at each corner of the plot
-		for _, x in { o.X + 2, o.X + Grid.PLOT_SIZE - 2 } do
-			local torch = Instance.new("Model")
-			torch.Name = "Torch"
-			local pole = ModelFactory.addPart(torch, {
-				Size = Vector3.new(0.5, 6, 0.5),
-				Position = Vector3.new(x, TOP + 3, -2),
-				Color = ModelFactory.Colors.DarkWood,
-			})
-			local flame = ModelFactory.addPart(torch, {
-				Size = Vector3.new(0.7, 0.7, 0.7),
-				Position = pole.Position + Vector3.new(0, 3.3, 0),
-				Color = Color3.fromRGB(255, 140, 50),
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-			})
-			local fire = Instance.new("Fire")
-			fire.Size = 1.6
-			fire.Heat = 5
-			fire.Parent = flame
-			local light = Instance.new("PointLight")
-			light.Color = Color3.fromRGB(255, 150, 70)
-			light.Range = 18
-			light.Brightness = 1.6
-			light.Parent = flame
-			torch.Parent = folder
-		end
-
 		-- village life on the beach and in the gaps between plots
 		local function placeProp(kind: string, x: number, z: number, turn: number)
 			local prop = ModelFactory.prop(kind, rng)
@@ -13221,12 +13274,13 @@ local function scatterScenery()
 			prop.Parent = folder
 		end
 		-- torch posts down the path to the jetty, warm against the cold
-		for k, z in { -6, -17, -28 } do
-			placeProp("TorchPost", dockX + ((k % 2 == 0) and 4.6 or -4.6), z, 0)
+		-- (all at the water's edge, below your beach, so the sand is free to build on)
+		for _, dx in { -4.6, 4.6 } do
+			placeProp("TorchPost", dockX + dx, -35, 0)
 		end
-		placeProp("FishRack", dockX - 14, -24, rng:NextNumber(-0.3, 0.3))
-		placeProp("Barrels", dockX + 7, -30, rng:NextNumber(0, 6))
-		placeProp("BoatUpturned", dockX + 22, -30, math.rad(80) + rng:NextNumber(-0.2, 0.2))
+		placeProp("FishRack", dockX - 14, -38, rng:NextNumber(-0.3, 0.3))
+		placeProp("Barrels", dockX + 7, -37, rng:NextNumber(0, 6))
+		placeProp("BoatUpturned", dockX + 22, -38, math.rad(80) + rng:NextNumber(-0.2, 0.2))
 		local gapX = o.X - Config.PLOT_GAP / 2
 		do
 			placeProp("Banner", gapX, -6, 0)
@@ -13493,7 +13547,7 @@ end
 
 -- Bump this whenever the valley's shape changes, so an old valley saved into
 -- the place file is rebuilt instead of fighting the new layout.
-local WORLD_VERSION = 4
+local WORLD_VERSION = 5
 
 -- Does a valley saved into the place still fit this version's layout?
 local function bakedValleyFits(): boolean
@@ -14200,7 +14254,8 @@ local function updatePlacement()
 	end
 	ghost.Parent = workspace
 
-	local sx, sz = Grid.footprint(mode.type, rot)
+	local r = Config.Buildings[mode.type].Shore and 0 or rot -- a jetty always points out to sea
+	local sx, sz = Grid.footprint(mode.type, r)
 	local cx, cz = Grid.worldToCell(origin, hit.Position, sx, sz)
 	-- keep the preview inside the plot so it doesn't jump off the edge
 	local state = controllers.StateController.State
@@ -14209,11 +14264,11 @@ local function updatePlacement()
 	cx = math.clamp(cx, minX, maxX - sx)
 	cz = math.clamp(cz, minZ, maxZ - sz)
 
-	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz, land)
+	local free = Grid.canPlace(controllers.StateController.Blocked, cx, cz, sx, sz, land, mode.type)
 	local affordable = state ~= nil and Grid.canAfford(state.resources, Config.Buildings[mode.type].Cost)
 	local ok = free and affordable
 
-	ghost:PivotTo(Grid.buildingCFrame(origin, cx, cz, sx, sz, rot))
+	ghost:PivotTo(Grid.buildingCFrame(origin, cx, cz, sx, sz, r))
 	highlight.FillColor = ok and GOOD or BAD
 	highlight.OutlineColor = ok and GOOD or BAD
 	current = { cx = cx, cz = cz, ok = ok, affordable = affordable }

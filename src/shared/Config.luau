@@ -264,6 +264,15 @@ Config.Buildings = {
 		Cost = { Wood = 6 },
 		Decor = true,
 	},
+	-- Shore: only on the front row of your beach, always pointing out to sea.
+	Jetty = {
+		Display = "Jetty",
+		Description = "A plank jetty on piles, running from your beach out over the water. Place it on the front row of the sand.",
+		Size = { 1, 1 },
+		Cost = { Wood = 25 },
+		Decor = true,
+		Shore = true,
+	},
 	Watchtower = {
 		Display = "Watchtower",
 		Description = "A tall lookout. Its archer shoots at raiders who attack your village.",
@@ -280,14 +289,14 @@ Config.BuildCategories = {
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
-	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "PalisadeGate", "Watchtower", "Shipyard" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "PalisadeGate", "Watchtower", "Shipyard", "Jetty" } },
 	{ Name = "Decorations", Icon = "🪵", Buildings = { "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", PalisadeGate = "🚪", Watchtower = "🏹", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", PalisadeGate = "🚪", Watchtower = "🏹", Shipyard = "⛵", Jetty = "⚓",
 	DecorTorch = "🔥", DecorBrazier = "🔥", DecorRuneStone = "🪨", DecorBanner = "🚩", DecorShieldRack = "🛡️", DecorTotem = "🗿", DecorAntlers = "🦌", DecorWoodpile = "🪵",
 }
 
@@ -503,14 +512,16 @@ Config.Ranks = {
 
 -- Land ----------------------------------------------------------------------
 -- Buy bigger land in stages (Jarl's Table > Land). Cells are counted from the
--- plot's front-left corner; MinX below 0 grows the land sideways into the gap
+-- plot's front-left corner. MinZ below 0 is the beach in front of the plot,
+-- down to the water's edge (yours from the start, so jetties and boat sheds
+-- can go on the sand). MinX below 0 grows the land sideways into the gap
 -- between plots, MaxZ grows it back toward the meadow. Never overlaps a
 -- neighbour: the gap between plots is 6 cells and each side takes at most 2.
 Config.LandStages = {
-	{ Name = "Homestead", MinX = 0, MaxX = 20, MaxZ = 20 },
-	{ Name = "Farmstead", MinX = 0, MaxX = 20, MaxZ = 23, Cost = { Silver = 40, Wood = 60 }, Rank = 1 },
-	{ Name = "Steading", MinX = -2, MaxX = 22, MaxZ = 23, Cost = { Silver = 90, Stone = 50 }, Rank = 2 },
-	{ Name = "Great Steading", MinX = -2, MaxX = 22, MaxZ = 26, Cost = { Silver = 160, Wood = 100, Stone = 80 }, Rank = 3 },
+	{ Name = "Homestead", MinX = 0, MaxX = 20, MinZ = -4, MaxZ = 20 },
+	{ Name = "Farmstead", MinX = 0, MaxX = 20, MinZ = -4, MaxZ = 24, Cost = { Silver = 40, Wood = 60 }, Rank = 1 },
+	{ Name = "Steading", MinX = -2, MaxX = 22, MinZ = -4, MaxZ = 26, Cost = { Silver = 90, Stone = 50 }, Rank = 2 },
+	{ Name = "Great Steading", MinX = -2, MaxX = 22, MinZ = -4, MaxZ = 28, Cost = { Silver = 160, Wood = 100, Stone = 80 }, Rank = 3 },
 }
 
 -- War band ------------------------------------------------------------------

@@ -26,7 +26,7 @@ local herd = {} -- [model] = deer record
 local nextId = 0
 
 local _, _, _, LAND_MAX_Z = Grid.maxBounds()
-local MEADOW_MIN_Z, MEADOW_MAX_Z = LAND_MAX_Z * Config.CELL + 16, Grid.PLOT_SIZE + 105
+local MEADOW_MIN_Z, MEADOW_MAX_Z = LAND_MAX_Z * Config.CELL + 16, Grid.PLOT_SIZE + 135
 
 function WildlifeService:Init(allServices)
 	services = allServices

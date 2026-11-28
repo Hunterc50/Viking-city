@@ -491,24 +491,6 @@ def fishery():
     return m
 
 
-def brewhouse():
-    """A smoky little brew hall, a copper vat on a fire, barrels and beehive skeps."""
-    m = Mesh(43)
-    shed = hall(L=10.5, D=8.0, wall_h=3.6, ridge_h=8.6, roof="thatch", seed=43, dragons=False, buttress=False)
-    m.add(shed.tris, T(-1.6, 0, 2.6))
-    # the vat: a round copper kettle on stones over the fire
-    for k in range(6):
-        a = k / 6 * math.tau
-        m.add(blob(0.5, STONE, m.rng, 1, 0.15, 0.05, (1, 0.7, 1)), T(4.4 + math.cos(a) * 1.3, 0.3, -4.4 + math.sin(a) * 1.3))
-    m.add(lathe([(0.0, 0.7), (1.1, 0.8), (1.5, 1.4), (1.6, 2.4), (1.45, 2.9), (1.55, 3.0), (0.0, 3.0)], 14, (176, 110, 64)), T(4.4, 0, -4.4))
-    barrels = prop_barrels()
-    m.add(barrels.tris, M(T(-5.2, 0, -4.4), RY(0.4)))
-    # straw beehive skeps on a bench
-    add_box(m, (-5.8, 0.8, 7.2), (3.6, 0.25, 1.0), WOOD)
-    for x in (-6.9, -5.8, -4.7):
-        m.add(lathe([(0.6, 0.0), (0.62, 0.4), (0.5, 0.8), (0.28, 1.05), (0.0, 1.12)], 10, THATCH), T(x, 0.92, 7.2))
-    return m
-
 
 def trader_stall():
     """Ottar's market stall: a striped awning on carved posts, a plank counter
@@ -1266,53 +1248,6 @@ def lorehall():
     return m
 
 
-def smithy():
-    """An open forge shed. The glowing coals, fire and smoke come from the game,
-    sitting on this forge at (-3, 3.1, 2.5)."""
-    m = Mesh(99)
-    rng = m.rng
-    k = 8
-    for i in range(k):
-        for j in range(k):
-            add_box(m, (-7 + (i + 0.5) * 14 / k, 0.15, -7 + (j + 0.5) * 14 / k), (14 / k - 0.1, 0.3, 14 / k - 0.1), shade((88, 82, 74), 0.1, rng))
-    for x in (-6.5, 6.5):
-        for z in (-6.5, 6.5):
-            add_cyl(m, (x, 0, z), (x, 7.2, z), 0.4, DARK, 8)
-    for z in (-6.5, 6.5):
-        add_beam(m, (-6.8, 7.1, z), (6.8, 7.1, z), 0.45, DARK)
-    # shingle roof, ridge along X, with a smoke louvre over the forge
-    for s_ in (-1, 1):
-        for c in range(4):
-            v0, v1 = c / 4, (c + 1) / 4 + 0.05
-            pts = lambda v: [V(x, 10.4 - 3.6 * v, s_ * 8.4 * v) for x in (-8, -4, 0, 4, 8)]  # noqa: E731
-            a = pts(v0)
-            b = [p - V(0, 0.12, 0) for p in pts(v1)]
-            m.add(slab_between(a, b, 0.3, shade((92, 70, 52), 0.07, rng), rng, 0.05))
-    add_box(m, (-3, 10.9, 0), (2.6, 0.9, 2.2), TAR)
-    add_box(m, (-3, 11.5, 0), (3.2, 0.2, 2.8), (92, 70, 52))
-    # back wall of wattle and a tool rack
-    wattle_fence(m, (-6.5, 0, 6.5), (6.5, 0, 6.5), 3.5)
-    for i, x in enumerate((1.5, 2.3, 3.1, 3.9)):
-        add_cyl(m, (x, 2.0, 6.2), (x + 0.2, 4.2, 6.2), 0.07, (138, 100, 64), 5)
-        add_box(m, (x + 0.2, 4.2, 6.1), (0.5, 0.3, 0.12), IRON)
-    # the forge: a stone hearth with a hood, and bellows
-    for i in range(3):
-        for j in range(3):
-            add_box(m, (-3 + (i - 1) * 1.35, 0.5 + j * 1.0, 2.5), (1.3, 0.95, 3.5), shade(STONE, 0.12, rng), bevel=0.08)
-    add_box(m, (-3, 3.0, 2.5), (3.3, 0.15, 2.6), (40, 34, 30))
-    m.add(hull([V(-4.6, 4.6, 1.0), V(-1.4, 4.6, 1.0), V(-4.6, 4.6, 4.2), V(-1.4, 4.6, 4.2), V(-3.5, 6.5, 2.1), V(-2.5, 6.5, 2.1), V(-3.5, 6.5, 2.9), V(-2.5, 6.5, 2.9)], shade(STONE, 0.05, rng)))
-    add_box(m, (-3, 8.3, 2.5), (1.0, 3.6, 0.8), STONE)
-    m.add(hull([V(-5.2, 1.6, 4.4), V(-5.2, 2.6, 4.4), V(-5.2, 1.6, 2.6), V(-5.2, 2.6, 2.6), V(-6.6, 2.1, 3.5)], LEATHER))
-    # anvil on a stump
-    add_cyl(m, (3, 0, 0), (3, 1.8, 0), 0.9, WEATHER, 10)
-    m.add(hull([V(x, y, z) for x in (2.0, 4.0) for y in (1.8, 2.7) for z in (-0.45, 0.45)] + [V(4.8, 2.6, 0), V(4.8, 2.7, 0)], IRON))
-    add_cyl(m, (3.4, 2.75, 0.3), (3.2, 2.75, 1.1), 0.08, (138, 100, 64), 5)
-    add_box(m, (3.42, 2.8, 0.25), (0.4, 0.25, 0.25), IRON)
-    # quenching barrel
-    m.add(barrel_tris(rng, 2.0, 0.9), T(4, 0, 4.5))
-    add_box(m, (4, 1.95, 4.5), (1.5, 0.05, 1.5), (60, 84, 100))
-    return m
-
 
 def shrine():
     """A small hof (temple) with stacked shingle roofs and dragon finials, the
@@ -1456,6 +1391,574 @@ def hunting_lodge():
     return m
 
 
+# ----------------------------------------------------------------------------- forge, brewery, waterfront
+
+
+def plank_wall(m, a, b, y0, y1, rgb, along=0.7, thick=0.3, skip=None):
+    """Upright planks from ground point a to b, y0..y1. `skip(t)` leaves a gap."""
+    a, b = V(*a), V(*b)
+    d = b - a
+    ln = float(np.linalg.norm(d))
+    n = max(1, int(ln / along))
+    for i in range(n):
+        t = (i + 0.5) / n
+        if skip and skip(t):
+            continue
+        p = a + d * t
+        h = y1 - y0 + m.rng.uniform(-0.1, 0.1)
+        rot = look_along(V(0, 1, 0))
+        yaw = math.atan2(d[0], d[2])
+        m.add(box(ln / n + 0.03, h, thick, shade(rgb, 0.08, m.rng), m.rng, 0.03), M(T(p[0], y0 + h / 2, p[2]), RY(yaw + math.pi / 2)))
+        del rot
+
+
+def gable_roof(m, x0, x1, half, eave_y, ridge_y, rgb, courses=5, thick=0.3, sag=0.25):
+    """Shingle courses on both sides of a ridge along X, eaves at z = +-half."""
+    rng = m.rng
+    xs = [x0 + (x1 - x0) * i / 6 for i in range(7)]
+    for s_ in (-1, 1):
+        for c in range(courses):
+            v0, v1 = c / courses, (c + 1) / courses + 0.05
+
+            def at(v, x):
+                # a slight sag in the middle of each run, like old boards
+                mid = 1 - ((x - (x0 + x1) / 2) / ((x1 - x0) / 2)) ** 2
+                return V(x, ridge_y + (eave_y - ridge_y) * v - sag * mid * math.sin(v * math.pi), s_ * half * v)
+
+            a = [at(v0, x) for x in xs]
+            b = [at(v1, x) - V(0, 0.1, 0) for x in xs]
+            m.add(slab_between(a, b, thick, shade(rgb, 0.08, rng), rng, 0.05))
+    add_cyl(m, (x0 - 0.3, ridge_y + 0.3, 0), (x1 + 0.3, ridge_y + 0.3, 0), 0.28, DARK, 6)
+
+
+def smithy():
+    """A smithy: a stone-footed timber forge shed with a shingle roof and a
+    smoke louvre, plank walls at the back and one side, a big stone forge with
+    a hood and chimney, bellows, anvil, grindstone, quench tub, racks of tools
+    and a heap of charcoal. The game puts its glowing coals on the forge at
+    (-3, 3.1, 2.5) and its smoke at the chimney top (-3, 9.6, 2.5)."""
+    m = Mesh(99)
+    rng = m.rng
+    # flagstone floor
+    for i in range(9):
+        for j in range(9):
+            x, z = -7.2 + (i + 0.5) * 1.6, -7.2 + (j + 0.5) * 1.6
+            add_box(m, (x + rng.uniform(-0.05, 0.05), 0.15, z), (1.5, 0.3 + rng.uniform(0, 0.08), 1.5), shade((92, 86, 78), 0.12, rng), RY(rng.uniform(-0.06, 0.06)), bevel=0.06)
+    # stone footing along the back and the left side
+    for z in np.arange(-6.6, 7.0, 1.1):
+        m.add(blob(0.62, shade(STONE, 0.14, rng), rng, 0, 0.3, 0.1, (1, 0.8, 1.1)), T(-6.6, 0.45, z))
+    for x in np.arange(-6.6, 7.0, 1.1):
+        m.add(blob(0.62, shade(STONE, 0.14, rng), rng, 0, 0.3, 0.1, (1.1, 0.8, 1)), T(x, 0.45, 6.6))
+    # frame: six posts, wall plates, tie beams and knee braces
+    posts = [(x, z) for x in (-6.6, 0, 6.6) for z in (-6.6, 6.6)]
+    for x, z in posts:
+        add_cyl(m, (x, 0.3, z), (x, 7.0, z), 0.42, shade(DARK, 0.06, rng), 8)
+    for z in (-6.6, 6.6):
+        add_beam(m, (-7.2, 7.0, z), (7.2, 7.0, z), 0.5, DARK)
+        for x in (-6.6, 0, 6.6):
+            for s_ in (-1, 1):
+                if -6.6 <= x + s_ * 1.4 <= 6.6:
+                    add_beam(m, (x, 5.6, z), (x + s_ * 1.4, 6.9, z), 0.22, DARK)
+    for x in (-6.6, 0, 6.6):
+        add_beam(m, (x, 7.0, -7.0), (x, 7.0, 7.0), 0.4, DARK)
+    # plank walls: the whole back and the left side (the front and right stay open)
+    plank_wall(m, (-6.6, 0, 6.75), (6.6, 0, 6.75), 0.6, 6.9, WEATHER)
+    plank_wall(m, (-6.75, 0, -6.6), (-6.75, 0, 6.6), 0.6, 6.9, WEATHER)
+    # gable infill at the ends
+    for x in (-6.7, 6.7):
+        for k in range(8):
+            z = -6.6 + (k + 0.5) * 13.2 / 8
+            top = 10.3 - 3.2 * abs(z) / 8.4
+            if top > 7.1:
+                add_box(m, (x, (7.0 + top) / 2, z), (0.25, top - 7.0, 13.2 / 8 + 0.03), shade(WEATHER, 0.08, rng))
+    # shingle roof, ridge along X, with a raised smoke louvre over the forge
+    gable_roof(m, -8.2, 8.2, 8.3, 7.0, 10.4, (92, 70, 52), courses=5)
+    m.add(hull([V(-4.4, 10.6, -1.2), V(-1.6, 10.6, -1.2), V(-4.4, 10.6, 1.2), V(-1.6, 10.6, 1.2), V(-4.7, 11.6, 0), V(-1.3, 11.6, 0)], (84, 62, 46)))
+    # the forge: a rough stone hearth, waist high, with a hood and chimney
+    for i in range(4):
+        for j in range(3):
+            add_box(m, (-3 + (i - 1.5) * 1.05, 0.55 + j * 0.85, 2.5), (1.0 + rng.uniform(0, 0.12), 0.8, 3.6 + rng.uniform(-0.1, 0.1)), shade(STONE, 0.14, rng), RY(rng.uniform(-0.04, 0.04)), bevel=0.1)
+    add_box(m, (-3, 2.85, 2.5), (4.4, 0.25, 3.8), shade((96, 92, 86), 0.05, rng), bevel=0.06)
+    add_box(m, (-3, 3.0, 2.5), (3.2, 0.12, 2.6), (40, 34, 30))  # the coal bed
+    for x in (-4.9, -1.1):
+        add_box(m, (x, 4.2, 3.8), (0.7, 2.6, 0.9), shade(STONE, 0.1, rng), bevel=0.08)
+    m.add(hull([V(-5.2, 5.4, 0.9), V(-0.8, 5.4, 0.9), V(-5.2, 5.4, 4.3), V(-0.8, 5.4, 4.3), V(-3.6, 7.6, 2.0), V(-2.4, 7.6, 2.0), V(-3.6, 7.6, 3.0), V(-2.4, 7.6, 3.0)], shade(STONE, 0.05, rng)))
+    for k in range(5):
+        add_box(m, (-3, 7.9 + k * 0.4, 2.5), (1.35 - k * 0.03, 0.4, 1.15 - k * 0.03), shade(STONE, 0.1, rng), RY(rng.uniform(-0.05, 0.05)), bevel=0.05)
+    add_box(m, (-3, 9.95, 2.5), (1.5, 0.2, 1.3), DARK)
+    # leather bellows on a frame, pumped by a pole
+    m.add(hull([V(-5.4, 1.5, 3.6), V(-5.4, 2.7, 3.6), V(-5.4, 1.5, 1.6), V(-5.4, 2.7, 1.6), V(-6.4, 2.1, 2.6)], LEATHER))
+    add_box(m, (-5.9, 2.75, 2.6), (1.2, 0.12, 2.2), WOOD)
+    add_cyl(m, (-6.2, 2.8, 2.6), (-6.3, 5.2, 1.4), 0.08, WOOD, 5)
+    # anvil on a stump
+    add_cyl(m, (3, 0.3, 0), (3, 1.9, 0), 0.9, WEATHER, 10, 0.85, vary=0.05, noise=0.05)
+    m.add(hull([V(x, y, z) for x in (2.1, 3.9) for y in (1.9, 2.15) for z in (-0.55, 0.55)], IRON))
+    m.add(hull([V(x, y, z) for x in (2.4, 3.6) for y in (2.15, 2.55) for z in (-0.3, 0.3)], IRON))
+    m.add(hull([V(x, y, z) for x in (2.0, 3.9) for y in (2.55, 2.95) for z in (-0.45, 0.45)] + [V(5.0, 2.85, 0), V(5.0, 2.95, 0)], IRON))
+    add_cyl(m, (3.4, 3.0, 0.2), (3.1, 3.0, 1.2), 0.07, (138, 100, 64), 5)
+    add_box(m, (3.45, 3.08, 0.15), (0.45, 0.28, 0.28), IRON)
+    # quenching tub
+    m.add(barrel_tris(rng, 1.7, 1.0), T(4.6, 0.3, 4.6))
+    add_box(m, (4.6, 1.95, 4.6), (1.6, 0.05, 1.6), (60, 84, 100))
+    # grindstone on a trestle
+    for z in (-3.6, -2.8):
+        add_beam(m, (5.2, 0.3, z), (5.2, 1.7, z), 0.22, DARK)
+    m.add(lathe([(0.0, -0.18), (1.0, -0.18), (1.05, 0.0), (1.0, 0.18), (0.0, 0.18)], 14, (150, 142, 128)), M(T(5.2, 1.75, -3.2), RX(math.pi / 2)))
+    add_cyl(m, (5.2, 1.75, -4.0), (5.2, 1.75, -2.2), 0.08, IRON, 5)
+    add_cyl(m, (5.2, 1.75, -2.2), (5.2, 1.0, -1.9), 0.06, WOOD, 4)
+    # tool rack on the back wall: tongs, hammers, a half-made blade
+    add_beam(m, (0.8, 4.2, 6.35), (5.8, 4.2, 6.35), 0.2, DARK)
+    for i, x in enumerate((1.4, 2.2, 3.0, 3.8, 4.6, 5.3)):
+        add_cyl(m, (x, 4.15, 6.3), (x + 0.15, 2.3, 6.25), 0.06, (138, 100, 64), 4)
+        if i % 2 == 0:
+            add_box(m, (x + 0.15, 2.3, 6.2), (0.5, 0.28, 0.25), IRON)
+        else:
+            add_cyl(m, (x - 0.1, 2.3, 6.2), (x + 0.3, 2.3, 6.2), 0.06, IRON, 4)
+    add_box(m, (-0.5, 3.2, 6.35), (0.12, 2.6, 0.06), STEEL)
+    # iron bars and a heap of charcoal by the left wall
+    for k in range(5):
+        add_box(m, (-5.6, 0.45 + (k // 3) * 0.22, -3.8 + (k % 3) * 0.3), (0.2, 0.2, 2.4), (86, 80, 78))
+    m.add(blob(1.2, (40, 38, 38), rng, 1, 0.2, 0.08, (1.1, 0.5, 1.0)), T(-5.2, 0.65, -1.4))
+    # a cart wheel waiting for its rim, leaning on the side wall
+    c = V(-6.3, 1.4, -5.2)
+    for k in range(12):
+        a0, a1 = k / 12 * math.tau, (k + 1) / 12 * math.tau
+        add_beam(m, c + V(0, math.cos(a0) * 1.1, math.sin(a0) * 1.1), c + V(0, math.cos(a1) * 1.1, math.sin(a1) * 1.1), 0.2, DARK)
+    for k in range(6):
+        a = k / 6 * math.tau
+        add_cyl(m, c, c + V(0, math.cos(a) * 1.05, math.sin(a) * 1.05), 0.06, WOOD, 4)
+    # a horseshoe nailed over the open front
+    m.add(lathe([(0.32, 0), (0.32, 0.08), (0.22, 0.08), (0.22, 0)], 10, IRON), M(T(0, 6.4, -6.9), RX(math.pi / 2)))
+    return m
+
+
+def brewhouse():
+    """The brewhouse: a turf-roofed log hall with a smoke hole, a lean-to open
+    brew shed in front with a big copper vat on a stone fire, mead barrels on a
+    rack, drying herbs, beehive skeps on a bench and a little iron fire basket
+    (the game's fire sits in it, at (4.6, 1.8, -2))."""
+    m = Mesh(43)
+    rng = m.rng
+    # the hall: horizontal logs, notched corners, a turf roof (ridge along X)
+    cx, cz, hx, hz = -1.6, 2.4, 4.6, 3.2
+    for i in range(6):
+        y = 0.45 + i * 0.62
+        for s_ in (-1, 1):
+            z = cz + s_ * hz
+            if s_ == -1:
+                for x0, x1 in ((cx - hx - 0.5, cx - 0.9), (cx + 0.9, cx + hx + 0.5)):
+                    add_cyl(m, (x0, y, z), (x1, y, z), 0.33, shade(WOOD, 0.1, rng), 7)
+                if i >= 4:
+                    add_cyl(m, (cx - 0.9, y, z), (cx + 0.9, y, z), 0.33, shade(WOOD, 0.1, rng), 7)
+            else:
+                add_cyl(m, (cx - hx - 0.5, y, z), (cx + hx + 0.5, y, z), 0.33, shade(WOOD, 0.1, rng), 7)
+            add_cyl(m, (cx + s_ * hx, y + 0.31, cz - hz - 0.5), (cx + s_ * hx, y + 0.31, cz + hz + 0.5), 0.33, shade(WOOD, 0.1, rng), 7)
+    wall_top = 0.45 + 6 * 0.62
+    add_box(m, (cx, 1.6, cz - hz - 0.15), (1.7, 2.7, 0.2), TAR)  # door
+    for y in (0.9, 2.3):
+        add_box(m, (cx, y, cz - hz - 0.28), (1.4, 0.12, 0.05), IRON)
+    ridge = wall_top + 3.4
+    for e in (-1, 1):
+        x = cx + e * hx
+        for k in range(9):
+            z = cz - hz + (k + 0.5) * (2 * hz / 9)
+            top = ridge - (ridge - wall_top) * abs(z - cz) / hz
+            if top > wall_top + 0.1:
+                add_box(m, (x, (wall_top + top) / 2, z), (0.25, top - wall_top, 2 * hz / 9 + 0.03), shade(WEATHER, 0.08, rng))
+    # birch-bark and turf roof: thick lumpy slabs, grass on top
+    xs = [cx - hx - 1.2 + (2 * hx + 2.4) * i / 6 for i in range(7)]
+    for s_ in (-1, 1):
+        for c in range(3):
+            v0, v1 = c / 3, (c + 1) / 3 + 0.04
+            a = [V(x, ridge + 0.35 + (wall_top - 0.6 - ridge) * v0, cz + s_ * (hz + 1.3) * v0) for x in xs]
+            b = [V(x, ridge + 0.35 + (wall_top - 0.6 - ridge) * v1, cz + s_ * (hz + 1.3) * v1) for x in xs]
+            m.add(slab_between(a, b, 0.55, shade(TURF, 0.1, rng), rng, 0.08))
+        for x in xs[1:-1]:
+            m.add(blob(0.55, shade(MOSS, 0.1, rng), rng, 0, 0.3, 0.1, (1.3, 0.5, 1)), T(x + rng.uniform(-0.4, 0.4), ridge - 1.2 + rng.uniform(-0.3, 0.3), cz + s_ * 2.0))
+    for s_ in (-1, 1):  # bark edge under the turf
+        add_beam(m, (cx - hx - 1.2, wall_top - 0.7, cz + s_ * (hz + 1.3)), (cx + hx + 1.2, wall_top - 0.7, cz + s_ * (hz + 1.3)), 0.25, (196, 184, 160))
+    # smoke hole with a little roof over it
+    add_box(m, (cx + 1.5, ridge + 0.9, cz), (1.2, 0.8, 1.2), DARK)
+    add_box(m, (cx + 1.5, ridge + 1.4, cz), (1.8, 0.15, 1.8), (92, 70, 52))
+    # the lean-to brew shed in front of the hall's right end
+    for x, z, h in ((2.2, -5.6, 4.0), (5.9, -5.6, 4.0), (2.2, -1.4, 5.0), (5.9, -1.4, 5.0)):
+        add_cyl(m, (x, 0, z), (x, h, z), 0.24, shade(DARK, 0.06, rng), 7)
+    for i in range(5):
+        x0 = 1.9 + i * 0.84
+        m.add(slab_between([V(x0, 4.1, -6.0), V(x0, 5.15, -0.9)], [V(x0 + 0.86, 4.1, -6.0), V(x0 + 0.86, 5.15, -0.9)], 0.2, shade((92, 70, 52), 0.08, rng), rng, 0.04))
+    # stone fire ring and the copper vat over it
+    for k in range(8):
+        a = k / 8 * math.tau
+        m.add(blob(0.45, shade(STONE, 0.12, rng), rng, 0, 0.25, 0.08, (1, 0.7, 1)), T(4.4 + math.cos(a) * 1.3, 0.28, -4.3 + math.sin(a) * 1.25))
+    m.add(lathe([(0.0, 0.5), (1.0, 0.6), (1.4, 1.1), (1.5, 2.2), (1.35, 2.75), (1.5, 2.85), (1.5, 2.95), (0.0, 2.95)], 16, (176, 110, 64)), T(4.4, 0, -4.3))
+    m.add(lathe([(1.52, 1.5), (1.58, 1.5), (1.58, 1.7), (1.52, 1.7)], 16, (120, 74, 46), caps=False), T(4.4, 0, -4.3))
+    m.add(lathe([(0.0, 2.9), (1.3, 2.9), (1.3, 2.96), (0.0, 2.96)], 16, (112, 84, 40)), T(4.4, 0, -4.3))  # the wort
+    add_cyl(m, (3.6, 2.4, -3.9), (5.4, 4.0, -4.9), 0.07, WOOD, 4)  # paddle
+    # the little iron fire basket where the game's fire burns
+    for k in range(3):
+        a = k / 3 * math.tau + 0.3
+        add_cyl(m, (4.6 + math.cos(a) * 0.7, 0, -2 + math.sin(a) * 0.7), (4.6, 1.3, -2), 0.06, IRON, 4)
+    m.add(lathe([(0.2, 1.2), (0.75, 1.55), (0.8, 1.7), (0.0, 1.45)], 10, IRON), T(4.6, 0, -2))
+    # barrel rack: three on a cradle, two more stood up, and a tap
+    for x in (-6.6, -4.4):
+        add_beam(m, (x, 0.2, -4.6), (x, 0.9, -4.6), 0.3, DARK)
+    add_beam(m, (-6.9, 0.9, -4.0), (-4.1, 0.9, -4.0), 0.25, DARK)
+    add_beam(m, (-6.9, 0.9, -5.2), (-4.1, 0.9, -5.2), 0.25, DARK)
+    for k in range(2):
+        m.add(barrel_tris(rng, 1.7, 0.7), M(T(-6.8 + k * 1.75 + 0.85, 1.65, -4.6), RZ(math.pi / 2), T(0, -0.85, 0)))
+    m.add(barrel_tris(rng, 1.7, 0.7), M(T(-5.95, 3.05, -4.6), RZ(math.pi / 2), T(0, -0.85, 0)))
+    add_cyl(m, (-5.0, 1.65, -5.35), (-5.0, 1.65, -5.7), 0.08, WOOD, 4)
+    for p in ((-3.4, -5.4), (-2.4, -4.6)):
+        m.add(barrel_tris(rng, 1.8, 0.75), T(p[0], 0, p[1]))
+    # bunches of herbs and hops hung under the lean-to
+    for i in range(5):
+        x = 2.8 + i * 0.85
+        add_cyl(m, (x, 4.3, -1.9), (x, 3.6, -1.9), 0.02, (150, 130, 96), 3)
+        m.add(blob(0.3, shade((112, 132, 64), 0.12, rng), rng, 0, 0.3, 0.1, (0.8, 1.3, 0.8)), T(x, 3.4, -1.9))
+    # beehive skeps on a bench behind
+    add_box(m, (-5.0, 0.8, 6.8), (4.2, 0.25, 1.0), WOOD)
+    for x in (-6.6, -6.0, -3.4):
+        add_beam(m, (x + 0.4, 0, 6.8), (x + 0.4, 0.7, 6.8), 0.2, DARK)
+    for x in (-6.4, -5.0, -3.6):
+        m.add(lathe([(0.6, 0.0), (0.62, 0.4), (0.5, 0.8), (0.28, 1.05), (0.0, 1.12)], 10, THATCH), T(x, 0.92, 6.8))
+        for y in (0.25, 0.55, 0.85):
+            k = 1 - y / 1.2
+            m.add(lathe([(0.62 * k + 0.06, y), (0.62 * k + 0.06, y + 0.06)], 10, (150, 116, 62), caps=False), T(x, 0.92, 6.8))
+    # a sign: a horn cup carved on a board
+    add_box(m, (cx + 1.5, 3.2, cz - hz - 0.4), (1.2, 0.8, 0.1), (196, 160, 80))
+    return m
+
+
+def dock(L=48):
+    """A plank jetty on piles, starting at z = 0 and running out along -Z.
+    Same layout as the game's own dock (deck at 1.2, piles to -8), with
+    crates, a barrel, a coil of rope, mooring posts and a rowing boat tied up
+    at the end."""
+    m = Mesh(111 + L)
+    rng = m.rng
+    z = 0.575
+    while z < L - 0.5:
+        add_box(m, (rng.uniform(-0.1, 0.1), 1.2 + rng.uniform(-0.04, 0.04), -z), (6 + rng.uniform(-0.2, 0.3), 0.42, 1.12), shade(WEATHER, 0.12, rng), RY(rng.uniform(-0.015, 0.015)), bevel=0.05)
+        z += 1.23
+    for x in (-2.2, 2.2):
+        add_box(m, (x, 0.8, -L / 2), (0.5, 0.5, L), DARK)
+    for zz in range(0, L + 1, 6):
+        for x in (-2.8, 2.8):
+            add_cyl(m, (x, -8, -zz), (x, 2.2, -zz), 0.4, shade(DARK, 0.1, rng), 8, 0.36, noise=0.03)
+            add_cyl(m, (x, 1.55, -zz), (x, 1.85, -zz), 0.47, (176, 150, 104), 8)
+            # a cross brace between the piles, below the deck
+            if zz + 6 <= L:
+                add_beam(m, (x, 0.4, -zz), (x, -3.5, -zz - 6), 0.22, DARK)
+        add_beam(m, (-2.8, 0.6, -zz), (2.8, 0.6, -zz), 0.3, DARK)
+    # mooring bollards near the end
+    for x in (-2.6, 2.6):
+        add_cyl(m, (x, 1.4, -L + 1.2), (x, 2.6, -L + 1.2), 0.32, DARK, 8)
+        add_cyl(m, (x, 2.6, -L + 1.2), (x, 2.8, -L + 1.2), 0.4, DARK, 8)
+    # crates, a barrel and a coil of rope
+    for at in ((1.6, 2.4, -6), (1.6, 2.4, -8.1), (1.7, 4.3, -7)):
+        add_box(m, at, (1.9, 1.9, 1.9), shade((150, 110, 70), 0.1, rng), RY(rng.uniform(-0.3, 0.3)), bevel=0.08)
+        add_box(m, (at[0], at[1], at[2]), (1.96, 0.2, 1.96), DARK, RY(0))
+    m.add(barrel_tris(rng, 1.8, 0.75), T(-1.8, 1.45, -10))
+    m.add(lathe([(0.3, 0), (0.7, 0), (0.7, 0.4), (0.3, 0.4)], 12, (176, 150, 104)), T(-1.8, 1.45, -L + 3))
+    # the rowing boat, tied up beside the end
+    boat = Mesh(112)
+    add_hull(boat, 9, 2.9, 1.0, 0.8)
+    m.add(boat.tris, T(-5.5, -0.4, -L + 4))
+    for k in (-1, 1):
+        add_box(m, (-5.5, 0.35, -L + 4 + k * 1.6), (2.2, 0.15, 0.5), WOOD)
+    add_cyl(m, (-5.0, 0.4, -L + 2.5), (-5.9, 0.5, -L + 7), 0.07, WOOD, 4)
+    add_cyl(m, (-4.6, 0.6, -L + 1.5), (-2.6, 2.6, -L + 1.2), 0.04, (176, 150, 104), 3)
+    return m
+
+
+def palisade_gate():
+    """A gateway for the palisade: two great sharpened posts, a carved lintel
+    with dragon heads and a little shingle roof, a painted shield, and the
+    doors swung open inward (+Z). The way through runs along Z."""
+    m = Mesh(117)
+    rng = m.rng
+    for x in (-3.1, 3.1):
+        h = 10.5
+        prof = [(0.98, 0), (0.92, h * 0.6), (0.9, h - 0.4), (0.45, h + 0.4), (0.0, h + 1.1)]
+        tris = lathe(prof, 10, shade(DARK, 0.05, rng), rng, 0.06, 0.05)
+        tris = [(a, b, c, (178, 148, 104) if (a[1] + b[1] + c[1]) / 3 > h - 0.45 else cc) for a, b, c, cc in tris]
+        m.add(tris, T(x, 0, 0))
+        for y in (2.0, 6.5):
+            add_cyl(m, (x, y, 0), (x, y + 0.35, 0), 1.0, IRON, 10)
+        # carved knotwork band
+        for k in range(6):
+            a = k / 6 * math.tau
+            add_box(m, (x + math.cos(a) * 0.92, 4.4 + (k % 2) * 0.4, math.sin(a) * 0.92), (0.2, 0.7, 0.2), (150, 40, 36), RY(-a))
+    add_box(m, (0, 9.1, 0), (8.6, 1.0, 1.2), shade(DARK, 0.04, rng), bevel=0.08)
+    for k in range(9):
+        add_box(m, (-3.2 + k * 0.8, 9.1, -0.62), (0.3, 0.6, 0.06), GOLD if k % 2 else (150, 40, 36))
+    # a small gable roof over the lintel
+    for s_ in (-1, 1):
+        for c in range(2):
+            v0, v1 = c / 2, (c + 1) / 2 + 0.05
+            a = [V(x, 10.9 - 1.1 * v0, s_ * 0.9 * v0) for x in (-4.4, 0, 4.4)]
+            b = [V(x, 10.9 - 1.1 * v1 - 0.08, s_ * 0.9 * v1) for x in (-4.4, 0, 4.4)]
+            m.add(slab_between(a, b, 0.2, shade((92, 70, 52), 0.08, rng), rng, 0.04))
+    # dragon heads looking out from the lintel ends
+    for s_ in (-1, 1):
+        base = V(s_ * 4.1, 9.4, 0)
+        neck = base + V(s_ * 0.35, 0.6, -0.3)
+        add_cyl(m, base, neck, 0.28, DARK, 6, 0.22)
+        m.add(hull([neck, neck + V(0, 0.15, -0.9), neck + V(0, 0.5, -0.2), neck + V(s_ * 0.18, 0.25, -0.3), neck + V(-s_ * 0.18, 0.25, -0.3)], (150, 40, 36)))
+        add_box(m, neck + V(0, 0.42, -0.35), (0.08, 0.08, 0.08), GOLD)
+    # the shield over the way through
+    disc(m, (0, 9.1, -0.62), (0, 0, -1), 0.85, GOLD, IRON, IRON, seg=16, paint=(150, 40, 36))
+    # doors swung open against the inside of the posts
+    for s_ in (-1, 1):
+        x = s_ * 2.6
+        for k in range(4):
+            add_box(m, (x, 3.9, 1.35 + k * 0.7), (0.32, 7.4 + rng.uniform(-0.1, 0.1), 0.68), shade(WOOD, 0.08, rng), bevel=0.03)
+        for y in (1.9, 5.9):
+            add_box(m, (x - s_ * 0.2, y, 2.4), (0.06, 0.3, 2.9), IRON)
+        add_beam(m, (x - s_ * 0.2, 1.9, 1.2), (x - s_ * 0.2, 5.9, 3.6), 0.2, DARK)
+        add_cyl(m, (x - s_ * 0.24, 3.9, 3.3), (x - s_ * 0.24, 3.9, 3.5), 0.18, IRON, 6)
+    # a worn path of stones through the gate
+    for k in range(5):
+        add_box(m, (rng.uniform(-0.6, 0.6), 0.06, -0.6 + k * 0.9), (1.2, 0.12, 0.7), shade(STONE, 0.1, rng), RY(rng.uniform(-0.3, 0.3)), bevel=0.04)
+    return m
+
+
+# ----------------------------------------------------------------------------- decorations (one cell each)
+
+
+def decor_torch():
+    """A carved torch post with an iron cup of burning pitch (the game's flame
+    sits at y 5.75) and a ring of stones round its foot."""
+    m = Mesh(121)
+    rng = m.rng
+    m.add(lathe([(0.28, 0), (0.25, 3.2), (0.22, 5.0), (0.2, 5.2), (0.0, 5.22)], 8, shade(DARK, 0.04, rng), rng, 0.04, 0.02))
+    for k in range(10):  # a spiral of carving
+        a = k * 0.9
+        add_box(m, (math.cos(a) * 0.25, 1.0 + k * 0.32, math.sin(a) * 0.25), (0.12, 0.3, 0.12), (150, 110, 70), RY(-a))
+    for y in (3.4, 3.75):
+        add_cyl(m, (0, y, 0), (0, y + 0.18, 0), 0.3, (110, 78, 50), 8)
+    m.add(lathe([(0.15, 5.1), (0.5, 5.35), (0.52, 5.65), (0.44, 5.65), (0.0, 5.45)], 10, IRON))
+    for k in range(4):
+        a = k / 4 * math.tau
+        add_cyl(m, (0, 4.7, 0), (math.cos(a) * 0.5, 5.45, math.sin(a) * 0.5), 0.04, IRON, 3)
+    for k in range(5):
+        a = k / 5 * math.tau + 0.4
+        m.add(blob(0.38, shade(STONE, 0.14, rng), rng, 0, 0.3, 0.1, (1.1, 0.7, 1)), T(math.cos(a) * 0.72, 0.18, math.sin(a) * 0.72))
+    return m
+
+
+def decor_brazier():
+    """A big iron fire basket on three curling legs over a round of flagstones.
+    The game's coals and fire sit in the bowl at y 4."""
+    m = Mesh(122)
+    rng = m.rng
+    m.add(lathe([(2.75, 0), (2.75, 0.18), (0.0, 0.24)], 16, (96, 96, 94)))
+    for k in range(7):
+        a = k / 7 * math.tau
+        add_box(m, (math.cos(a) * 1.9, 0.26, math.sin(a) * 1.9), (1.1, 0.06, 0.9), shade(STONE, 0.12, rng), RY(-a), bevel=0.03)
+    for k in range(3):
+        a = k / 3 * math.tau
+        pts = []
+        for i in range(7):
+            t = i / 6
+            r = 1.1 - 0.55 * t + 0.25 * math.sin(t * math.pi)
+            pts.append(V(math.cos(a) * r, 0.24 + 3.3 * t, math.sin(a) * r))
+        for p, q in zip(pts, pts[1:]):
+            add_cyl(m, p, q, 0.1, IRON, 5)
+        m.add(blob(0.16, IRON, rng, 0, 0.0, 0.0), T(*pts[0]))
+        tip = pts[-1]
+        add_cyl(m, tip, tip + V(math.cos(a) * 0.45, 0.4, math.sin(a) * 0.45), 0.08, IRON, 4)
+    m.add(lathe([(0.3, 3.3), (0.9, 3.5), (1.15, 3.95), (1.1, 4.05), (0.0, 3.7)], 14, (46, 44, 44)))
+    for k in range(8):  # basket bars
+        a = k / 8 * math.tau
+        add_cyl(m, (math.cos(a) * 1.1, 3.95, math.sin(a) * 1.1), (math.cos(a) * 1.3, 4.6, math.sin(a) * 1.3), 0.05, IRON, 3)
+    m.add(lathe([(1.3, 4.55), (1.36, 4.55), (1.36, 4.65), (1.3, 4.65)], 14, IRON, caps=False))
+    return m
+
+
+def decor_runestone():
+    """A tall rune stone: a rough grey slab with a red serpent band coiling
+    up the face, rune marks inside, moss and stones at its foot."""
+    m = Mesh(123)
+    rng = m.rng
+    h = 7.0
+    prof = [(1.7, 0), (1.75, h * 0.35), (1.5, h * 0.75), (0.9, h * 0.95), (0.0, h)]
+    tris = lathe(prof, 10, (118, 120, 118), rng, 0.06, 0.09)
+    m.add(tris, np.diag([1, 1, 0.36, 1]))
+    # the serpent: a band of red squares following a loop up the face
+    for k in range(26):
+        t = k / 25
+        y = 0.8 + t * (h - 2.0)
+        w = 1.25 * (1 - 0.45 * t)
+        x = math.sin(t * math.pi * 2.0) * w
+        add_box(m, (x, y, -0.6 + 0.02 * t), (0.34, 0.34, 0.1), (160, 44, 38), RZ(math.cos(t * math.pi * 2) * 0.8))
+    m.add(hull([V(-0.2, h - 0.9, -0.55), V(0.25, h - 1.1, -0.55), V(0.0, h - 0.6, -0.62), V(0.0, h - 1.0, -0.66)], (160, 44, 38)))  # head
+    for i in range(8):
+        add_box(m, (-0.6 + (i % 4) * 0.4, 2.0 + (i // 4) * 1.3, -0.6), (0.1, 0.5, 0.06), (40, 36, 34), RZ(0.3 if i % 2 else -0.25))
+    for k in range(7):
+        a = k / 7 * math.tau
+        m.add(blob(0.45, shade(MOSS, 0.12, rng), rng, 0, 0.35, 0.1, (1.4, 0.45, 1)), T(math.cos(a) * 1.3, 0.12, math.sin(a) * 0.55))
+    for p in ((1.6, 0.25, 0.3), (-1.5, 0.2, -0.2)):
+        m.add(blob(0.4, shade(STONE, 0.12, rng), rng, 0, 0.3, 0.1, (1, 0.7, 1)), T(*p))
+    return m
+
+
+def decor_banner():
+    """A tall banner pole: an iron finial, a crossbar and a swallow-tailed
+    banner in the clan colour (red, recoloured by the game) with a gold border
+    and a raven, its foot held by stones."""
+    m = Mesh(124)
+    rng = m.rng
+    add_cyl(m, (0, 0, 0), (0, 11, 0), 0.22, DARK, 8, 0.16)
+    m.add(hull([V(0, 11.0, 0), V(0.35, 11.5, 0), V(-0.35, 11.5, 0), V(0, 12.2, 0), V(0, 11.4, 0.12), V(0, 11.4, -0.12)], IRON))
+    add_cyl(m, (-0.2, 10.4, 0), (3.1, 10.4, 0), 0.12, DARK, 6)
+    for x in (-0.2, 3.1):
+        m.add(blob(0.16, GOLD, rng, 0, 0.0, 0.0), T(x, 10.4, 0))
+    nx, ny = 6, 8
+    grid = []
+    for j in range(ny + 1):
+        v = j / ny
+        row = []
+        for i in range(nx + 1):
+            u = i / nx
+            row.append(V(0.1 + 2.8 * u, 10.25 - v * 5.4, 0.2 * math.sin(u * math.pi * 2 + v * 2) * u))
+        grid.append(row)
+    for j in range(ny):
+        m.add(strip_between(grid[j], grid[j + 1], RED, rng, 0.03))
+    for i in range(2):  # swallow tails
+        x = 0.1 + 1.4 * i
+        tip = V(x + 0.7, 4.0, 0.1)
+        m.add(strip_between([V(x, 4.85, 0.0), V(x + 1.4, 4.85, 0.0)], [tip, tip], RED))
+    em = [V(1.5, 8.6, -0.25), V(0.6, 8.2, -0.25), V(2.4, 8.2, -0.25), V(1.5, 7.2, -0.25), V(1.8, 8.9, -0.25), V(1.2, 8.9, -0.25)]
+    m.add(strip_between([em[1], em[5], em[4]], [em[3], em[0], em[2]], GOLD))
+    for k in range(5):
+        a = k / 5 * math.tau
+        m.add(blob(0.42, shade(STONE, 0.12, rng), rng, 0, 0.3, 0.1, (1, 0.7, 1)), T(math.cos(a) * 0.6, 0.2, math.sin(a) * 0.6))
+    return m
+
+
+def decor_shieldrack():
+    """A rack of painted round shields with spears and an axe leaning behind."""
+    m = Mesh(125)
+    rng = m.rng
+    for x in (-2.6, 2.6):
+        add_cyl(m, (x, 0, 0), (x, 4.0, 0), 0.2, DARK, 7)
+        m.add(hull([V(x, 4.0, 0), V(x + 0.25, 4.2, 0), V(x - 0.25, 4.2, 0), V(x, 4.6, -0.1)], DARK))
+        for s_ in (-1, 1):
+            add_beam(m, (x, 0, s_ * 0.7), (x, 1.4, 0), 0.16, DARK)
+    add_beam(m, (-2.9, 3.4, 0), (2.9, 3.4, 0), 0.26, DARK)
+    add_beam(m, (-2.9, 0.8, 0.3), (2.9, 0.8, 0.3), 0.26, DARK)
+    colours = [((150, 40, 36), CREAM), (GOLD, (150, 40, 36)), (BLUE, CREAM)]
+    for (face, paint), x in zip(colours, (-1.7, 0, 1.7)):
+        disc(m, (x, 2.1, -0.32), (0, math.sin(math.radians(-8)), -math.cos(math.radians(-8))), 1.15, face, IRON, IRON, seg=18, paint=paint)
+    for x in (-2.1, -0.8, 0.9, 2.2):
+        base = V(x, 0, 0.55)
+        top = V(x + x * 0.05, 6.0, 0.25)
+        add_cyl(m, base, top, 0.06, WOOD, 5)
+        d = top - base
+        d /= np.linalg.norm(d)
+        m.add(hull([top, top + d * 0.9, top + d * 0.3 + V(0.14, 0, 0), top + d * 0.3 + V(-0.14, 0, 0), top + d * 0.3 + V(0, 0, 0.04)], STEEL))
+    # an axe hung on the top rail
+    add_cyl(m, (2.8, 3.5, -0.2), (2.6, 1.6, -0.2), 0.06, (138, 100, 64), 5)
+    m.add(hull([V(2.75, 3.3, -0.2), V(3.4, 3.6, -0.2), V(3.4, 2.7, -0.2), V(2.7, 2.9, -0.2), V(3.0, 3.1, -0.26), V(3.0, 3.1, -0.14)], STEEL))
+    return m
+
+
+def decor_totem():
+    """A carved god-post: three stacked faces (the middle with gold eyes),
+    spread wings and a raven perched on top."""
+    m = Mesh(126)
+    rng = m.rng
+    m.add(lathe([(0.7, 0), (0.66, 8.8), (0.5, 9.0), (0.0, 9.05)], 10, (96, 70, 48), rng, 0.04, 0.03))
+    for i, y in enumerate((2.2, 4.6, 7.0)):
+        wood = shade((120, 88, 58), 0.05, rng)
+        m.add(hull([V(x, yy, z) for x in (-0.75, 0.75) for yy in (y - 1.0, y + 1.0) for z in (-0.45, 0.2)] + [V(0, y + 0.1, -0.95), V(0, y + 1.15, -0.5)], wood))
+        add_box(m, (0, y + 0.6, -0.62), (1.4, 0.2, 0.3), shade(DARK, 0.04, rng))  # brow
+        for x in (-0.33, 0.33):
+            add_box(m, (x, y + 0.3, -0.7), (0.3, 0.2, 0.1), GOLD if i == 1 else (30, 26, 24))
+        add_box(m, (0, y - 0.45, -0.72), (0.7, 0.16, 0.1), (150, 40, 36))
+        if i == 0:  # a beard
+            m.add(hull([V(-0.5, y - 0.55, -0.6), V(0.5, y - 0.55, -0.6), V(0, y - 1.3, -0.65), V(0, y - 0.6, -0.3)], (110, 80, 54)))
+        if i == 2:  # horns
+            for s_ in (-1, 1):
+                add_cyl(m, (s_ * 0.6, y + 0.8, -0.2), (s_ * 1.2, y + 1.6, -0.3), 0.14, CREAM, 5, 0.04)
+    for s_ in (-1, 1):
+        m.add(hull([V(s_ * 0.5, 8.0, -0.15), V(s_ * 0.5, 8.6, -0.15), V(s_ * 2.6, 8.9, -0.1), V(s_ * 2.3, 8.2, -0.1), V(s_ * 1.4, 7.8, -0.1), V(s_ * 1.4, 8.3, 0.15)], DARK))
+        for k in range(3):
+            add_box(m, (s_ * (1.0 + k * 0.5), 8.35 + k * 0.08, -0.25), (0.08, 0.5, 0.06), (150, 40, 36))
+    raven = (28, 28, 32)
+    m.add(blob(0.5, raven, rng, 1, 0.05, 0.02, (0.8, 0.75, 1.2)), T(0, 9.45, 0.1))
+    m.add(blob(0.3, raven, rng, 1, 0.05, 0.02), T(0, 9.95, -0.35))
+    m.add(hull([V(0, 9.95, -0.6), V(0.08, 9.9, -0.6), V(-0.08, 9.9, -0.6), V(0, 9.85, -0.95)], (60, 56, 50)))
+    m.add(hull([V(-0.25, 9.4, 0.5), V(0.25, 9.4, 0.5), V(0, 9.2, 1.1), V(0, 9.5, 0.6)], raven))
+    return m
+
+
+def decor_antlers():
+    """An antler arch: two carved posts, a beam with a stag skull and great
+    antlers, and an iron cup of fire at each post top (the game's flames sit
+    at (+-3, 7.9, -0.6))."""
+    m = Mesh(127)
+    rng = m.rng
+    bone = (220, 205, 180)
+    for x in (-3, 3):
+        add_cyl(m, (x, 0, 0), (x, 7.5, 0), 0.32, shade(DARK, 0.05, rng), 8, 0.28)
+        for y in (1.2, 5.6):
+            add_cyl(m, (x, y, 0), (x, y + 0.25, 0), 0.36, (150, 40, 36), 8)
+        # iron bracket and cup holding the fire
+        add_beam(m, (x, 7.1, -0.2), (x, 7.55, -0.6), 0.08, IRON)
+        m.add(lathe([(0.1, 7.5), (0.3, 7.65), (0.32, 7.85), (0.0, 7.7)], 8, IRON), T(x, 0, -0.6))
+    add_box(m, (0, 7.6, 0), (7.4, 0.6, 0.6), shade(DARK, 0.04, rng), bevel=0.06)
+    for x in (-3.4, 3.4):
+        m.add(hull([V(x, 7.3, -0.3), V(x, 7.9, -0.3), V(x, 7.3, 0.3), V(x, 7.9, 0.3), V(x * 1.08, 8.2, 0)], shade(DARK, 0.05, rng)))
+    # the skull
+    m.add(hull([V(x, y, z) for x in (-0.4, 0.4) for y in (8.0, 8.7) for z in (-0.15, 0.3)] + [V(0, 7.9, -0.75), V(0.15, 8.2, -0.75), V(-0.15, 8.2, -0.75)], bone))
+    for x in (-0.2, 0.2):
+        add_box(m, (x, 8.45, -0.18), (0.16, 0.16, 0.06), (40, 36, 34))
+    # antlers: a main beam curving out and up, tines off it
+    for s_ in (-1, 1):
+        pts = []
+        for i in range(7):
+            t = i / 6
+            pts.append(V(s_ * (0.35 + 2.0 * t), 8.6 + 2.4 * math.sin(t * 1.5) - 0.3 * t, -0.1 + 0.25 * t))
+        for i, (p, q) in enumerate(zip(pts, pts[1:])):
+            add_cyl(m, p, q, 0.12 - 0.012 * i, bone, 5)
+        for i in (2, 3, 4, 5):
+            p = pts[i]
+            add_cyl(m, p, p + V(-s_ * 0.15, 0.8 - i * 0.06, -0.15), 0.07, bone, 4, 0.02)
+    return m
+
+
+def decor_woodpile():
+    """Split logs stacked for winter under a little plank roof, a chopping
+    block with an axe in it and a few split pieces on the ground."""
+    m = Mesh(128)
+    rng = m.rng
+    for row in range(3):
+        for i in range(5 - row):
+            z = -1.8 + i * 0.9 + row * 0.45
+            y = 0.45 + row * 0.8
+            ln = 4.2 + rng.uniform(-0.2, 0.2)
+            tris, mat = cyl_between((-ln / 2, y, z), (ln / 2, y, z), 0.45, shade(WOOD, 0.12, rng), 8)
+            tris = [(a, b, c, (196, 160, 112) if abs(a[0] - b[0]) < 1e-6 and abs(b[0] - c[0]) < 1e-6 else col) for a, b, c, col in tris]
+            m.add(tris, mat)
+    # a lean-to roof of planks on four poles
+    for x in (-2.3, 2.3):
+        add_cyl(m, (x, 0, -2.3), (x, 2.8, -2.3), 0.1, WEATHER, 5)
+        add_cyl(m, (x, 0, 2.0), (x, 3.3, 2.0), 0.1, WEATHER, 5)
+    for k in range(6):
+        x0 = -2.6 + k * 0.88
+        m.add(slab_between([V(x0, 2.85, -2.6), V(x0, 3.4, 2.3)], [V(x0 + 0.9, 2.85, -2.6), V(x0 + 0.9, 3.4, 2.3)], 0.14, shade((92, 70, 52), 0.08, rng), rng, 0.04))
+    # chopping block and axe
+    add_cyl(m, (2.6, 0, -0.2), (2.6, 0.9, -0.2), 0.5, WEATHER, 9)
+    m.add(lathe([(0.0, 0.89), (0.5, 0.89), (0.5, 0.91), (0.0, 0.91)], 9, (196, 160, 112)), T(2.6, 0, -0.2))
+    add_cyl(m, (2.6, 0.95, -0.1), (2.7, 2.0, 0.6), 0.05, (138, 100, 64), 5)
+    m.add(hull([V(2.45, 0.85, -0.25), V(2.75, 0.85, -0.25), V(2.45, 1.2, -0.05), V(2.75, 1.2, -0.05), V(2.6, 0.95, -0.55)], STEEL))
+    for k in range(3):
+        add_box(m, (2.2 + rng.uniform(-0.5, 0.5), 0.12, 1.2 + rng.uniform(-0.4, 0.4)), (0.9, 0.22, 0.35), (186, 150, 104), RY(rng.uniform(0, 3)))
+    return m
+
+
 # ----------------------------------------------------------------------------- shield (not a slot, a handy extra)
 
 
@@ -1503,6 +2006,17 @@ ASSETS = {
     "Prop_Woodpile": prop_woodpile,
     "Prop_Banner": prop_banner,
     "Prop_BoatUpturned": prop_boat_upturned,
+    "Dock": dock,
+    "Jetty": lambda: dock(28),
+    "PalisadeGate": palisade_gate,
+    "DecorTorch": decor_torch,
+    "DecorBrazier": decor_brazier,
+    "DecorRuneStone": decor_runestone,
+    "DecorBanner": decor_banner,
+    "DecorShieldRack": decor_shieldrack,
+    "DecorTotem": decor_totem,
+    "DecorAntlers": decor_antlers,
+    "DecorWoodpile": decor_woodpile,
     "Shield": shield,
 }
 

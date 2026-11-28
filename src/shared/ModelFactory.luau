@@ -1449,6 +1449,24 @@ function ModelFactory.dock(length: number): Model
 	return model
 end
 
+-- A jetty you build yourself: a shorter dock starting at the back of its
+-- cell (on the sand) and running out along -Z over the water. Its piles go
+-- down to the sea bed, so it keeps its own floor (see ModelFactory.building).
+local partDock = ModelFactory.dock -- the block-built one (a mesh may replace ModelFactory.dock)
+function Builders.Jetty(model, _w, d)
+	local dock = partDock(28)
+	for _, child in dock:GetChildren() do
+		child.Parent = model
+	end
+	dock:Destroy()
+	-- the building's pivot sits on the ground (GROUND_Y); a dock's at the waterline
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CFrame = CFrame.new(0, -Config.GROUND_Y, d / 2) * part.CFrame
+		end
+	end
+end
+
 -- A longship, bow toward local -Z, pivot at the waterline in the middle.
 function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 	local L = length or 44
@@ -2410,6 +2428,7 @@ ModelFactory.Slots = {
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
+	"PalisadeGate", "Jetty", "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile",
 }
 
 -- Models laid out in Workspace > ModelWorkshop (see bakeTemplates) are
@@ -2825,7 +2844,8 @@ function ModelFactory.building(buildingType: string): Model
 	local reference = partBuilt.building(buildingType)
 	local model = wrap(custom)
 	setAnchored(model, true)
-	fitTo(model, reference, "footprint", nil, 0)
+	-- buildings stand on the ground; a jetty's piles reach down into the water
+	fitTo(model, reference, "footprint", nil, not Config.Buildings[buildingType].Shore and 0 or nil)
 	keepGlow(model, reference)
 	reference:Destroy()
 	model.Name = buildingType

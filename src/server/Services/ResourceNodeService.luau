@@ -29,7 +29,7 @@ local function randomFreeCell(colony)
 	local minX, minZ, maxX, maxZ = Grid.bounds(colony.land)
 	for _ = 1, 60 do
 		local x = rng:NextInteger(minX, maxX - 1)
-		local z = rng:NextInteger(minZ, maxZ - 1)
+		local z = rng:NextInteger(math.max(minZ, 0), maxZ - 1) -- trees and rocks stay off the beach
 		if not colony.blocked[Grid.key(x, z)] then
 			return x, z
 		end

@@ -34,10 +34,11 @@ function Grid.footprint(buildingType: string, rot: number): (number, number)
 end
 
 -- The cell bounds of a plot at land stage `land` (1 = starting size):
--- minX, minZ, maxX, maxZ, with max exclusive. Cells may be negative.
+-- minX, minZ, maxX, maxZ, with max exclusive. Cells may be negative
+-- (minZ < 0 is the beach in front of the plot).
 function Grid.bounds(land: number?): (number, number, number, number)
 	local stage = Config.LandStages[land or 1] or Config.LandStages[1]
-	return stage.MinX, 0, stage.MaxX, stage.MaxZ
+	return stage.MinX, stage.MinZ or 0, stage.MaxX, stage.MaxZ
 end
 
 -- The world-space box of the land: min corner and size (studs).
@@ -50,7 +51,8 @@ end
 function Grid.maxBounds(): (number, number, number, number)
 	local a, b, c, d = 0, 0, N, N
 	for _, stage in Config.LandStages do
-		a, c, d = math.min(a, stage.MinX), math.max(c, stage.MaxX), math.max(d, stage.MaxZ)
+		a, b = math.min(a, stage.MinX), math.min(b, stage.MinZ or 0)
+		c, d = math.max(c, stage.MaxX), math.max(d, stage.MaxZ)
 	end
 	return a, b, c, d
 end
@@ -70,9 +72,18 @@ function Grid.eachCell(cx: number, cz: number, sx: number, sz: number, fn: (numb
 end
 
 -- `blocked` is a set: { ["x,z"] = true/anything }.
-function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number, land: number?): (boolean, string?)
+-- `buildingType` (optional) adds that building's own rules, like a jetty's
+-- place at the water's edge.
+function Grid.canPlace(blocked, cx: number, cz: number, sx: number, sz: number, land: number?, buildingType: string?): (boolean, string?)
 	if not Grid.inBounds(cx, cz, sx, sz, land) then
 		return false, "Outside your land"
+	end
+	local def = buildingType and Config.Buildings[buildingType]
+	if def and def.Shore then
+		local _, minZ = Grid.bounds(land)
+		if cz ~= minZ then
+			return false, "A jetty goes on the front row of your beach, by the water"
+		end
 	end
 	local free = true
 	Grid.eachCell(cx, cz, sx, sz, function(x, z)

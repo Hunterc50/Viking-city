@@ -27,11 +27,12 @@ local function makePart(props)
 	return p
 end
 
--- Wooden posts at the corners and stakes along the edges, so you can see
--- your borders. Redrawn when the land grows.
+-- Your borders: tall carved posts with a red cloth at the corners, and a
+-- line of stakes joined by rope all the way round (across the beach too).
+-- Redrawn when the land grows.
 drawBorders = function(plot: Model, origin: Vector3, land: number)
 	for _, child in plot:GetChildren() do
-		if child.Name == "BorderPost" or child.Name == "BorderStake" then
+		if child.Name == "BorderPost" or child.Name == "BorderStake" or child.Name == "BorderRope" or child.Name == "BorderCloth" then
 			child:Destroy()
 		end
 	end
@@ -41,35 +42,69 @@ drawBorders = function(plot: Model, origin: Vector3, land: number)
 		for _, z in { 0, size.Z } do
 			local post = makePart({
 				Name = "BorderPost",
-				Size = Vector3.new(1, 6, 1),
-				Position = corner + Vector3.new(x, 3, z),
+				Size = Vector3.new(1.1, 7, 1.1),
+				Position = corner + Vector3.new(x, 3.5, z),
 				Color = Color3.fromRGB(78, 54, 36),
 				Material = Enum.Material.Wood,
+				Parent = plot,
+			})
+			makePart({
+				Name = "BorderCloth",
+				Size = Vector3.new(0.12, 2.2, 1.4),
+				Position = post.Position + Vector3.new(0, 2.2, 0.8),
+				Color = Color3.fromRGB(150, 36, 32),
+				Material = Enum.Material.Fabric,
+				CanCollide = false,
+				CastShadow = false,
 				Parent = plot,
 			})
 			first = first or post
 		end
 	end
-	-- low stakes every 4 cells along the sides and back
-	local step = Config.CELL * 4
+	-- stakes every 2 cells, a rope from each one to the next
+	local step = Config.CELL * 2
 	local function stake(p: Vector3)
 		makePart({
 			Name = "BorderStake",
-			Size = Vector3.new(0.5, 2.4, 0.5),
-			Position = p + Vector3.new(0, 1.2, 0),
+			Size = Vector3.new(0.45, 2.6, 0.45),
+			Position = p + Vector3.new(0, 1.3, 0),
 			Color = Color3.fromRGB(96, 70, 46),
 			Material = Enum.Material.Wood,
 			CanCollide = false,
 			Parent = plot,
 		})
 	end
-	for d = step, size.Z - 1, step do
-		stake(corner + Vector3.new(0, 0, d))
-		stake(corner + Vector3.new(size.X, 0, d))
+	local function rope(a: Vector3, b: Vector3)
+		local mid = (a + b) / 2 + Vector3.new(0, 2.1, 0)
+		makePart({
+			Name = "BorderRope",
+			Size = Vector3.new(0.14, 0.14, (b - a).Magnitude),
+			CFrame = CFrame.lookAt(mid, b + Vector3.new(0, 2.1, 0)),
+			Color = Color3.fromRGB(196, 170, 120),
+			Material = Enum.Material.Fabric,
+			CanCollide = false,
+			CastShadow = false,
+			Parent = plot,
+		})
 	end
-	for d = step, size.X - 1, step do
-		stake(corner + Vector3.new(d, 0, size.Z))
+	local function side(from: Vector3, to: Vector3)
+		local len = (to - from).Magnitude
+		local dir = (to - from).Unit
+		local last = from
+		for d = step, len - 1, step do
+			local p = from + dir * d
+			stake(p)
+			rope(last, p)
+			last = p
+		end
+		rope(last, to)
 	end
+	local c00, c10 = corner, corner + Vector3.new(size.X, 0, 0)
+	local c01, c11 = corner + Vector3.new(0, 0, size.Z), corner + Vector3.new(size.X, 0, size.Z)
+	side(c00, c10)
+	side(c10, c11)
+	side(c11, c01)
+	side(c01, c00)
 	local ground = plot:FindFirstChild("Ground")
 	if ground then
 		ground.Size = Vector3.new(size.X, 1, size.Z)

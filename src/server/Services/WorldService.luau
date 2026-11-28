@@ -8,9 +8,9 @@
 
 	Layout (looking from the lake toward the mountains):
 	  z < -44      a fjord lake, with a far shore and peaks across the water
-	  z -44..0     sandy beach and docks, then a dirt path in front of each plot
-	  z 0..160     the row of player plots (grass)
-	  z 160..270   an open meadow where deer roam
+	  z -44..0     sandy beach and docks (the front of each plot's land)
+	  z 0..160     the row of player plots (grass), growing back to z 224
+	  z 240..300   an open meadow where deer roam
 	  z 270..470   pine forest, rolling hills and rock outcrops
 	  z 480+       snow-capped mountains
 	Also sets up warm afternoon light, haze, sky and colour grading.
@@ -48,7 +48,7 @@ for _, rival in Config.Rivals do
 	FLAT_MIN_X = math.min(FLAT_MIN_X, rival.Center.X - rival.Radius - 30)
 	FLAT_MAX_X = math.max(FLAT_MAX_X, rival.Center.X + rival.Radius + 30)
 end
-local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 115
+local FLAT_MIN_Z, FLAT_MAX_Z = -40, Grid.PLOT_SIZE + 145
 local SHORE_Z = -40 -- where the beach starts to slope into the fjord
 local SEED = 7.31
 
@@ -288,7 +288,7 @@ local function inPath(x: number, z: number): boolean
 end
 
 local function inApron(x: number, z: number): boolean
-	if z < -16 or z > 0 then
+	if z < -4 or z > 0 then
 		return false
 	end
 	for i = 1, Config.MAX_PLOTS do
@@ -316,7 +316,8 @@ local function surfaceMaterial(x: number, z: number, h: number, slope: number)
 		return M.Ground
 	end
 	if inPlotArea(x, z) then
-		return M.Grass
+		-- the front of every plot is beach, down to the water
+		return z < -4 and M.Sand or M.Grass
 	end
 	local rival = rivalAt(x, z)
 	if rival then
@@ -555,7 +556,7 @@ local function scatterScenery()
 		tries += 1
 		local x, z = rng:NextNumber(MIN_X, MAX_X), rng:NextNumber(MIN_Z + 40, 640)
 		local density = fbm(x, z, 1 / 220, 3, 29) + 0.15
-		if z > FLAT_MAX_Z - 30 and z < FLAT_MAX_Z + 40 and x > FLAT_MIN_X and x < FLAT_MAX_X then
+		if z > FLAT_MAX_Z - 70 and z < FLAT_MAX_Z + 40 and x > FLAT_MIN_X and x < FLAT_MAX_X then
 			density -= 0.35 -- keep the deer meadow open
 		end
 		if rng:NextNumber() < density * 2 and plant(x, z) then
@@ -662,34 +663,6 @@ local function scatterScenery()
 			ship:PivotTo(CFrame.new(dockX + 9, 0, -62) * CFrame.Angles(0, math.rad(rng:NextNumber(-4, 4)), 0))
 			ship.Parent = folder
 		end
-		-- torches lighting the path at each corner of the plot
-		for _, x in { o.X + 2, o.X + Grid.PLOT_SIZE - 2 } do
-			local torch = Instance.new("Model")
-			torch.Name = "Torch"
-			local pole = ModelFactory.addPart(torch, {
-				Size = Vector3.new(0.5, 6, 0.5),
-				Position = Vector3.new(x, TOP + 3, -2),
-				Color = ModelFactory.Colors.DarkWood,
-			})
-			local flame = ModelFactory.addPart(torch, {
-				Size = Vector3.new(0.7, 0.7, 0.7),
-				Position = pole.Position + Vector3.new(0, 3.3, 0),
-				Color = Color3.fromRGB(255, 140, 50),
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-			})
-			local fire = Instance.new("Fire")
-			fire.Size = 1.6
-			fire.Heat = 5
-			fire.Parent = flame
-			local light = Instance.new("PointLight")
-			light.Color = Color3.fromRGB(255, 150, 70)
-			light.Range = 18
-			light.Brightness = 1.6
-			light.Parent = flame
-			torch.Parent = folder
-		end
-
 		-- village life on the beach and in the gaps between plots
 		local function placeProp(kind: string, x: number, z: number, turn: number)
 			local prop = ModelFactory.prop(kind, rng)
@@ -699,12 +672,13 @@ local function scatterScenery()
 			prop.Parent = folder
 		end
 		-- torch posts down the path to the jetty, warm against the cold
-		for k, z in { -6, -17, -28 } do
-			placeProp("TorchPost", dockX + ((k % 2 == 0) and 4.6 or -4.6), z, 0)
+		-- (all at the water's edge, below your beach, so the sand is free to build on)
+		for _, dx in { -4.6, 4.6 } do
+			placeProp("TorchPost", dockX + dx, -35, 0)
 		end
-		placeProp("FishRack", dockX - 14, -24, rng:NextNumber(-0.3, 0.3))
-		placeProp("Barrels", dockX + 7, -30, rng:NextNumber(0, 6))
-		placeProp("BoatUpturned", dockX + 22, -30, math.rad(80) + rng:NextNumber(-0.2, 0.2))
+		placeProp("FishRack", dockX - 14, -38, rng:NextNumber(-0.3, 0.3))
+		placeProp("Barrels", dockX + 7, -37, rng:NextNumber(0, 6))
+		placeProp("BoatUpturned", dockX + 22, -38, math.rad(80) + rng:NextNumber(-0.2, 0.2))
 		local gapX = o.X - Config.PLOT_GAP / 2
 		do
 			placeProp("Banner", gapX, -6, 0)
@@ -971,7 +945,7 @@ end
 
 -- Bump this whenever the valley's shape changes, so an old valley saved into
 -- the place file is rebuilt instead of fighting the new layout.
-local WORLD_VERSION = 4
+local WORLD_VERSION = 5
 
 -- Does a valley saved into the place still fit this version's layout?
 local function bakedValleyFits(): boolean
