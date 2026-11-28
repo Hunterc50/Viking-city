@@ -34,6 +34,16 @@ end
 
 -- Helpers -------------------------------------------------------------------
 
+-- Where the ground really is under a point (the terrain surface can sit a
+-- little above GROUND_Y), so villagers walk on it, not in it.
+local function groundY(pos: Vector3): number
+	local ws = services and services.WorldService
+	if ws and ws.GroundHeight then
+		return math.max(ws:GroundHeight(pos.X, pos.Z), Config.GROUND_Y)
+	end
+	return Config.GROUND_Y
+end
+
 local function counts(colony)
 	local adults, children = 0, 0
 	for _, v in colony.villagers do
@@ -137,7 +147,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage, services.RankService:Rank(colony))
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
-	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
+	v.model:PivotTo(CFrame.new(groundPos.X, groundY(groundPos), groundPos.Z) + Vector3.new(0, v.height, 0))
 	if v.warrior then
 		ModelFactory.armWarrior(v.model)
 	end
@@ -593,7 +603,7 @@ local function walk(colony, v, now: number)
 	end
 
 	local from = v.body.Position
-	local to = Vector3.new(target.X, colony.origin.Y + v.height, target.Z)
+	local to = Vector3.new(target.X, groundY(target) + v.height, target.Z)
 	local flat = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
 	local dist = flat.Magnitude
 	if dist < 1 then

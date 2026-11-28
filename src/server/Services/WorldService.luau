@@ -974,6 +974,17 @@ function WorldService:LevelUnder(cf: CFrame, sizeX: number, sizeZ: number)
 	end)
 end
 
+-- The highest ground under a footprint centred on `pos` (sizes in studs),
+-- sampled at the middle and near each corner.
+function WorldService:GroundUnder(pos: Vector3, sizeX: number, sizeZ: number): number
+	local best = -math.huge
+	local hx, hz = math.max(sizeX / 2 - 1.5, 0), math.max(sizeZ / 2 - 1.5, 0)
+	for _, o in { Vector2.new(0, 0), Vector2.new(hx, hz), Vector2.new(-hx, hz), Vector2.new(hx, -hz), Vector2.new(-hx, -hz) } do
+		best = math.max(best, self:GroundHeight(pos.X + o.X, pos.Z + o.Y))
+	end
+	return best
+end
+
 function WorldService:Init()
 	clearPlaceholders()
 	shareRivers()
@@ -1033,7 +1044,8 @@ function WorldService:Start()
 	dayNightCycle()
 end
 
--- Height of the terrain at x, z (used by wildlife).
+-- Height of the terrain surface at x, z, where it is really drawn (terrain
+-- voxels can leave it a little above GROUND_Y). Water counts as ground.
 function WorldService:GroundHeight(x: number, z: number): number
 	local hit = groundAt(x, z)
 	return hit and hit.Position.Y or TOP

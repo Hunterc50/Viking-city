@@ -5415,6 +5415,16 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	if not Config.Buildings[buildingType].Wall and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
 		services.WorldService:LevelUnder(finalCFrame, sx * Config.CELL, sz * Config.CELL)
 	end
+	-- stand it on the ground as it is really drawn (terrain voxels can leave the
+	-- surface a little above GROUND_Y), so nothing sits sunk in the dirt
+	if not Config.Buildings[buildingType].Shore and services.WorldService.GroundUnder then
+		local y = services.WorldService:GroundUnder(finalCFrame.Position, sx * Config.CELL, sz * Config.CELL)
+		local lift = math.clamp(y - finalCFrame.Position.Y, 0, 4)
+		if lift > 0.05 then
+			finalCFrame += Vector3.new(0, lift, 0)
+			model:PivotTo(finalCFrame)
+		end
+	end
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
 	services.ClanService:Apply(colony, model) -- banners in the clan's colours
 	model.Parent = colony.plot.Buildings
@@ -10879,6 +10889,16 @@ end
 
 -- Helpers -------------------------------------------------------------------
 
+-- Where the ground really is under a point (the terrain surface can sit a
+-- little above GROUND_Y), so villagers walk on it, not in it.
+local function groundY(pos: Vector3): number
+	local ws = services and services.WorldService
+	if ws and ws.GroundHeight then
+		return math.max(ws:GroundHeight(pos.X, pos.Z), Config.GROUND_Y)
+	end
+	return Config.GROUND_Y
+end
+
 local function counts(colony)
 	local adults, children = 0, 0
 	for _, v in colony.villagers do
@@ -10982,7 +11002,7 @@ local function makeModel(colony, v, groundPos: Vector3)
 	v.model = ModelFactory.villager(v.name, v.isChild, rng, v.stage, services.RankService:Rank(colony))
 	v.body = v.model.PrimaryPart
 	v.height = v.model:GetAttribute("GroundOffset") or v.body.Size.Y / 2
-	v.model:PivotTo(CFrame.new(groundPos + Vector3.new(0, v.height, 0)))
+	v.model:PivotTo(CFrame.new(groundPos.X, groundY(groundPos), groundPos.Z) + Vector3.new(0, v.height, 0))
 	if v.warrior then
 		ModelFactory.armWarrior(v.model)
 	end
@@ -11438,7 +11458,7 @@ local function walk(colony, v, now: number)
 	end
 
 	local from = v.body.Position
-	local to = Vector3.new(target.X, colony.origin.Y + v.height, target.Z)
+	local to = Vector3.new(target.X, groundY(target) + v.height, target.Z)
 	local flat = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
 	local dist = flat.Magnitude
 	if dist < 1 then
@@ -13577,6 +13597,17 @@ function WorldService:LevelUnder(cf: CFrame, sizeX: number, sizeZ: number)
 	end)
 end
 
+-- The highest ground under a footprint centred on `pos` (sizes in studs),
+-- sampled at the middle and near each corner.
+function WorldService:GroundUnder(pos: Vector3, sizeX: number, sizeZ: number): number
+	local best = -math.huge
+	local hx, hz = math.max(sizeX / 2 - 1.5, 0), math.max(sizeZ / 2 - 1.5, 0)
+	for _, o in { Vector2.new(0, 0), Vector2.new(hx, hz), Vector2.new(-hx, hz), Vector2.new(hx, -hz), Vector2.new(-hx, -hz) } do
+		best = math.max(best, self:GroundHeight(pos.X + o.X, pos.Z + o.Y))
+	end
+	return best
+end
+
 function WorldService:Init()
 	clearPlaceholders()
 	shareRivers()
@@ -13636,7 +13667,8 @@ function WorldService:Start()
 	dayNightCycle()
 end
 
--- Height of the terrain at x, z (used by wildlife).
+-- Height of the terrain surface at x, z, where it is really drawn (terrain
+-- voxels can leave it a little above GROUND_Y). Water counts as ground.
 function WorldService:GroundHeight(x: number, z: number): number
 	local hit = groundAt(x, z)
 	return hit and hit.Position.Y or TOP

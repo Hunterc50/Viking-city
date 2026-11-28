@@ -134,6 +134,16 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	if not Config.Buildings[buildingType].Wall and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
 		services.WorldService:LevelUnder(finalCFrame, sx * Config.CELL, sz * Config.CELL)
 	end
+	-- stand it on the ground as it is really drawn (terrain voxels can leave the
+	-- surface a little above GROUND_Y), so nothing sits sunk in the dirt
+	if not Config.Buildings[buildingType].Shore and services.WorldService.GroundUnder then
+		local y = services.WorldService:GroundUnder(finalCFrame.Position, sx * Config.CELL, sz * Config.CELL)
+		local lift = math.clamp(y - finalCFrame.Position.Y, 0, 4)
+		if lift > 0.05 then
+			finalCFrame += Vector3.new(0, lift, 0)
+			model:PivotTo(finalCFrame)
+		end
+	end
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
 	services.ClanService:Apply(colony, model) -- banners in the clan's colours
 	model.Parent = colony.plot.Buildings
