@@ -3126,7 +3126,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
-	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse",
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
@@ -3315,6 +3315,23 @@ local function customAsset(name: string): Instance?
 	local folder = assetsFolder() -- always, so an imported pack never sits in the world
 	local workshop = workspace:FindFirstChild("ModelWorkshop")
 	local item = workshop and workshop:FindFirstChild(name)
+	-- a block-built copy left in the ModelWorkshop never hides a real mesh
+	if item and not item:FindFirstChildWhichIsA("MeshPart", true) and folder then
+		local hasMesh = folder:FindFirstChild(name)
+		if not hasMesh then
+			for _, child in folder:GetChildren() do
+				if not slotSet[child.Name] and (child:IsA("Model") or child:IsA("Folder")) then
+					hasMesh = findInPack(child, name)
+					if hasMesh then
+						break
+					end
+				end
+			end
+		end
+		if hasMesh and hasMesh:FindFirstChildWhichIsA("MeshPart", true) then
+			item = nil
+		end
+	end
 	local fromPack = false
 	if folder and not item then
 		item = folder:FindFirstChild(name)

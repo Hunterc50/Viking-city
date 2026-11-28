@@ -476,6 +476,40 @@ def storehouse():
     return m
 
 
+def fishery():
+    """A net shed by the water, a rack of drying fish, and a boat pulled up beside it."""
+    m = Mesh(41)
+    shed = hall(L=9.5, D=7.5, wall_h=3.4, ridge_h=8.0, roof="thatch", seed=41, dragons=False, buttress=False)
+    m.add(shed.tris, T(-3.0, 0, 3.0))
+    rack = prop_fishrack()
+    m.add(rack.tris, M(T(3.6, 0, -4.2), RY(math.pi / 2)))
+    boat = prop_boat_upturned()
+    m.add(boat.tris, M(T(4.6, 0, 3.6), RY(0.12)))
+    # a net hung over a pole
+    add_cyl(m, (-6.5, 2.8, -2.2), (0.5, 2.8, -2.2), 0.12, DARK, 6)
+    add_box(m, (-3.0, 1.9, -2.25), (6.6, 1.8, 0.06), (96, 88, 70))
+    return m
+
+
+def brewhouse():
+    """A smoky little brew hall, a copper vat on a fire, barrels and beehive skeps."""
+    m = Mesh(43)
+    shed = hall(L=10.5, D=8.0, wall_h=3.6, ridge_h=8.6, roof="thatch", seed=43, dragons=False, buttress=False)
+    m.add(shed.tris, T(-1.6, 0, 2.6))
+    # the vat: a round copper kettle on stones over the fire
+    for k in range(6):
+        a = k / 6 * math.tau
+        m.add(blob(0.5, STONE, m.rng, 1, 0.15, 0.05, (1, 0.7, 1)), T(4.4 + math.cos(a) * 1.3, 0.3, -4.4 + math.sin(a) * 1.3))
+    m.add(lathe([(0.0, 0.7), (1.1, 0.8), (1.5, 1.4), (1.6, 2.4), (1.45, 2.9), (1.55, 3.0), (0.0, 3.0)], 14, (176, 110, 64)), T(4.4, 0, -4.4))
+    barrels = prop_barrels()
+    m.add(barrels.tris, M(T(-5.2, 0, -4.4), RY(0.4)))
+    # straw beehive skeps on a bench
+    add_box(m, (-5.8, 0.8, 7.2), (3.6, 0.25, 1.0), WOOD)
+    for x in (-6.9, -5.8, -4.7):
+        m.add(lathe([(0.6, 0.0), (0.62, 0.4), (0.5, 0.8), (0.28, 1.05), (0.0, 1.12)], 10, THATCH), T(x, 0.92, 7.2))
+    return m
+
+
 # ----------------------------------------------------------------------------- nature
 
 
@@ -1403,6 +1437,8 @@ ASSETS = {
     "Shrine": shrine,
     "Shipyard": shipyard,
     "HuntingLodge": hunting_lodge,
+    "Fishery": fishery,
+    "Brewhouse": brewhouse,
     "Palisade": palisade,
     "Tree_Pine": pine,
     "Tree_Spruce": spruce,
