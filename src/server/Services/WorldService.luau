@@ -140,8 +140,48 @@ end
 
 -- The height of the land at x, z
 local landHeight
+-- 0..1: how far inside a settler plot (x, z) is (1 = well inside)
+local function inPlot(x: number, z: number): number
+	if z < -4 or z > Grid.PLOT_SIZE + 4 then
+		return 0
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		if x >= o.X - 4 and x <= o.X + Grid.PLOT_SIZE + 4 then
+			local edge = math.min(x - (o.X - 4), o.X + Grid.PLOT_SIZE + 4 - x, z + 4, Grid.PLOT_SIZE + 4 - z)
+			return math.clamp(edge / 6, 0, 1)
+		end
+	end
+	return 0
+end
+
+-- 0..1: inside the deep berth dug beside each jetty, where ships are moored
+local function inBerth(x: number, z: number): number
+	if z > -34 then
+		return 0
+	end
+	local best = 0
+	for i = 1, Config.MAX_PLOTS do
+		local o = Grid.plotOrigin(i)
+		local dockX = o.X + Grid.PLOT_SIZE * 0.25
+		local dx = math.abs(x - (dockX + 6))
+		best = math.max(best, smooth(26, 14, dx) * smooth(-36, -50, z))
+	end
+	return best
+end
+
 local function heightAt(x: number, z: number): number
 	local h = landHeight(x, z)
+	-- plots are dead level, so buildings sit on the ground, not in it
+	local plot = inPlot(x, z)
+	if plot > 0 then
+		h = lerp(h, TOP, plot)
+	end
+	-- a deep berth by every jetty, so moored ships float instead of running aground
+	local berth = inBerth(x, z)
+	if berth > 0 then
+		h = lerp(h, math.min(h, -8), berth)
+	end
 	local d, cx = nearestRiver(x, z)
 	if d < 18 then
 		-- carve the river bed below the bank on its centre line
@@ -927,9 +967,53 @@ local function shareRivers()
 	workspace:SetAttribute("RiverZ", Vector2.new(SHORE_Z - 30, RIVER_TOP_Z))
 end
 
+-- Bump this whenever the valley's shape changes, so an old valley saved into
+-- the place file is rebuilt instead of fighting the new layout.
+local WORLD_VERSION = 3
+
+-- Does a valley saved into the place still fit this version's layout?
+local function bakedValleyFits(): boolean
+	if workspace:GetAttribute("WorldVersion") ~= WORLD_VERSION then
+		return false
+	end
+	-- the middle of plot 1 must be flat ground at the plot's height
+	local o = Grid.plotOrigin(1)
+	local hit = groundAt(o.X + Grid.PLOT_SIZE / 2, o.Z + Grid.PLOT_SIZE / 2)
+	if not hit or math.abs(hit.Position.Y - TOP) > 2.5 then
+		return false
+	end
+	-- and the ships' moorings must be out on the water
+	local sea = groundAt(o.X + Grid.PLOT_SIZE * 0.25 + 9, -62)
+	return sea ~= nil and sea.Material == M.Water
+end
+
+-- Makes the ground level under a building's footprint (sizes along world X and Z): digs out any hill
+-- poking up into it and fills any dip, so nothing is half-buried or floating.
+function WorldService:LevelUnder(cf: CFrame, sizeX: number, sizeZ: number)
+	local pos = cf.Position
+	local w, d = sizeX + 4, sizeZ + 4
+	pcall(function()
+		Terrain:FillBlock(CFrame.new(pos.X, TOP + 30, pos.Z), Vector3.new(w, 60, d), M.Air)
+		Terrain:FillBlock(CFrame.new(pos.X, TOP - 4, pos.Z), Vector3.new(w, 8, d), M.Ground)
+	end)
+end
+
 function WorldService:Init()
 	clearPlaceholders()
 	shareRivers()
+	if workspace:GetAttribute("WorldBaked") and not bakedValleyFits() then
+		-- saved by an older version of the game: its hills and shore no longer
+		-- match where plots, docks and ships go, so make the valley fresh
+		warn("[WorldService] the saved valley is from an older version: building a new one")
+		workspace:SetAttribute("WorldBaked", nil)
+		for _, name in { "Scenery", "ShoreFoam" } do
+			local old = workspace:FindFirstChild(name)
+			if old then
+				old:Destroy()
+			end
+		end
+		Terrain:Clear()
+	end
 	if workspace:GetAttribute("WorldBaked") then
 		if hasGround() then
 			-- The valley was saved into the place (see Bake), so whatever you
@@ -965,6 +1049,7 @@ function WorldService:Bake()
 	scatterScenery()
 	buildLandings()
 	workspace:SetAttribute("WorldBaked", true)
+	workspace:SetAttribute("WorldVersion", WORLD_VERSION)
 end
 
 function WorldService:Start()

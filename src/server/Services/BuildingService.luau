@@ -69,6 +69,10 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	model:SetAttribute("OwnerUserId", colony.player.UserId)
 	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
 	model:PivotTo(finalCFrame)
+	-- clear and level the ground under it (palisades are too small to bother)
+	if buildingType ~= "Palisade" and services.WorldService.LevelUnder then
+		services.WorldService:LevelUnder(finalCFrame, sx * Config.CELL, sz * Config.CELL)
+	end
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
 	services.ClanService:Apply(colony, model) -- banners in the clan's colours
 	model.Parent = colony.plot.Buildings
