@@ -18,36 +18,36 @@
 local AssetIds = {}
 
 AssetIds.Textures = {
-	Planks = "",
-	Bark = "",
-	Stone = "",
-	Thatch = "",
-	Fur = "",
-	Iron = "",
-	Mail = "",
-	Cloth = "",
-	Leather = "",
+	Planks = "99219759031156",
+	Bark = "81943827981119",
+	Stone = "134784449121497",
+	Thatch = "83706834634988",
+	Fur = "108994538135725",
+	Iron = "74881552321813",
+	Mail = "110799894282775",
+	Cloth = "133036267171125",
+	Leather = "108816029250063",
 }
 
 -- Normal maps (<Name>_Normal.png). Only used if you also make SurfaceAppearances.
 AssetIds.Normals = {
-	Planks = "",
-	Bark = "",
-	Stone = "",
-	Thatch = "",
-	Fur = "",
-	Iron = "",
-	Mail = "",
-	Cloth = "",
-	Leather = "",
+	Planks = "99000675698208",
+	Bark = "137110303829148",
+	Stone = "88416761511029",
+	Thatch = "117669267634241",
+	Fur = "105222209754048",
+	Iron = "111404527296440",
+	Mail = "71993879985414",
+	Cloth = "76685064842577",
+	Leather = "135894035407072",
 }
 
 AssetIds.Sounds = {
-	VikingTheme = "", -- music/VikingTheme.ogg, the theme "Over the Fjord"
-	WarHorn = "", -- music/sfx/WarHorn.ogg
-	Wind = "", -- music/sfx/Wind.ogg
-	Waves = "", -- music/sfx/Waves.ogg
-	Fire = "", -- music/sfx/Fire.ogg
+	VikingTheme = "134063905969129", -- music/VikingTheme.ogg, the theme "Over the Fjord"
+	WarHorn = "122414446260321", -- music/sfx/WarHorn.ogg
+	Wind = "136494073086031", -- music/sfx/Wind.ogg
+	Waves = "123305574817861", -- music/sfx/Waves.ogg
+	Fire = "114757074007418", -- music/sfx/Fire.ogg
 }
 
 -- "1234" -> "rbxassetid://1234"; already-full ids pass through; "" -> nil
