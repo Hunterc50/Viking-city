@@ -11977,7 +11977,11 @@ end
 
 -- The nearest enemy of this colony to `pos`: rival guards, raiders attacking
 -- the village, or militia in a town raid you started.
-local function nearestEnemy(colony, pos: Vector3, range: number)
+local function nearestEnemy(colony, pos: Vector3, range: number, onlyRaiders: boolean?)
+	if onlyRaiders then
+		local m, root = services.VillageDefenseService:NearestRaider(colony, pos, range)
+		return m, root, Config.VillageRaids.RaiderDamage, m and "raider" or nil
+	end
 	local best, bestRoot, bestDmg = services.RaidService:NearestDefender(pos, range, true)
 	local bestD = bestRoot and (bestRoot.Position - pos).Magnitude or range
 	local kind = best and "defender"
@@ -12023,7 +12027,7 @@ local function fight(colony, v, now: number, dt: number, anchor: Vector3, f): bo
 	f = f or {}
 	local sight = W.Sight * (f.Sight or 1)
 	local leash = f.Leash or sight * 1.5
-	local enemy, root, dmg, kind = nearestEnemy(colony, v.body.Position, sight)
+	local enemy, root, dmg, kind = nearestEnemy(colony, v.body.Position, sight, f.OnlyRaiders)
 	if not enemy or not root or (root.Position - anchor).Magnitude > leash then
 		return false
 	end
@@ -12072,6 +12076,7 @@ end
 
 -- Settlers take up arms: while raiders are in the village, grown villagers
 -- near them grab a weapon and fight. When the raid is over they go back to work.
+local HUNT = 600 -- during a raid, defenders chase raiders anywhere on your land (and the beach)
 local function militia(colony, now: number, dt: number)
 	local raiding = services.VillageDefenseService:Raiding(colony)
 	local corner, size = Grid.landRect(colony.origin, colony.land)
@@ -12091,7 +12096,7 @@ local function militia(colony, now: number, dt: number)
 					ModelFactory.armWarrior(v.model)
 				end
 				-- settlers hit softer than trained warriors, and take it harder
-				fight(colony, v, now, dt, middle, { Sight = (Config.Villagers.MilitiaSight or 34) / W.Sight, Leash = 400, Damage = 0.7, DamageTaken = 1.2 })
+				fight(colony, v, now, dt, middle, { Sight = HUNT / W.Sight, Leash = HUNT, Damage = 0.7, DamageTaken = 1.2, OnlyRaiders = true })
 			end
 		elseif v.militia then
 			-- the raid is over: put the weapon down and go back to work
@@ -12195,6 +12200,9 @@ local function stepColony(colony, now: number, dt: number)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	local ship = b.mode == "follow" and services.BoatService:ShipOf(player)
 	local heal = maxHealth(colony)
+	local raiding = services.VillageDefenseService:Raiding(colony)
+	local homeCorner, homeSize = Grid.landRect(colony.origin, colony.land)
+	local home = homeCorner + homeSize / 2
 
 	for i, v in list do
 		if not v.body or not v.model or not v.model.Parent then
@@ -12206,6 +12214,10 @@ local function stepColony(colony, now: number, dt: number)
 		end
 		if now - (v.fighting or 0) > 4 and (v.hp or heal) < heal then
 			v.hp = math.min(heal, (v.hp or heal) + W.HealPerSecond * dt)
+		end
+		-- raiders in the village: every warrior goes after them, wherever they are
+		if not ship and raiding and fight(colony, v, now, dt, home, { Sight = HUNT / W.Sight, Leash = HUNT, OnlyRaiders = true }) then
+			continue
 		end
 		if b.mode == "follow" and root then
 			if ship then
