@@ -914,6 +914,35 @@ def boar(seed=57):
     return m
 
 
+def bear(seed=59):
+    """A great brown bear on all fours, facing -Z: a shoulder hump, a broad
+    head with small round ears, a pale muzzle, heavy legs and big clawed paws."""
+    m = Mesh(seed)
+    rng = m.rng
+    coat = (96, 66, 44)
+    m.add(blob(1.0, coat, rng, 2, 0.1, 0.05, (1.75, 1.75, 3.1)), T(0, 3.7, 0.3))
+    m.add(blob(1.0, coat, rng, 2, 0.1, 0.05, (1.7, 1.9, 1.7)), T(0, 4.3, -1.6))  # shoulders and hump
+    m.add(blob(1.0, coat, rng, 1, 0.1, 0.05, (1.6, 1.6, 1.5)), T(0, 3.6, 2.2))  # rump
+    # head and muzzle
+    m.add(blob(1.0, coat, rng, 1, 0.06, 0.04, (1.05, 0.95, 1.1)), T(0, 4.3, -3.9))
+    m.add(blob(1.0, mix(coat, (200, 170, 130), 0.35), rng, 1, 0.04, 0.03, (0.55, 0.48, 0.75)), T(0, 3.95, -5.0))
+    add_box(m, (0, 4.2, -5.72), (0.45, 0.32, 0.15), (20, 16, 14))
+    for s_ in (-1, 1):
+        m.add(blob(0.32, coat, rng, 0, 0.05, 0.03, (1, 1, 0.6)), T(s_ * 0.75, 5.25, -3.5))
+        add_box(m, (s_ * 0.45, 4.6, -4.92), (0.16, 0.16, 0.06), (16, 12, 10))
+    # legs and paws with claws
+    for x in (-1.15, 1.15):
+        for z in (-1.9, 2.1):
+            add_cyl(m, (x, 3.6, z), (x, 0.5, z - 0.1), 0.62, coat, 8, 0.5)
+            m.add(blob(0.6, mix(coat, (0, 0, 0), 0.25), rng, 0, 0.08, 0.03, (1, 0.55, 1.25)), T(x, 0.32, z - 0.3))
+            for k in (-1, 0, 1):
+                add_cyl(m, (x + k * 0.25, 0.2, z - 0.95), (x + k * 0.27, 0.05, z - 1.3), 0.06, (220, 210, 190), 4, 0.01)
+    # stubby tail and a darker back
+    m.add(blob(0.3, coat, rng, 0, 0.1, 0.03), T(0, 4.6, 3.6))
+    recolour(m, lambda rgb, n, c: mix(rgb, (64, 44, 30), 0.4) if rgb == coat and n[1] > 0.6 else rgb)
+    return m
+
+
 # ----------------------------------------------------------------------------- tools (handle space)
 
 
@@ -2098,6 +2127,7 @@ ASSETS = {
     "Longship": longship,
     "Deer": deer,
     "Boar": boar,
+    "Bear": bear,
     "Axe": axe,
     "Pickaxe": pickaxe,
     "Bow": bow,

@@ -487,15 +487,43 @@ Config.Wildlife = {
 	-- wild boars root about the meadow too. Leave them be, or they fight back:
 	-- hit one and it charges and gores you until one of you goes down
 	BoarsPerPlot = 2,
-	BoarHealth = 120,
-	BoarDamage = 14, -- per goring
-	BoarGoreCooldown = 1.4,
-	BoarSpeed = 7,
-	BoarChargeSpeed = 23,
-	BoarAngrySeconds = 14, -- how long it keeps charging after it was last hit
-	BoarMeat = 40,
-	BoarHides = 3,
-	BoarRespawnSeconds = 90,
+	BoarAngrySeconds = 14, -- how long a beast keeps after you once roused
+	-- the wildlands (Config.Wildlands) are wilder: boars, wolves all year that
+	-- hunt you, and now and then a great bear
+	Beasts = {
+		Boar = { Health = 120, Damage = 14, Cooldown = 1.4, Speed = 7, Charge = 23, Food = 40, Hides = 3, Respawn = 90 },
+		WildWolf = { Health = 70, Damage = 9, Cooldown = 1.1, Speed = 9, Charge = 21, Aggro = 26, Food = 10, Hides = 4, Respawn = 80 },
+		Bear = { Health = 420, Damage = 28, Cooldown = 1.8, Speed = 6, Charge = 19, Aggro = 34, Food = 90, Hides = 10, Silver = 10, Respawn = 0 },
+	},
+}
+
+-- The wildlands: the rough forest behind the meadow, up toward the mountains.
+-- Anyone may cut and mine there (nobody's plot), for richer yields and the
+-- odd silver vein, but bandits camp there and the beasts are hungry.
+Config.Wildlands = {
+	MinZ = 330,
+	MaxZ = 470,
+	Trees = 46,
+	Rocks = 20,
+	SilverVeins = 5,
+	RegrowSeconds = 50,
+	TreeWood = 18, -- per tree (a tree in your plot gives 10)
+	RockStone = 14,
+	VeinSilver = 12,
+	VeinStone = 6,
+	Boars = 6,
+	WolfPacks = 2,
+	WolvesPerPack = 3,
+	BearChance = 0.35, -- each check (every 3 minutes) with no bear about, one may come down
+	BearCheckSeconds = 180,
+	BanditCamps = 3,
+	BanditsPerCamp = 3,
+	BanditHealth = 110,
+	BanditDamage = 10,
+	BanditSight = 45,
+	BanditLeash = 90, -- studs from their camp they will chase you
+	BanditLoot = { Silver = 8, Food = 10 },
+	BanditRespawnSeconds = 150,
 }
 
 -- The rival village you can raid ---------------------------------------------
@@ -2889,6 +2917,58 @@ function ModelFactory.boar(rng: Random): Model
 	return model
 end
 
+-- A great brown bear, facing -Z, on all fours. GroundOffset = body centre
+-- height above its paws.
+function ModelFactory.bear(rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "Bear"
+	local g = rng:NextInteger(-8, 8)
+	local coat = Color3.fromRGB(92 + g, 64 + g, 44 + g)
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Anchored = true
+	body.CanCollide = false
+	body.Size = V3(3.4, 3.4, 6)
+	body.Color = coat
+	body.Material = Enum.Material.Fabric
+	body.CFrame = CFrame.new(0, 3.6, 0)
+	body.Parent = model
+	local function attach(name, size, offset: CFrame, color)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color or coat
+		p.Material = Enum.Material.Fabric
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = body.CFrame * offset
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	for _, x in { -1.1, 1.1 } do
+		for _, z in { -2, 2 } do
+			attach("Leg", V3(1.1, 2.6, 1.2), CFrame.new(x, -2.3, z))
+			attach("Paw", V3(1.2, 0.4, 1.5), CFrame.new(x, -3.4, z - 0.2), coat:Lerp(Color3.new(0, 0, 0), 0.4))
+		end
+	end
+	attach("Hump", V3(3, 1.4, 2.4), CFrame.new(0, 1.6, -1.6))
+	attach("Head", V3(2, 1.9, 2), CFrame.new(0, 0.6, -3.8))
+	attach("Muzzle", V3(1.1, 0.9, 1.1), CFrame.new(0, 0.1, -5.1), coat:Lerp(Color3.fromRGB(200, 170, 130), 0.35))
+	attach("Nose", V3(0.5, 0.35, 0.2), CFrame.new(0, 0.4, -5.7), Color3.fromRGB(20, 16, 14))
+	for _, x in { -0.7, 0.7 } do
+		attach("Ear", V3(0.5, 0.5, 0.3), CFrame.new(x, 1.7, -3.4))
+		attach("Eye", V3(0.18, 0.18, 0.05), CFrame.new(x * 0.6, 1, -4.81), Color3.fromRGB(16, 12, 10))
+	end
+	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", 3.6)
+	return model
+end
+
 -- A flying arrow (visual only).
 function ModelFactory.arrow(): BasePart
 	local shaft = Instance.new("Part")
@@ -3499,7 +3579,7 @@ end
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
 	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse", "TraderStall",
-	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer", "Boar",
+	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer", "Boar", "Bear",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
 	"PalisadeGate", "Jetty", "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile",
@@ -4043,6 +4123,12 @@ function ModelFactory.deer(rng: Random): Model
 	return animalMesh("Deer", reference) or reference
 end
 
+local partBear = ModelFactory.bear
+function ModelFactory.bear(rng: Random): Model
+	local reference = partBear(rng)
+	return animalMesh("Bear", reference) or reference
+end
+
 local partBoar = ModelFactory.boar
 function ModelFactory.boar(rng: Random): Model
 	local reference = partBoar(rng)
@@ -4506,6 +4592,7 @@ Sounds.Slots = {
 	Build = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.8, Pitch = 0.6 },
 	Splash = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 1, Pitch = 0.7 },
 	QuestDone = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.5, Pitch = 1 },
+	Growl = { Id = "", Volume = 1.2, Range = 220 }, -- the bear's roar (upload music/sfx/Growl.ogg to fill it)
 	WarHorn = { Id = "", Volume = 2.5, Range = 900, Life = 14 }, -- a long, loud horn blast when a raid begins
 }
 
@@ -8718,6 +8805,9 @@ function ResourceNodeService:Tick(colony, dt: number)
 	end
 end
 
+-- The chopping and mining effects, shared with the wildlands (WildlandsService).
+ResourceNodeService.fx = { chips = chips, healthBar = healthBar, shake = shake, fell = fell }
+
 return ResourceNodeService
 ]]></string>
           </Properties>
@@ -9770,6 +9860,12 @@ local function shoot(player: Player, aim)
 			services.VillageDefenseService:DamageRaider(raider, Config.Combat.ArrowDamage * (longbows and 1.5 or 1))
 		end)
 	end
+	local bandit = hit and services.WildlandsService:FindBandit(hit.Instance)
+	if bandit then
+		task.delay(flight, function()
+			services.WildlandsService:DamageBandit(bandit, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
+		end)
+	end
 	local militia = hit and services.TownRaidService:FindMilitia(hit.Instance)
 	if militia then
 		task.delay(flight, function()
@@ -9802,7 +9898,9 @@ local function strike(player: Player)
 	lastStrike[player] = now
 	Sounds.play("Swing", root)
 	if held.Name ~= "Sword" then
-		services.ResourceNodeService:Hit(player, held.Name, root)
+		if not services.ResourceNodeService:Hit(player, held.Name, root) then
+			services.WildlandsService:Hit(player, held.Name, root)
+		end
 	end
 	local colony = services.ColonyService:Get(player)
 	local damage = base
@@ -9821,6 +9919,9 @@ local function strike(player: Player)
 	end
 	for _, animal in services.WildlifeService:AnimalsNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.WildlifeService:Hit(animal, damage, player)
+	end
+	for _, bandit in services.WildlandsService:BanditsNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
+		services.WildlandsService:DamageBandit(bandit, damage, player)
 	end
 	for _, militia in services.TownRaidService:MilitiaNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.TownRaidService:DamageMilitia(militia, damage, player)
@@ -12600,6 +12701,498 @@ return WeatherService
         </Item>
         <Item class="ModuleScript" referent="42">
           <Properties>
+            <string name="Name">WildlandsService</string>
+            <string name="Source"><![CDATA[--[[
+	WildlandsService
+	The wildlands (Config.Wildlands): the rough forest behind the meadow, up
+	toward the mountains, open to everyone. Trees and rocks there are nobody's,
+	so anyone may cut and mine them, for bigger yields than at home, and now
+	and then a silver vein glints among the stones. They grow back in time.
+	But it is dangerous: bandits camp out there and fall on anyone who comes
+	near their fire (WildlifeService adds the wolves, boars and the bear).
+]]
+
+local Players = game:GetService("Players")
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Grid = require(Shared.Grid)
+local ModelFactory = require(Shared.ModelFactory)
+local Sounds = require(Shared.Sounds)
+
+local WildlandsService = {}
+
+local WL = Config.Wildlands
+local services
+local rng = Random.new()
+local folder: Folder
+local nodes = {} -- [model] = node
+local bandits = {} -- list of bandit records
+local camps = {} -- list of { position = Vector3 }
+WildlandsService.Camps = camps
+local WALK_ANIM = "rbxassetid://507777826"
+
+local PLOTS_END_X = Config.MAX_PLOTS * (Grid.PLOT_SIZE + Config.PLOT_GAP) - Config.PLOT_GAP
+local MIN_X, MAX_X = -200, PLOTS_END_X + 200
+
+function WildlandsService:Init(all)
+	services = all
+end
+
+local function flat(v: Vector3): Vector3
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- True if (x, z) is in the wildlands.
+function WildlandsService:InWild(pos: Vector3): boolean
+	return pos.Z >= WL.MinZ and pos.Z <= WL.MaxZ and pos.X >= MIN_X and pos.X <= MAX_X
+end
+
+-- A spot on open, walkable ground in the wildlands (not water, cliff or snow).
+local function openSpot(): Vector3?
+	for _ = 1, 30 do
+		local x = rng:NextNumber(MIN_X, MAX_X)
+		local z = rng:NextNumber(WL.MinZ, WL.MaxZ)
+		local y = services.WorldService:GroundHeight(x, z)
+		local yx = services.WorldService:GroundHeight(x + 3, z)
+		local yz = services.WorldService:GroundHeight(x, z + 3)
+		if y > 2 and y < 110 and math.abs(yx - y) < 2.2 and math.abs(yz - y) < 2.2 then
+			return Vector3.new(x, y, z)
+		end
+	end
+	return nil
+end
+
+-- Trees, rocks and silver veins --------------------------------------------------
+
+local function spawnNode(kind: string)
+	local at = openSpot()
+	if not at then
+		return
+	end
+	local model, main
+	if kind == "Tree" then
+		if rng:NextNumber() < 0.5 then
+			model, main = ModelFactory.spruce(rng, rng:NextNumber(1.1, 1.6))
+		else
+			model, main = ModelFactory.pine(rng, rng:NextNumber(1.1, 1.6))
+		end
+	else
+		model, main = ModelFactory.boulder(rng, rng:NextNumber(1.2, 1.8))
+		if kind == "Vein" then
+			-- bright flecks of silver in the stone
+			local _, size = model:GetBoundingBox()
+			for _ = 1, 7 do
+				local fleck = Instance.new("Part")
+				fleck.Name = "Silver"
+				fleck.Anchored = true
+				fleck.CanCollide = false
+				fleck.Size = Vector3.new(0.5, 0.5, 0.5) * rng:NextNumber(0.7, 1.4)
+				fleck.Color = Color3.fromRGB(214, 218, 226)
+				fleck.Material = Enum.Material.Foil
+				fleck.Reflectance = 0.3
+				local a = rng:NextNumber(0, math.pi * 2)
+				fleck.CFrame = CFrame.new(math.cos(a) * size.X * 0.35, rng:NextNumber(0.3, 0.8) * size.Y, math.sin(a) * size.Z * 0.35) * CFrame.Angles(rng:NextNumber(0, 3), rng:NextNumber(0, 3), 0)
+				fleck.Parent = model
+			end
+			local glint = Instance.new("PointLight")
+			glint.Color = Color3.fromRGB(200, 210, 255)
+			glint.Range = 8
+			glint.Brightness = 0.6
+			glint.Parent = main
+		end
+	end
+	model:PivotTo(CFrame.new(at) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
+	model:SetAttribute("NodeKind", kind == "Tree" and "Tree" or "Rock")
+	model:SetAttribute("Wild", true)
+	model.Parent = folder
+	local hits = kind == "Tree" and 7 or 8
+	nodes[model] = { model = model, main = main, kind = kind == "Tree" and "Tree" or "Rock", vein = kind == "Vein", hp = hits, maxHp = hits }
+end
+
+local function harvest(colony, node)
+	local ColonyService = services.ColonyService
+	local got = {}
+	if node.kind == "Tree" then
+		got.Wood = WL.TreeWood
+	elseif node.vein then
+		got.Silver, got.Stone = WL.VeinSilver, WL.VeinStone
+	else
+		got.Stone = WL.RockStone
+	end
+	if ColonyService:Has(colony, "PathWoods") then
+		for res, n in got do
+			got[res] = n * 2
+		end
+	end
+	for res, n in got do
+		ColonyService:Add(colony, res, n)
+	end
+	services.QuestService:Count(colony, node.kind == "Tree" and "chop" or "mine")
+	ColonyService:Notify(colony, (node.vein and "A silver vein! " or "") .. "+" .. Grid.costText(got), "gain")
+	ColonyService:Sync(colony)
+	-- it grows back, somewhere in the wilds
+	task.delay(WL.RegrowSeconds, function()
+		spawnNode(node.vein and "Vein" or node.kind)
+	end)
+end
+
+-- A swing of the Axe or Pickaxe in the wildlands. Returns true if it hit something.
+function WildlandsService:Hit(player: Player, toolName: string, root: BasePart): boolean
+	local colony = services.ColonyService:Get(player)
+	if not colony or not self:InWild(root.Position) then
+		return false
+	end
+	local best, bestDist = nil, 10
+	local look = flat(root.CFrame.LookVector)
+	for model, node in nodes do
+		if node.hp and model.Parent then
+			local offset = flat(model:GetPivot().Position - root.Position)
+			local d = offset.Magnitude
+			if d < bestDist and (d < 3.5 or offset.Unit:Dot(look.Unit) > 0.3) then
+				best, bestDist = node, d
+			end
+		end
+	end
+	if not best then
+		return false
+	end
+	local need = best.kind == "Tree" and "Axe" or "Pickaxe"
+	if toolName ~= need then
+		services.ColonyService:Notify(colony, "Use the " .. need .. " for that (press " .. (table.find(Config.Tools, need) or 1) .. ")", "bad")
+		return false
+	end
+	local ColonyService = services.ColonyService
+	local power = 1
+	if best.kind == "Tree" then
+		power = ColonyService:Has(colony, "SteelEdges") and 2 or (ColonyService:Has(colony, "IronAxes") and 1.5 or 1)
+	else
+		power = ColonyService:Has(colony, "Masonry") and 1.5 or 1
+	end
+	best.hp -= power
+	local fx = services.ResourceNodeService.fx
+	local p = best.model:GetPivot().Position
+	local at = Vector3.new(p.X, p.Y + (best.kind == "Tree" and 2.5 or 1.5), p.Z):Lerp(root.Position, 0.25)
+	Sounds.play(best.kind == "Rock" and "Mine" or "Chop", at)
+	fx.chips(at, best.kind == "Rock")
+	local bar = fx.healthBar(best)
+	bar.Size = UDim2.fromScale(math.max(best.hp, 0) / best.maxHp, 1)
+	if best.hp <= 0 then
+		best.hp = nil
+		nodes[best.model] = nil
+		if best.bar then
+			best.bar.Parent.Parent:Destroy()
+		end
+		harvest(colony, best)
+		fx.fell(best, root.Position)
+	else
+		fx.shake(best.model)
+	end
+	return true
+end
+
+-- Bandits ------------------------------------------------------------------------
+
+local function spawnBandit(camp)
+	local desc = Instance.new("HumanoidDescription")
+	local skin = Color3.fromRGB(206, 166, 132)
+	desc.HeadColor = skin
+	desc.LeftArmColor = skin
+	desc.RightArmColor = skin
+	desc.TorsoColor = Color3.fromRGB(70, 58, 44)
+	desc.LeftLegColor = Color3.fromRGB(46, 40, 34)
+	desc.RightLegColor = Color3.fromRGB(46, 40, 34)
+	local ok, model = pcall(function()
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not model then
+		return
+	end
+	model.Name = "Bandit"
+	model:SetAttribute("Bandit", true)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	humanoid.DisplayName = "Bandit"
+	humanoid.MaxHealth = WL.BanditHealth
+	humanoid.Health = WL.BanditHealth
+	humanoid.WalkSpeed = 13
+	local function gear(onto, name, size, offset, color, material, shape)
+		if not onto then
+			return
+		end
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = material
+		if shape then
+			p.Shape = shape
+		end
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = onto.CFrame * offset
+		p.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = onto
+		w.Part1 = p
+		w.Parent = p
+	end
+	-- a ragged hood and a hand axe
+	gear(model:FindFirstChild("Head"), "Hood", Vector3.new(1.4, 1.2, 1.4), CFrame.new(0, 0.25, 0.1), Color3.fromRGB(52, 46, 40), Enum.Material.Fabric, Enum.PartType.Ball)
+	local hand = model:FindFirstChild("RightHand")
+	gear(hand, "Haft", Vector3.new(0.22, 2.6, 0.22), CFrame.new(0, -0.5, -0.4) * CFrame.Angles(math.rad(90), 0, 0), Color3.fromRGB(100, 70, 44), Enum.Material.Wood)
+	gear(hand, "AxeHead", Vector3.new(0.18, 0.8, 0.9), CFrame.new(0, 0.1, -1.6), Color3.fromRGB(110, 112, 118), Enum.Material.Metal)
+	local spot = camp.position + Vector3.new(rng:NextNumber(-7, 7), 0, rng:NextNumber(-7, 7))
+	model:PivotTo(CFrame.new(spot + Vector3.new(0, 3.2, 0)))
+	model.Parent = folder
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if root then
+		pcall(function()
+			root:SetNetworkOwner(nil)
+		end)
+	end
+	local walkTrack
+	pcall(function()
+		local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
+		local anim = Instance.new("Animation")
+		anim.AnimationId = WALK_ANIM
+		walkTrack = animator:LoadAnimation(anim)
+	end)
+	humanoid.Running:Connect(function(speed)
+		if walkTrack then
+			if speed > 0.5 and not walkTrack.IsPlaying then
+				walkTrack:Play()
+			elseif speed <= 0.5 and walkTrack.IsPlaying then
+				walkTrack:Stop()
+			end
+		end
+	end)
+	local b = { model = model, humanoid = humanoid, root = root, camp = camp, lastHit = 0, nextWander = 0 }
+	humanoid.Died:Connect(function()
+		b.dead = true
+		local killer = b.lastAttacker
+		local colony = killer and services.ColonyService:Get(killer)
+		if colony then
+			for res, n in WL.BanditLoot do
+				services.ColonyService:Add(colony, res, n)
+			end
+			services.ColonyService:Notify(colony, "A bandit falls! +" .. Grid.costText(WL.BanditLoot), "gain")
+			services.ColonyService:Sync(colony)
+		end
+		task.delay(4, function()
+			model:Destroy()
+		end)
+		task.delay(WL.BanditRespawnSeconds, function()
+			local i = table.find(bandits, b)
+			if i then
+				table.remove(bandits, i)
+			end
+			spawnBandit(camp)
+		end)
+	end)
+	table.insert(bandits, b)
+end
+
+-- A camp: a fire ring, a lean-to and a stolen chest.
+local function makeCamp(at: Vector3)
+	local camp = Instance.new("Model")
+	camp.Name = "BanditCamp"
+	local function part(props)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		for k, v in props do
+			p[k] = v
+		end
+		p.Parent = camp
+		return p
+	end
+	for k = 1, 7 do
+		local a = k / 7 * math.pi * 2
+		part({ Size = Vector3.new(1, 0.7, 0.9), CFrame = CFrame.new(at + Vector3.new(math.cos(a) * 1.8, 0.3, math.sin(a) * 1.8)) * CFrame.Angles(0, a, 0), Color = Color3.fromRGB(110, 108, 104), Material = Enum.Material.Slate })
+	end
+	local embers = part({ Name = "Embers", Size = Vector3.new(2, 0.3, 2), CFrame = CFrame.new(at + Vector3.new(0, 0.2, 0)), Color = Color3.fromRGB(255, 110, 40), Material = Enum.Material.Neon, CanCollide = false })
+	local fire = Instance.new("Fire")
+	fire.Size = 4
+	fire.Heat = 8
+	fire.Parent = embers
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 140, 60)
+	light.Range = 24
+	light.Brightness = 1.8
+	light.Parent = embers
+	-- a hide lean-to on two poles
+	for _, x in { -2.5, 2.5 } do
+		part({ Size = Vector3.new(0.35, 4.5, 0.35), CFrame = CFrame.new(at + Vector3.new(x, 2.25, 5)), Color = Color3.fromRGB(80, 58, 40), Material = Enum.Material.Wood })
+	end
+	part({ Size = Vector3.new(6, 0.2, 4.6), CFrame = CFrame.new(at + Vector3.new(0, 2.6, 6.4)) * CFrame.Angles(math.rad(-38), 0, 0), Color = Color3.fromRGB(120, 88, 60), Material = Enum.Material.Fabric })
+	part({ Size = Vector3.new(2, 1.4, 1.3), CFrame = CFrame.new(at + Vector3.new(3.6, 0.7, 3.4)) * CFrame.Angles(0, 0.4, 0), Color = Color3.fromRGB(110, 76, 46), Material = Enum.Material.WoodPlanks })
+	camp.Parent = folder
+	return { position = at }
+end
+
+local function nearestPlayer(pos: Vector3, range: number): (Player?, BasePart?, Humanoid?)
+	local best, bestRoot, bestHum, bestD = nil, nil, nil, range
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local hum = character and character:FindFirstChildOfClass("Humanoid")
+		if root and hum and hum.Health > 0 then
+			local d = (root.Position - pos).Magnitude
+			if d < bestD then
+				best, bestRoot, bestHum, bestD = player, root, hum, d
+			end
+		end
+	end
+	return best, bestRoot, bestHum
+end
+
+local function tickBandits(now: number)
+	for _, b in bandits do
+		if b.dead or not b.root or not b.root.Parent then
+			continue
+		end
+		local pos = b.root.Position
+		local fromCamp = flat(pos - b.camp.position).Magnitude
+		local _, proot, phum = nearestPlayer(pos, WL.BanditSight)
+		if proot and fromCamp < WL.BanditLeash then
+			b.humanoid:MoveTo(proot.Position)
+			if (proot.Position - pos).Magnitude < 6 and now - b.lastHit > 1.3 then
+				b.lastHit = now
+				phum:TakeDamage(WL.BanditDamage)
+				Sounds.play("Swing", b.root)
+			end
+		elseif fromCamp > 12 then
+			b.humanoid:MoveTo(b.camp.position) -- back to the fire
+		elseif now > b.nextWander then
+			b.nextWander = now + rng:NextNumber(4, 10)
+			b.humanoid:MoveTo(b.camp.position + Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8)))
+		end
+	end
+end
+
+-- Combat hooks (ToolService, the war band) ---------------------------------------------
+
+function WildlandsService:FindBandit(inst: Instance?): Model?
+	while inst and inst ~= workspace do
+		if inst:IsA("Model") and inst:GetAttribute("Bandit") then
+			return inst
+		end
+		inst = inst.Parent
+	end
+	return nil
+end
+
+function WildlandsService:BanditsNear(position: Vector3, look: Vector3, range: number): { Model }
+	local found = {}
+	for _, b in bandits do
+		if not b.dead and b.root and b.root.Parent then
+			local offset = flat(b.root.Position - position)
+			if offset.Magnitude <= range and (offset.Magnitude < 2 or offset.Unit:Dot(flat(look).Unit) > 0.2) then
+				table.insert(found, b.model)
+			end
+		end
+	end
+	return found
+end
+
+function WildlandsService:NearestBandit(position: Vector3, range: number): (Model?, BasePart?)
+	local best, bestRoot, bestD = nil, nil, range
+	for _, b in bandits do
+		if not b.dead and b.root and b.root.Parent then
+			local d = (b.root.Position - position).Magnitude
+			if d < bestD then
+				best, bestRoot, bestD = b.model, b.root, d
+			end
+		end
+	end
+	return best, bestRoot
+end
+
+function WildlandsService:DamageBandit(model: Model, amount: number, attacker: Player?)
+	for _, b in bandits do
+		if b.model == model and not b.dead then
+			if attacker then
+				b.lastAttacker = attacker
+			end
+			b.humanoid:TakeDamage(amount)
+			return
+		end
+	end
+end
+
+-- Start -------------------------------------------------------------------------
+
+function WildlandsService:Start()
+	folder = Instance.new("Folder")
+	folder.Name = "Wildlands"
+	folder.Parent = workspace
+	-- wait for the valley to be built before looking for ground
+	task.wait(2)
+	for _ = 1, WL.Trees do
+		spawnNode("Tree")
+	end
+	for _ = 1, WL.Rocks do
+		spawnNode("Rock")
+	end
+	for _ = 1, WL.SilverVeins do
+		spawnNode("Vein")
+	end
+	for i = 1, WL.BanditCamps do
+		-- spread the camps out along the valley
+		local at
+		for _ = 1, 20 do
+			local spot = openSpot()
+			if spot then
+				local x0 = MIN_X + (MAX_X - MIN_X) * (i - 0.5) / WL.BanditCamps
+				if math.abs(spot.X - x0) < (MAX_X - MIN_X) / WL.BanditCamps / 2 then
+					at = spot
+					break
+				end
+				at = at or spot
+			end
+		end
+		if at then
+			local camp = makeCamp(at)
+			table.insert(camps, camp)
+			for _ = 1, WL.BanditsPerCamp do
+				spawnBandit(camp)
+			end
+		end
+	end
+
+	-- a warning the first time each player walks into the wilds
+	local warned = {}
+	Players.PlayerRemoving:Connect(function(player)
+		warned[player] = nil
+	end)
+	while true do
+		task.wait(0.4)
+		local now = os.clock()
+		local ok, err = pcall(tickBandits, now)
+		if not ok then
+			warn("[WildlandsService] " .. tostring(err))
+		end
+		for _, player in Players:GetPlayers() do
+			local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			local inside = root and self:InWild(root.Position)
+			if inside and not warned[player] then
+				warned[player] = true
+				local colony = services.ColonyService:Get(player)
+				if colony then
+					services.ColonyService:Notify(colony, "You enter the wildlands. Rich timber, stone and silver here, but beware bandits, wolves and bears!", "raid")
+				end
+			elseif not inside and warned[player] and root and root.Position.Z < WL.MinZ - 60 then
+				warned[player] = nil
+			end
+		end
+	end
+end
+
+return WildlandsService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="43">
+          <Properties>
             <string name="Name">WildlifeService</string>
             <string name="Source"><![CDATA[--[[
 	WildlifeService
@@ -12611,6 +13204,9 @@ return WeatherService
 	for its pelt (Hides). They leave when winter ends.
 	Wild boars root about too. Hit one and it charges and gores you until one
 	of you goes down; a boar gives plenty of meat and its hide.
+	The wildlands (Config.Wildlands) hold boars, wolves that hunt you all year
+	round, and now and then a great bear. Beasts share one set of rules
+	(Config.Wildlife.Beasts): some only fight back, some come for you.
 ]]
 
 local Players = game:GetService("Players")
@@ -12620,6 +13216,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Grid = require(Shared.Grid)
 local ModelFactory = require(Shared.ModelFactory)
+local Sounds = require(Shared.Sounds)
 
 local WildlifeService = {}
 
@@ -12700,27 +13297,47 @@ function WildlifeService:Spawn(area)
 	}
 end
 
-local function spawnBoar(area)
+local BEASTS = W.Beasts
+local makers = {
+	Boar = function()
+		return ModelFactory.boar(rng)
+	end,
+	WildWolf = function()
+		return ModelFactory.wolf(rng)
+	end,
+	Bear = function()
+		return ModelFactory.bear(rng)
+	end,
+}
+
+-- A beast (Config.Wildlife.Beasts) somewhere in `area`.
+local function spawnBeast(kind: string, area, at: Vector3?)
 	nextId += 1
-	local model = ModelFactory.boar(rng)
+	local model = makers[kind]()
 	model:SetAttribute("DeerId", nextId) -- so arrows and blows find it
-	model:SetAttribute("Boar", true)
-	local x = rng:NextNumber(area.minX, area.maxX)
-	local z = rng:NextNumber(area.minZ, area.maxZ)
+	model:SetAttribute("Beast", kind)
+	local x = at and at.X or rng:NextNumber(area.minX, area.maxX)
+	local z = at and at.Z or rng:NextNumber(area.minZ, area.maxZ)
 	local offset = model:GetAttribute("GroundOffset")
 	model:PivotTo(CFrame.new(x, services.WorldService:GroundHeight(x, z) + offset, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
 	model.Parent = folder
-	herd[model] = { model = model, body = model.PrimaryPart, offset = offset, area = area, busyUntil = 0, boar = true, hp = W.BoarHealth, lastGore = 0 }
+	herd[model] = { model = model, body = model.PrimaryPart, offset = offset, area = area, busyUntil = 0, beast = kind, hp = BEASTS[kind].Health, lastGore = 0 }
+	return model
 end
 
+-- The wildlands (Config.Wildlands): across the whole valley behind the meadow.
+local PLOTS_END_X = Config.MAX_PLOTS * (Grid.PLOT_SIZE + Config.PLOT_GAP) - Config.PLOT_GAP
+local WILD = { minX = -200, maxX = PLOTS_END_X + 200, minZ = Config.Wildlands.MinZ, maxZ = Config.Wildlands.MaxZ, plot = 0, wild = true }
+WildlifeService.WildArea = WILD
+
 -- Called by ToolService when an arrow or a blow lands on an animal. Deer and
--- wolves drop at once; a boar takes a beating, and turns on whoever hit it.
+-- wolves drop at once; a beast takes a beating, and turns on whoever hit it.
 function WildlifeService:Hit(model: Model, damage: number, hunter: Player)
 	local rec = herd[model]
 	if not rec then
 		return
 	end
-	if not rec.boar then
+	if not rec.beast then
 		self:Kill(model, hunter)
 		return
 	end
@@ -12731,6 +13348,9 @@ function WildlifeService:Hit(model: Model, damage: number, hunter: Player)
 	end
 	rec.target = hunter
 	rec.angryUntil = os.clock() + W.BoarAngrySeconds
+	if rec.beast == "Bear" then
+		Sounds.play("Growl", rec.body)
+	end
 	rec.busyUntil = 0
 end
 
@@ -12767,17 +13387,26 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 
 	local ColonyService = services.ColonyService
 	local colony = ColonyService:Get(hunter)
-	if deer.boar then
+	if deer.beast then
+		local b = BEASTS[deer.beast]
 		if colony then
 			local mult = ColonyService:Has(colony, "PathWoods") and 2 or 1
-			ColonyService:Add(colony, "Food", W.BoarMeat * mult)
-			ColonyService:Add(colony, "Hides", W.BoarHides * mult)
-			ColonyService:Notify(colony, "A wild boar brought down! +" .. W.BoarMeat * mult .. " Food, +" .. W.BoarHides * mult .. " Hides", "gain")
+			local got = { Food = b.Food * mult, Hides = b.Hides * mult, Silver = b.Silver }
+			for res, n in got do
+				ColonyService:Add(colony, res, n)
+			end
+			if deer.beast == "WildWolf" then
+				services.QuestService:Count(colony, "wolf")
+			end
+			local name = ({ Boar = "A wild boar", WildWolf = "A wolf", Bear = "The great bear" })[deer.beast]
+			ColonyService:Notify(colony, name .. " brought down! +" .. Grid.costText(got), "gain")
 			ColonyService:Sync(colony)
 		end
-		task.delay(W.BoarRespawnSeconds, function()
-			spawnBoar(deer.area)
-		end)
+		if b.Respawn > 0 then
+			task.delay(b.Respawn, function()
+				spawnBeast(deer.beast, deer.area)
+			end)
+		end
 		return
 	end
 	if deer.wolf then
@@ -12881,9 +13510,22 @@ function WildlifeService:Start()
 			self:Spawn(area)
 		end
 		for _ = 1, W.BoarsPerPlot or 0 do
-			spawnBoar(area)
+			spawnBeast("Boar", area)
 		end
 	end
+
+	-- the wildlands: boars and wolf packs, and now and then the bear
+	local WL = Config.Wildlands
+	for _ = 1, WL.Boars do
+		spawnBeast("Boar", WILD)
+	end
+	for _ = 1, WL.WolfPacks do
+		local at = Vector3.new(rng:NextNumber(WILD.minX, WILD.maxX), 0, rng:NextNumber(WILD.minZ, WILD.maxZ))
+		for _ = 1, WL.WolvesPerPack do
+			spawnBeast("WildWolf", WILD, at + Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8)))
+		end
+	end
+	local bearTimer = 0
 
 	local packTimer = 0
 	while true do
@@ -12894,32 +13536,69 @@ function WildlifeService:Start()
 			packTimer = 0
 			tendPacks()
 		end
+		bearTimer += 0.4
+		if bearTimer >= WL.BearCheckSeconds then
+			bearTimer = 0
+			local any = false
+			for _, rec in herd do
+				any = any or rec.beast == "Bear"
+			end
+			if not any and rng:NextNumber() < WL.BearChance then
+				spawnBeast("Bear", WILD)
+				for _, player in Players:GetPlayers() do
+					local colony = services.ColonyService:Get(player)
+					if colony then
+						services.ColonyService:Notify(colony, "Hunters whisper of a great bear come down into the wildlands...", "raid")
+					end
+				end
+			end
+		end
 		for _, deer in herd do
 			local pos = deer.body.Position
 			local threat, dist = nearestPlayer(pos)
-			if deer.boar then
+			if deer.beast then
+				local b = BEASTS[deer.beast]
 				local target = deer.target
+				-- hunters (wolves, the bear) come for anyone who strays close
+				if b.Aggro and not (target and now < (deer.angryUntil or 0)) then
+					local near, nearD = nil, b.Aggro
+					for _, player in Players:GetPlayers() do
+						local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+						if r and (r.Position - pos).Magnitude < nearD then
+							near, nearD = player, (r.Position - pos).Magnitude
+						end
+					end
+					if near then
+						target = near
+						deer.target = near
+						deer.angryUntil = now + W.BoarAngrySeconds
+						if deer.beast == "Bear" and now - (deer.roared or 0) > 8 then
+							deer.roared = now
+							Sounds.play("Growl", deer.body)
+						end
+					end
+				end
 				local troot = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
 				local thum = target and target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 				if troot and thum and thum.Health > 0 and now < (deer.angryUntil or 0) and (troot.Position - pos).Magnitude < 120 then
-					-- charge! and gore when close
+					-- charge! and strike when close
 					local gap = Vector3.new(troot.Position.X - pos.X, 0, troot.Position.Z - pos.Z)
-					if gap.Magnitude < 4.5 then
-						if now - deer.lastGore >= W.BoarGoreCooldown then
+					local reach = deer.beast == "Bear" and 6 or 4.5
+					if gap.Magnitude < reach then
+						if now - deer.lastGore >= b.Cooldown then
 							deer.lastGore = now
-							thum:TakeDamage(W.BoarDamage)
-							-- toss them back a little
-							troot.AssemblyLinearVelocity += gap.Unit * 40 + Vector3.new(0, 25, 0)
+							thum:TakeDamage(b.Damage)
+							troot.AssemblyLinearVelocity += gap.Unit * (deer.beast == "Bear" and 60 or 40) + Vector3.new(0, 25, 0)
 						end
 					else
-						moveTo(deer, troot.Position.X, troot.Position.Z, W.BoarChargeSpeed)
+						moveTo(deer, troot.Position.X, troot.Position.Z, b.Charge)
 					end
 					deer.busyUntil = now + 0.4
 				elseif now >= deer.busyUntil then
 					deer.target = nil
-					-- root about, slow and unbothered
+					-- roam about, slow and unbothered
 					local x, z = clampToArea(deer.area, pos.X + rng:NextNumber(-18, 18), pos.Z + rng:NextNumber(-18, 18))
-					local t = moveTo(deer, x, z, W.BoarSpeed * rng:NextNumber(0.5, 1))
+					local t = moveTo(deer, x, z, b.Speed * rng:NextNumber(0.5, 1))
 					deer.busyUntil = now + t + rng:NextNumber(3, 8)
 				end
 				continue
@@ -12971,7 +13650,7 @@ return WildlifeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--[[
@@ -14034,15 +14713,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="44">
+  <Item class="StarterPlayer" referent="45">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="45">
+    <Item class="StarterPlayerScripts" referent="46">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="46">
+      <Item class="LocalScript" referent="47">
         <Properties>
           <string name="Name">Client</string>
           <string name="Source"><![CDATA[--[[
@@ -14075,11 +14754,11 @@ for _, controller in controllers do
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="47">
+        <Item class="Folder" referent="48">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="48">
+          <Item class="ModuleScript" referent="49">
             <Properties>
               <string name="Name">AmbienceController</string>
               <string name="Source"><![CDATA[--[[
@@ -14189,7 +14868,7 @@ return AmbienceController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="49">
+          <Item class="ModuleScript" referent="50">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--[[
@@ -14300,7 +14979,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="50">
+          <Item class="ModuleScript" referent="51">
             <Properties>
               <string name="Name">AuroraController</string>
               <string name="Source"><![CDATA[--[[
@@ -14403,7 +15082,7 @@ return AuroraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="51">
+          <Item class="ModuleScript" referent="52">
             <Properties>
               <string name="Name">BoatController</string>
               <string name="Source"><![CDATA[--[[
@@ -14484,7 +15163,7 @@ return BoatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="52">
+          <Item class="ModuleScript" referent="53">
             <Properties>
               <string name="Name">BuildController</string>
               <string name="Source"><![CDATA[--[[
@@ -14788,7 +15467,7 @@ return BuildController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="53">
+          <Item class="ModuleScript" referent="54">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--[[
@@ -14916,7 +15595,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="54">
+          <Item class="ModuleScript" referent="55">
             <Properties>
               <string name="Name">CouncilController</string>
               <string name="Source"><![CDATA[--[[
@@ -15404,7 +16083,7 @@ return CouncilController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="55">
+          <Item class="ModuleScript" referent="56">
             <Properties>
               <string name="Name">GuideController</string>
               <string name="Source"><![CDATA[--[[
@@ -15650,7 +16329,7 @@ return GuideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="56">
+          <Item class="ModuleScript" referent="57">
             <Properties>
               <string name="Name">HearthGlowController</string>
               <string name="Source"><![CDATA[--[[
@@ -15756,7 +16435,7 @@ return HearthGlowController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="57">
+          <Item class="ModuleScript" referent="58">
             <Properties>
               <string name="Name">HudController</string>
               <string name="Source"><![CDATA[--[[
@@ -16465,7 +17144,7 @@ return HudController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="58">
+          <Item class="ModuleScript" referent="59">
             <Properties>
               <string name="Name">IntroController</string>
               <string name="Source"><![CDATA[--[[
@@ -16802,7 +17481,7 @@ return IntroController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="59">
+          <Item class="ModuleScript" referent="60">
             <Properties>
               <string name="Name">LoadingController</string>
               <string name="Source"><![CDATA[--[[
@@ -16883,7 +17562,7 @@ return LoadingController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="60">
+          <Item class="ModuleScript" referent="61">
             <Properties>
               <string name="Name">MinimapController</string>
               <string name="Source"><![CDATA[--[[
@@ -17176,7 +17855,7 @@ return MinimapController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="61">
+          <Item class="ModuleScript" referent="62">
             <Properties>
               <string name="Name">ScreenToggleController</string>
               <string name="Source"><![CDATA[--[[
@@ -17233,7 +17912,7 @@ return ScreenToggleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="62">
+          <Item class="ModuleScript" referent="63">
             <Properties>
               <string name="Name">SeasonFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -17424,7 +18103,7 @@ return SeasonFxController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="63">
+          <Item class="ModuleScript" referent="64">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--[[
@@ -17476,7 +18155,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="64">
+          <Item class="ModuleScript" referent="65">
             <Properties>
               <string name="Name">TechController</string>
               <string name="Source"><![CDATA[--[[
@@ -17799,7 +18478,7 @@ return TechController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="65">
+          <Item class="ModuleScript" referent="66">
             <Properties>
               <string name="Name">ToolController</string>
               <string name="Source"><![CDATA[--[[
@@ -17979,7 +18658,7 @@ return ToolController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="66">
+          <Item class="ModuleScript" referent="67">
             <Properties>
               <string name="Name">TouchController</string>
               <string name="Source"><![CDATA[--[[
@@ -18164,7 +18843,7 @@ return TouchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="67">
+          <Item class="ModuleScript" referent="68">
             <Properties>
               <string name="Name">TradeController</string>
               <string name="Source"><![CDATA[--[[
@@ -18362,7 +19041,7 @@ return TradeController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="68">
+          <Item class="ModuleScript" referent="69">
             <Properties>
               <string name="Name">UIScaleController</string>
               <string name="Source"><![CDATA[--[[
@@ -18415,7 +19094,7 @@ return UIScaleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="69">
+          <Item class="ModuleScript" referent="70">
             <Properties>
               <string name="Name">VillagerAnimController</string>
               <string name="Source"><![CDATA[--[[
@@ -18641,7 +19320,7 @@ return VillagerAnimController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="70">
+          <Item class="ModuleScript" referent="71">
             <Properties>
               <string name="Name">WeatherFxController</string>
               <string name="Source"><![CDATA[--[[
@@ -18787,12 +19466,12 @@ return WeatherFxController
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="71">
+  <Item class="Workspace" referent="72">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
     </Properties>
-    <Item class="Part" referent="72">
+    <Item class="Part" referent="73">
       <Properties>
         <string name="Name">Baseplate</string>
         <bool name="Anchored">true</bool>
@@ -18813,13 +19492,13 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="BoolValue" referent="73">
+    <Item class="BoolValue" referent="74">
       <Properties>
         <string name="Name">ShowModelWorkshop</string>
         <bool name="Value">false</bool>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="74">
+    <Item class="SpawnLocation" referent="75">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>
@@ -18839,7 +19518,7 @@ return WeatherFxController
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="Part" referent="75">
+    <Item class="Part" referent="76">
       <Properties>
         <string name="Name">WelcomeSign</string>
         <bool name="Anchored">true</bool>
@@ -18856,13 +19535,13 @@ return WeatherFxController
           <Z>1</Z>
         </Vector3>
       </Properties>
-      <Item class="SurfaceGui" referent="76">
+      <Item class="SurfaceGui" referent="77">
         <Properties>
           <string name="Name">BackText</string>
           <token name="Face">2</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="77">
+        <Item class="TextLabel" referent="78">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">
@@ -18894,13 +19573,13 @@ Press Play (F5) to start your settlement</string>
           </Properties>
         </Item>
       </Item>
-      <Item class="SurfaceGui" referent="78">
+      <Item class="SurfaceGui" referent="79">
         <Properties>
           <string name="Name">FrontText</string>
           <token name="Face">5</token>
           <float name="PixelsPerStud">20</float>
         </Properties>
-        <Item class="TextLabel" referent="79">
+        <Item class="TextLabel" referent="80">
           <Properties>
             <string name="Name">Text</string>
             <Color3 name="BackgroundColor3">

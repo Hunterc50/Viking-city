@@ -8,6 +8,9 @@
 	for its pelt (Hides). They leave when winter ends.
 	Wild boars root about too. Hit one and it charges and gores you until one
 	of you goes down; a boar gives plenty of meat and its hide.
+	The wildlands (Config.Wildlands) hold boars, wolves that hunt you all year
+	round, and now and then a great bear. Beasts share one set of rules
+	(Config.Wildlife.Beasts): some only fight back, some come for you.
 ]]
 
 local Players = game:GetService("Players")
@@ -17,6 +20,7 @@ local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Grid = require(Shared.Grid)
 local ModelFactory = require(Shared.ModelFactory)
+local Sounds = require(Shared.Sounds)
 
 local WildlifeService = {}
 
@@ -97,27 +101,47 @@ function WildlifeService:Spawn(area)
 	}
 end
 
-local function spawnBoar(area)
+local BEASTS = W.Beasts
+local makers = {
+	Boar = function()
+		return ModelFactory.boar(rng)
+	end,
+	WildWolf = function()
+		return ModelFactory.wolf(rng)
+	end,
+	Bear = function()
+		return ModelFactory.bear(rng)
+	end,
+}
+
+-- A beast (Config.Wildlife.Beasts) somewhere in `area`.
+local function spawnBeast(kind: string, area, at: Vector3?)
 	nextId += 1
-	local model = ModelFactory.boar(rng)
+	local model = makers[kind]()
 	model:SetAttribute("DeerId", nextId) -- so arrows and blows find it
-	model:SetAttribute("Boar", true)
-	local x = rng:NextNumber(area.minX, area.maxX)
-	local z = rng:NextNumber(area.minZ, area.maxZ)
+	model:SetAttribute("Beast", kind)
+	local x = at and at.X or rng:NextNumber(area.minX, area.maxX)
+	local z = at and at.Z or rng:NextNumber(area.minZ, area.maxZ)
 	local offset = model:GetAttribute("GroundOffset")
 	model:PivotTo(CFrame.new(x, services.WorldService:GroundHeight(x, z) + offset, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0))
 	model.Parent = folder
-	herd[model] = { model = model, body = model.PrimaryPart, offset = offset, area = area, busyUntil = 0, boar = true, hp = W.BoarHealth, lastGore = 0 }
+	herd[model] = { model = model, body = model.PrimaryPart, offset = offset, area = area, busyUntil = 0, beast = kind, hp = BEASTS[kind].Health, lastGore = 0 }
+	return model
 end
 
+-- The wildlands (Config.Wildlands): across the whole valley behind the meadow.
+local PLOTS_END_X = Config.MAX_PLOTS * (Grid.PLOT_SIZE + Config.PLOT_GAP) - Config.PLOT_GAP
+local WILD = { minX = -200, maxX = PLOTS_END_X + 200, minZ = Config.Wildlands.MinZ, maxZ = Config.Wildlands.MaxZ, plot = 0, wild = true }
+WildlifeService.WildArea = WILD
+
 -- Called by ToolService when an arrow or a blow lands on an animal. Deer and
--- wolves drop at once; a boar takes a beating, and turns on whoever hit it.
+-- wolves drop at once; a beast takes a beating, and turns on whoever hit it.
 function WildlifeService:Hit(model: Model, damage: number, hunter: Player)
 	local rec = herd[model]
 	if not rec then
 		return
 	end
-	if not rec.boar then
+	if not rec.beast then
 		self:Kill(model, hunter)
 		return
 	end
@@ -128,6 +152,9 @@ function WildlifeService:Hit(model: Model, damage: number, hunter: Player)
 	end
 	rec.target = hunter
 	rec.angryUntil = os.clock() + W.BoarAngrySeconds
+	if rec.beast == "Bear" then
+		Sounds.play("Growl", rec.body)
+	end
 	rec.busyUntil = 0
 end
 
@@ -164,17 +191,26 @@ function WildlifeService:Kill(model: Model, hunter: Player)
 
 	local ColonyService = services.ColonyService
 	local colony = ColonyService:Get(hunter)
-	if deer.boar then
+	if deer.beast then
+		local b = BEASTS[deer.beast]
 		if colony then
 			local mult = ColonyService:Has(colony, "PathWoods") and 2 or 1
-			ColonyService:Add(colony, "Food", W.BoarMeat * mult)
-			ColonyService:Add(colony, "Hides", W.BoarHides * mult)
-			ColonyService:Notify(colony, "A wild boar brought down! +" .. W.BoarMeat * mult .. " Food, +" .. W.BoarHides * mult .. " Hides", "gain")
+			local got = { Food = b.Food * mult, Hides = b.Hides * mult, Silver = b.Silver }
+			for res, n in got do
+				ColonyService:Add(colony, res, n)
+			end
+			if deer.beast == "WildWolf" then
+				services.QuestService:Count(colony, "wolf")
+			end
+			local name = ({ Boar = "A wild boar", WildWolf = "A wolf", Bear = "The great bear" })[deer.beast]
+			ColonyService:Notify(colony, name .. " brought down! +" .. Grid.costText(got), "gain")
 			ColonyService:Sync(colony)
 		end
-		task.delay(W.BoarRespawnSeconds, function()
-			spawnBoar(deer.area)
-		end)
+		if b.Respawn > 0 then
+			task.delay(b.Respawn, function()
+				spawnBeast(deer.beast, deer.area)
+			end)
+		end
 		return
 	end
 	if deer.wolf then
@@ -278,9 +314,22 @@ function WildlifeService:Start()
 			self:Spawn(area)
 		end
 		for _ = 1, W.BoarsPerPlot or 0 do
-			spawnBoar(area)
+			spawnBeast("Boar", area)
 		end
 	end
+
+	-- the wildlands: boars and wolf packs, and now and then the bear
+	local WL = Config.Wildlands
+	for _ = 1, WL.Boars do
+		spawnBeast("Boar", WILD)
+	end
+	for _ = 1, WL.WolfPacks do
+		local at = Vector3.new(rng:NextNumber(WILD.minX, WILD.maxX), 0, rng:NextNumber(WILD.minZ, WILD.maxZ))
+		for _ = 1, WL.WolvesPerPack do
+			spawnBeast("WildWolf", WILD, at + Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8)))
+		end
+	end
+	local bearTimer = 0
 
 	local packTimer = 0
 	while true do
@@ -291,32 +340,69 @@ function WildlifeService:Start()
 			packTimer = 0
 			tendPacks()
 		end
+		bearTimer += 0.4
+		if bearTimer >= WL.BearCheckSeconds then
+			bearTimer = 0
+			local any = false
+			for _, rec in herd do
+				any = any or rec.beast == "Bear"
+			end
+			if not any and rng:NextNumber() < WL.BearChance then
+				spawnBeast("Bear", WILD)
+				for _, player in Players:GetPlayers() do
+					local colony = services.ColonyService:Get(player)
+					if colony then
+						services.ColonyService:Notify(colony, "Hunters whisper of a great bear come down into the wildlands...", "raid")
+					end
+				end
+			end
+		end
 		for _, deer in herd do
 			local pos = deer.body.Position
 			local threat, dist = nearestPlayer(pos)
-			if deer.boar then
+			if deer.beast then
+				local b = BEASTS[deer.beast]
 				local target = deer.target
+				-- hunters (wolves, the bear) come for anyone who strays close
+				if b.Aggro and not (target and now < (deer.angryUntil or 0)) then
+					local near, nearD = nil, b.Aggro
+					for _, player in Players:GetPlayers() do
+						local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+						if r and (r.Position - pos).Magnitude < nearD then
+							near, nearD = player, (r.Position - pos).Magnitude
+						end
+					end
+					if near then
+						target = near
+						deer.target = near
+						deer.angryUntil = now + W.BoarAngrySeconds
+						if deer.beast == "Bear" and now - (deer.roared or 0) > 8 then
+							deer.roared = now
+							Sounds.play("Growl", deer.body)
+						end
+					end
+				end
 				local troot = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
 				local thum = target and target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 				if troot and thum and thum.Health > 0 and now < (deer.angryUntil or 0) and (troot.Position - pos).Magnitude < 120 then
-					-- charge! and gore when close
+					-- charge! and strike when close
 					local gap = Vector3.new(troot.Position.X - pos.X, 0, troot.Position.Z - pos.Z)
-					if gap.Magnitude < 4.5 then
-						if now - deer.lastGore >= W.BoarGoreCooldown then
+					local reach = deer.beast == "Bear" and 6 or 4.5
+					if gap.Magnitude < reach then
+						if now - deer.lastGore >= b.Cooldown then
 							deer.lastGore = now
-							thum:TakeDamage(W.BoarDamage)
-							-- toss them back a little
-							troot.AssemblyLinearVelocity += gap.Unit * 40 + Vector3.new(0, 25, 0)
+							thum:TakeDamage(b.Damage)
+							troot.AssemblyLinearVelocity += gap.Unit * (deer.beast == "Bear" and 60 or 40) + Vector3.new(0, 25, 0)
 						end
 					else
-						moveTo(deer, troot.Position.X, troot.Position.Z, W.BoarChargeSpeed)
+						moveTo(deer, troot.Position.X, troot.Position.Z, b.Charge)
 					end
 					deer.busyUntil = now + 0.4
 				elseif now >= deer.busyUntil then
 					deer.target = nil
-					-- root about, slow and unbothered
+					-- roam about, slow and unbothered
 					local x, z = clampToArea(deer.area, pos.X + rng:NextNumber(-18, 18), pos.Z + rng:NextNumber(-18, 18))
-					local t = moveTo(deer, x, z, W.BoarSpeed * rng:NextNumber(0.5, 1))
+					local t = moveTo(deer, x, z, b.Speed * rng:NextNumber(0.5, 1))
 					deer.busyUntil = now + t + rng:NextNumber(3, 8)
 				end
 				continue

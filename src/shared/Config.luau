@@ -332,15 +332,43 @@ Config.Wildlife = {
 	-- wild boars root about the meadow too. Leave them be, or they fight back:
 	-- hit one and it charges and gores you until one of you goes down
 	BoarsPerPlot = 2,
-	BoarHealth = 120,
-	BoarDamage = 14, -- per goring
-	BoarGoreCooldown = 1.4,
-	BoarSpeed = 7,
-	BoarChargeSpeed = 23,
-	BoarAngrySeconds = 14, -- how long it keeps charging after it was last hit
-	BoarMeat = 40,
-	BoarHides = 3,
-	BoarRespawnSeconds = 90,
+	BoarAngrySeconds = 14, -- how long a beast keeps after you once roused
+	-- the wildlands (Config.Wildlands) are wilder: boars, wolves all year that
+	-- hunt you, and now and then a great bear
+	Beasts = {
+		Boar = { Health = 120, Damage = 14, Cooldown = 1.4, Speed = 7, Charge = 23, Food = 40, Hides = 3, Respawn = 90 },
+		WildWolf = { Health = 70, Damage = 9, Cooldown = 1.1, Speed = 9, Charge = 21, Aggro = 26, Food = 10, Hides = 4, Respawn = 80 },
+		Bear = { Health = 420, Damage = 28, Cooldown = 1.8, Speed = 6, Charge = 19, Aggro = 34, Food = 90, Hides = 10, Silver = 10, Respawn = 0 },
+	},
+}
+
+-- The wildlands: the rough forest behind the meadow, up toward the mountains.
+-- Anyone may cut and mine there (nobody's plot), for richer yields and the
+-- odd silver vein, but bandits camp there and the beasts are hungry.
+Config.Wildlands = {
+	MinZ = 330,
+	MaxZ = 470,
+	Trees = 46,
+	Rocks = 20,
+	SilverVeins = 5,
+	RegrowSeconds = 50,
+	TreeWood = 18, -- per tree (a tree in your plot gives 10)
+	RockStone = 14,
+	VeinSilver = 12,
+	VeinStone = 6,
+	Boars = 6,
+	WolfPacks = 2,
+	WolvesPerPack = 3,
+	BearChance = 0.35, -- each check (every 3 minutes) with no bear about, one may come down
+	BearCheckSeconds = 180,
+	BanditCamps = 3,
+	BanditsPerCamp = 3,
+	BanditHealth = 110,
+	BanditDamage = 10,
+	BanditSight = 45,
+	BanditLeash = 90, -- studs from their camp they will chase you
+	BanditLoot = { Silver = 8, Food = 10 },
+	BanditRespawnSeconds = 150,
 }
 
 -- The rival village you can raid ---------------------------------------------

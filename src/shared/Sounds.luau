@@ -38,6 +38,7 @@ Sounds.Slots = {
 	Build = { Id = "rbxasset://sounds/action_jump_land.mp3", Volume = 0.8, Pitch = 0.6 },
 	Splash = { Id = "rbxasset://sounds/impact_water.mp3", Volume = 1, Pitch = 0.7 },
 	QuestDone = { Id = "rbxasset://sounds/unsheath.wav", Volume = 0.5, Pitch = 1 },
+	Growl = { Id = "", Volume = 1.2, Range = 220 }, -- the bear's roar (upload music/sfx/Growl.ogg to fill it)
 	WarHorn = { Id = "", Volume = 2.5, Range = 900, Life = 14 }, -- a long, loud horn blast when a raid begins
 }
 

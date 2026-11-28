@@ -307,4 +307,7 @@ function ResourceNodeService:Tick(colony, dt: number)
 	end
 end
 
+-- The chopping and mining effects, shared with the wildlands (WildlandsService).
+ResourceNodeService.fx = { chips = chips, healthBar = healthBar, shake = shake, fell = fell }
+
 return ResourceNodeService

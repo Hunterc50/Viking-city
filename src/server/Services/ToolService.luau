@@ -195,6 +195,12 @@ local function shoot(player: Player, aim)
 			services.VillageDefenseService:DamageRaider(raider, Config.Combat.ArrowDamage * (longbows and 1.5 or 1))
 		end)
 	end
+	local bandit = hit and services.WildlandsService:FindBandit(hit.Instance)
+	if bandit then
+		task.delay(flight, function()
+			services.WildlandsService:DamageBandit(bandit, Config.Combat.ArrowDamage * (longbows and 1.5 or 1), player)
+		end)
+	end
 	local militia = hit and services.TownRaidService:FindMilitia(hit.Instance)
 	if militia then
 		task.delay(flight, function()
@@ -227,7 +233,9 @@ local function strike(player: Player)
 	lastStrike[player] = now
 	Sounds.play("Swing", root)
 	if held.Name ~= "Sword" then
-		services.ResourceNodeService:Hit(player, held.Name, root)
+		if not services.ResourceNodeService:Hit(player, held.Name, root) then
+			services.WildlandsService:Hit(player, held.Name, root)
+		end
 	end
 	local colony = services.ColonyService:Get(player)
 	local damage = base
@@ -246,6 +254,9 @@ local function strike(player: Player)
 	end
 	for _, animal in services.WildlifeService:AnimalsNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.WildlifeService:Hit(animal, damage, player)
+	end
+	for _, bandit in services.WildlandsService:BanditsNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
+		services.WildlandsService:DamageBandit(bandit, damage, player)
 	end
 	for _, militia in services.TownRaidService:MilitiaNear(root.Position, root.CFrame.LookVector, Config.Combat.StrikeRange) do
 		services.TownRaidService:DamageMilitia(militia, damage, player)

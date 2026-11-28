@@ -1868,6 +1868,58 @@ function ModelFactory.boar(rng: Random): Model
 	return model
 end
 
+-- A great brown bear, facing -Z, on all fours. GroundOffset = body centre
+-- height above its paws.
+function ModelFactory.bear(rng: Random): Model
+	local model = Instance.new("Model")
+	model.Name = "Bear"
+	local g = rng:NextInteger(-8, 8)
+	local coat = Color3.fromRGB(92 + g, 64 + g, 44 + g)
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Anchored = true
+	body.CanCollide = false
+	body.Size = V3(3.4, 3.4, 6)
+	body.Color = coat
+	body.Material = Enum.Material.Fabric
+	body.CFrame = CFrame.new(0, 3.6, 0)
+	body.Parent = model
+	local function attach(name, size, offset: CFrame, color)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color or coat
+		p.Material = Enum.Material.Fabric
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = body.CFrame * offset
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = body
+		weld.Part1 = p
+		weld.Parent = p
+		return p
+	end
+	for _, x in { -1.1, 1.1 } do
+		for _, z in { -2, 2 } do
+			attach("Leg", V3(1.1, 2.6, 1.2), CFrame.new(x, -2.3, z))
+			attach("Paw", V3(1.2, 0.4, 1.5), CFrame.new(x, -3.4, z - 0.2), coat:Lerp(Color3.new(0, 0, 0), 0.4))
+		end
+	end
+	attach("Hump", V3(3, 1.4, 2.4), CFrame.new(0, 1.6, -1.6))
+	attach("Head", V3(2, 1.9, 2), CFrame.new(0, 0.6, -3.8))
+	attach("Muzzle", V3(1.1, 0.9, 1.1), CFrame.new(0, 0.1, -5.1), coat:Lerp(Color3.fromRGB(200, 170, 130), 0.35))
+	attach("Nose", V3(0.5, 0.35, 0.2), CFrame.new(0, 0.4, -5.7), Color3.fromRGB(20, 16, 14))
+	for _, x in { -0.7, 0.7 } do
+		attach("Ear", V3(0.5, 0.5, 0.3), CFrame.new(x, 1.7, -3.4))
+		attach("Eye", V3(0.18, 0.18, 0.05), CFrame.new(x * 0.6, 1, -4.81), Color3.fromRGB(16, 12, 10))
+	end
+	model.PrimaryPart = body
+	model:SetAttribute("GroundOffset", 3.6)
+	return model
+end
+
 -- A flying arrow (visual only).
 function ModelFactory.arrow(): BasePart
 	local shaft = Instance.new("Part")
@@ -2478,7 +2530,7 @@ end
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
 	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse", "TraderStall",
-	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer", "Boar",
+	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer", "Boar", "Bear",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
 	"PalisadeGate", "Jetty", "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile",
@@ -3020,6 +3072,12 @@ end
 function ModelFactory.deer(rng: Random): Model
 	local reference = partBuilt.deer(rng)
 	return animalMesh("Deer", reference) or reference
+end
+
+local partBear = ModelFactory.bear
+function ModelFactory.bear(rng: Random): Model
+	local reference = partBear(rng)
+	return animalMesh("Bear", reference) or reference
 end
 
 local partBoar = ModelFactory.boar
