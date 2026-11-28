@@ -3126,7 +3126,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
-	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse", "TraderStall",
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
@@ -3521,6 +3521,21 @@ local partBuilt = {
 	deer = ModelFactory.deer,
 	tool = ModelFactory.tool,
 }
+
+-- The mesh for `slot`, fitted onto the block-built `reference` (built at the
+-- origin, front at -Z), or nil if there is no mesh. Lights and fires from
+-- the reference come along. The reference is left as it is.
+function ModelFactory.meshFor(slot: string, reference: Model): Model?
+	local custom = customAsset(slot)
+	if not custom then
+		return nil
+	end
+	local model = wrap(custom)
+	setAnchored(model, true)
+	fitTo(model, reference, "footprint", nil, 0)
+	model.Name = slot
+	return model
+end
 
 function ModelFactory.building(buildingType: string): Model
 	local custom = customAsset(buildingType)
@@ -9857,7 +9872,10 @@ local function buildStall(index: number)
 	local o = Grid.plotOrigin(index)
 	local x, z = o.X + 100, -16
 	local y = services.WorldService:GroundHeight(x, z)
-	local base = CFrame.new(x, y, z)
+	-- built at the origin with its counter at -Z, then turned to face the
+	-- village (+Z), where players come from
+	local world = CFrame.new(x, y, z) * CFrame.Angles(0, math.pi, 0)
+	local base = CFrame.new()
 	local model = Instance.new("Model")
 	model.Name = "TraderStall"
 	local add = ModelFactory.addPart
@@ -9881,10 +9899,32 @@ local function buildStall(index: number)
 	add(model, { Name = "Crate", Size = Vector3.new(1.6, 1.4, 1.4), CFrame = base * CFrame.new(-3, 3.7, -2.2), Color = Color3.fromRGB(150, 110, 70) })
 	add(model, { Name = "Pelts", Size = Vector3.new(2.4, 0.4, 1.4), CFrame = base * CFrame.new(0, 3.2, -2.2), Color = Color3.fromRGB(140, 96, 60), Material = Enum.Material.Fabric })
 	add(model, { Name = "Silver", Size = Vector3.new(1.2, 0.5, 1.2), CFrame = base * CFrame.new(3, 3.25, -2.2), Color = Color3.fromRGB(220, 220, 230), Material = Enum.Material.Foil })
+	-- the mesh stall, if there is one, replaces the block-built one
+	local mesh = ModelFactory.meshFor("TraderStall", model)
+	if mesh then
+		local counter = model:FindFirstChild("Counter")
+		for _, d in model:GetChildren() do
+			if d ~= counter then
+				d:Destroy()
+			end
+		end
+		-- keep an invisible counter for the trade prompt
+		if counter then
+			counter.Transparency = 1
+			counter.CanCollide = false
+		end
+		for _, d in mesh:GetChildren() do
+			d.Parent = model
+		end
+		mesh:Destroy()
+	end
+	-- Ottar stands behind the counter, looking out over it at his customers
 	local trader = ModelFactory.villager("Ottar the Trader", false, Random.new(index), "elder", 2)
 	local offset = trader:GetAttribute("GroundOffset") or 2
-	trader:PivotTo(base * CFrame.new(0, offset, 0.5) * CFrame.Angles(0, math.pi, 0))
+	trader:PivotTo(base * CFrame.new(0, offset, 0.9))
 	trader.Parent = model
+	model.WorldPivot = CFrame.new()
+	model:PivotTo(world)
 	model.Parent = workspace
 
 	local anchor = model:FindFirstChild("Counter")
@@ -17018,13 +17058,103 @@ local function aimPoint(): Vector3
 	return hit and hit.Position or ray.Origin + ray.Direction * 1000
 end
 
+-- A two-handed overhead chop: wind the arm up and back, lean in, bring it
+-- down hard, then recover. Works on the character's own shoulder and waist
+-- joints, so there's no animation to upload. Other tools get a quicker swing.
+local swinging = false
+
+local function joint(character: Model, r15: string, r15Part: string, r6: string): Motor6D?
+	local part = character:FindFirstChild(r15Part)
+	local j = part and part:FindFirstChild(r15)
+	if j and j:IsA("Motor6D") then
+		return j
+	end
+	local torso = character:FindFirstChild("Torso") or character:FindFirstChild("HumanoidRootPart")
+	j = torso and torso:FindFirstChild(r6)
+	return (j and j:IsA("Motor6D")) and j or nil
+end
+
 local function swing(tool: Tool)
-	local base = tool.Grip
-	local info = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true)
-	local t = TweenService:Create(tool, info, { Grip = base * CFrame.Angles(math.rad(-70), 0, 0) })
-	t:Play()
-	t.Completed:Wait()
-	tool.Grip = base
+	if swinging then
+		return
+	end
+	swinging = true
+	local character = player.Character
+	local heavy = tool.Name == "Axe" or tool.Name == "Pickaxe"
+	local shoulder = character and joint(character, "RightShoulder", "RightUpperArm", "Right Shoulder")
+	local waist = character and joint(character, "Waist", "UpperTorso", "RootJoint")
+	local r6 = shoulder ~= nil and shoulder.Name == "Right Shoulder"
+	-- the tool's true resting grip, remembered once, so quick clicks can never
+	-- leave it turned (that was the sideways axe)
+	local baseGrip = tool:GetAttribute("RestGrip")
+	if typeof(baseGrip) ~= "CFrame" then
+		baseGrip = tool.Grip
+		tool:SetAttribute("RestGrip", baseGrip)
+	end
+	local baseShoulder = shoulder and shoulder.C0
+	local baseWaist = waist and waist.C0
+
+	-- arm angle: how far the arm is raised forward from hanging (degrees)
+	local function arm(deg: number): CFrame?
+		if not baseShoulder then
+			return nil
+		end
+		if r6 then
+			return baseShoulder * CFrame.Angles(0, 0, math.rad(deg))
+		end
+		return baseShoulder * CFrame.Angles(math.rad(deg), 0, 0)
+	end
+	local function lean(deg: number, twist: number): CFrame?
+		if not baseWaist or r6 then
+			return baseWaist
+		end
+		return baseWaist * CFrame.Angles(math.rad(deg), math.rad(twist), 0)
+	end
+	local function step(duration: number, style: Enum.EasingStyle, dir: Enum.EasingDirection, armDeg: number, leanDeg: number, twist: number, gripDeg: number)
+		local info = TweenInfo.new(duration, style, dir)
+		local tweens = { TweenService:Create(tool, info, { Grip = baseGrip * CFrame.Angles(math.rad(gripDeg), 0, 0) }) }
+		if shoulder then
+			table.insert(tweens, TweenService:Create(shoulder, info, { C0 = arm(armDeg) }))
+		end
+		if waist and not r6 then
+			table.insert(tweens, TweenService:Create(waist, info, { C0 = lean(leanDeg, twist) }))
+		end
+		for _, t in tweens do
+			t:Play()
+		end
+		task.wait(duration)
+	end
+
+	local ok = pcall(function()
+		if heavy then
+			-- wind up: arm high and back, body turning away, blade cocked
+			step(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 165, 8, 20, 35)
+			task.wait(0.04)
+			-- the chop: fast and hard, leaning into it
+			step(0.11, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 45, -18, -10, -60)
+			task.wait(0.08)
+			-- recover
+			step(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 0, 0, 0, 0)
+		else
+			step(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 120, 4, 25, 20)
+			step(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 40, -10, -25, -50)
+			step(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, 0, 0, 0, 0)
+		end
+	end)
+	-- always put everything back exactly, even if the character changed
+	if tool.Parent then
+		tool.Grip = baseGrip
+	end
+	if shoulder and shoulder.Parent and baseShoulder then
+		shoulder.C0 = baseShoulder
+	end
+	if waist and waist.Parent and baseWaist then
+		waist.C0 = baseWaist
+	end
+	if not ok then
+		warn("[ToolController] swing failed")
+	end
+	swinging = false
 end
 
 local function hookTool(tool: Instance)
@@ -17032,6 +17162,7 @@ local function hookTool(tool: Instance)
 		return
 	end
 	tool:SetAttribute("Hooked", true)
+	tool:SetAttribute("RestGrip", tool.Grip)
 	tool.Activated:Connect(function()
 		if tool.Name == "Bow" then
 			local now = os.clock()
@@ -17044,7 +17175,7 @@ local function hookTool(tool: Instance)
 			if Config.Combat.MeleeDamage[tool.Name] then
 				Remotes.Strike:FireServer()
 			end
-			swing(tool)
+			task.spawn(swing, tool)
 		end
 	end)
 end

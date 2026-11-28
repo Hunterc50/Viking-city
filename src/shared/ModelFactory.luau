@@ -2211,7 +2211,7 @@ end
 ]]
 ModelFactory.Slots = {
 	"Longhouse", "Cottage", "Woodcutter", "Quarry", "Farm", "Storehouse", "Palisade",
-	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse",
+	"LoreHall", "Smithy", "Shrine", "Shipyard", "HuntingLodge", "GreatHall", "Watchtower", "Fishery", "Brewhouse", "TraderStall",
 	"Tree_Pine", "Tree_Spruce", "Tree_Birch", "Rock", "Bush", "Dock", "Deer",
 	"Axe", "Pickaxe", "Bow", "Torch", "Sword", "Longship",
 	"Prop_Cart", "Prop_Haystack", "Prop_FishRack", "Prop_Barrels", "Prop_Woodpile", "Prop_Banner", "Prop_BoatUpturned",
@@ -2606,6 +2606,21 @@ local partBuilt = {
 	deer = ModelFactory.deer,
 	tool = ModelFactory.tool,
 }
+
+-- The mesh for `slot`, fitted onto the block-built `reference` (built at the
+-- origin, front at -Z), or nil if there is no mesh. Lights and fires from
+-- the reference come along. The reference is left as it is.
+function ModelFactory.meshFor(slot: string, reference: Model): Model?
+	local custom = customAsset(slot)
+	if not custom then
+		return nil
+	end
+	local model = wrap(custom)
+	setAnchored(model, true)
+	fitTo(model, reference, "footprint", nil, 0)
+	model.Name = slot
+	return model
+end
 
 function ModelFactory.building(buildingType: string): Model
 	local custom = customAsset(buildingType)

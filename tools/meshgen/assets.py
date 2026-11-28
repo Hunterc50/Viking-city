@@ -510,6 +510,49 @@ def brewhouse():
     return m
 
 
+def trader_stall():
+    """Ottar's market stall: a striped awning on carved posts, a plank counter
+    facing the customers (-Z), goods and a little sign. About 9 x 6 studs."""
+    m = Mesh(47)
+    rng = m.rng
+    # posts (front pair shorter, so the awning slopes toward the customers)
+    for x, z, h in ((-4.2, -2.6, 6.6), (4.2, -2.6, 6.6), (-4.2, 2.6, 7.8), (4.2, 2.6, 7.8)):
+        add_cyl(m, (x, 0, z), (x, h, z), 0.32, shade(WOOD, 0.08, rng), 8)
+        add_cyl(m, (x, h - 0.15, z), (x, h + 0.35, z), 0.42, DARK, 8)
+    # striped awning, in slats from front to back
+    stripes = 8
+    for i in range(stripes):
+        x0 = -4.8 + i * (9.6 / stripes)
+        a = [V(x0, 6.7, -3.4), V(x0, 7.95, 3.0)]
+        b = [V(x0 + 9.6 / stripes + 0.02, 6.7, -3.4), V(x0 + 9.6 / stripes + 0.02, 7.95, 3.0)]
+        m.add(slab_between(a, b, 0.12, RED if i % 2 == 0 else CREAM, rng, 0.02))
+    # scalloped valance along the front edge
+    for i in range(stripes):
+        x = -4.8 + (i + 0.5) * (9.6 / stripes)
+        add_box(m, (x, 6.25, -3.42), (9.6 / stripes - 0.05, 0.8, 0.06), RED if i % 2 == 0 else CREAM)
+    # counter: planks on a frame, front at -Z
+    add_box(m, (0, 1.5, -2.2), (8.6, 2.8, 1.6), shade(WOOD, 0.06, rng), bevel=0.05)
+    for k in range(5):
+        add_box(m, (-3.4 + k * 1.7, 1.5, -3.02), (1.6, 2.7, 0.08), shade((104, 74, 48), 0.1, rng))
+    add_box(m, (0, 3.0, -2.2), (9.0, 0.22, 2.0), DARK)
+    # goods: a crate, furs, silver dish, a sack, fish
+    add_box(m, (-3.0, 3.8, -2.1), (1.5, 1.3, 1.3), (150, 110, 70), RY(0.2), bevel=0.06)
+    m.add(blob(0.9, (140, 96, 60), rng, 1, 0.08, 0.05, (1.4, 0.35, 0.9)), T(-0.6, 3.3, -2.2))
+    m.add(lathe([(0.0, 0.0), (0.7, 0.05), (0.8, 0.25), (0.0, 0.2)], 12, STEEL), T(1.6, 3.12, -2.3))
+    m.add(blob(0.6, (168, 150, 112), rng, 1, 0.12, 0.05, (1, 1.2, 1)), T(3.2, 3.7, -2.0))
+    # a back shelf with jars and bolts of cloth
+    add_box(m, (0, 3.6, 2.4), (8.0, 0.2, 1.0), DARK)
+    for i, rgb in enumerate((BLUE, RED, (120, 130, 70), CREAM)):
+        add_cyl(m, (-3.0 + i * 2.0, 4.0, 2.0), (-3.0 + i * 2.0, 4.0, 2.8), 0.35, rgb, 8)
+    for x in (-3.6, -2.2, 2.4, 3.6):
+        m.add(lathe([(0.3, 0), (0.42, 0.3), (0.3, 0.7), (0.18, 0.85), (0.0, 0.9)], 10, (156, 112, 70)), T(x, 3.7, 2.4))
+    # hanging sign
+    add_box(m, (3.0, 5.3, -3.0), (1.6, 0.9, 0.12), (196, 160, 80))
+    add_cyl(m, (2.5, 5.75, -3.0), (2.5, 6.6, -3.0), 0.04, IRON, 4)
+    add_cyl(m, (3.5, 5.75, -3.0), (3.5, 6.6, -3.0), 0.04, IRON, 4)
+    return m
+
+
 # ----------------------------------------------------------------------------- nature
 
 
@@ -1439,6 +1482,7 @@ ASSETS = {
     "HuntingLodge": hunting_lodge,
     "Fishery": fishery,
     "Brewhouse": brewhouse,
+    "TraderStall": trader_stall,
     "Palisade": palisade,
     "Tree_Pine": pine,
     "Tree_Spruce": spruce,

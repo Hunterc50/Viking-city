@@ -78,7 +78,10 @@ local function buildStall(index: number)
 	local o = Grid.plotOrigin(index)
 	local x, z = o.X + 100, -16
 	local y = services.WorldService:GroundHeight(x, z)
-	local base = CFrame.new(x, y, z)
+	-- built at the origin with its counter at -Z, then turned to face the
+	-- village (+Z), where players come from
+	local world = CFrame.new(x, y, z) * CFrame.Angles(0, math.pi, 0)
+	local base = CFrame.new()
 	local model = Instance.new("Model")
 	model.Name = "TraderStall"
 	local add = ModelFactory.addPart
@@ -102,10 +105,32 @@ local function buildStall(index: number)
 	add(model, { Name = "Crate", Size = Vector3.new(1.6, 1.4, 1.4), CFrame = base * CFrame.new(-3, 3.7, -2.2), Color = Color3.fromRGB(150, 110, 70) })
 	add(model, { Name = "Pelts", Size = Vector3.new(2.4, 0.4, 1.4), CFrame = base * CFrame.new(0, 3.2, -2.2), Color = Color3.fromRGB(140, 96, 60), Material = Enum.Material.Fabric })
 	add(model, { Name = "Silver", Size = Vector3.new(1.2, 0.5, 1.2), CFrame = base * CFrame.new(3, 3.25, -2.2), Color = Color3.fromRGB(220, 220, 230), Material = Enum.Material.Foil })
+	-- the mesh stall, if there is one, replaces the block-built one
+	local mesh = ModelFactory.meshFor("TraderStall", model)
+	if mesh then
+		local counter = model:FindFirstChild("Counter")
+		for _, d in model:GetChildren() do
+			if d ~= counter then
+				d:Destroy()
+			end
+		end
+		-- keep an invisible counter for the trade prompt
+		if counter then
+			counter.Transparency = 1
+			counter.CanCollide = false
+		end
+		for _, d in mesh:GetChildren() do
+			d.Parent = model
+		end
+		mesh:Destroy()
+	end
+	-- Ottar stands behind the counter, looking out over it at his customers
 	local trader = ModelFactory.villager("Ottar the Trader", false, Random.new(index), "elder", 2)
 	local offset = trader:GetAttribute("GroundOffset") or 2
-	trader:PivotTo(base * CFrame.new(0, offset, 0.5) * CFrame.Angles(0, math.pi, 0))
+	trader:PivotTo(base * CFrame.new(0, offset, 0.9))
 	trader.Parent = model
+	model.WorldPivot = CFrame.new()
+	model:PivotTo(world)
 	model.Parent = workspace
 
 	local anchor = model:FindFirstChild("Counter")
