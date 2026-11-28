@@ -192,9 +192,18 @@ Config.Buildings = {
 	},
 	Palisade = {
 		Display = "Palisade",
-		Description = "A section of sharpened-log wall. Raiders must hack through it, which slows them down. Place many in a row.",
+		Description = "Sharpened-log wall. Pieces join up by themselves into straight runs, corners and crossings. Raiders must hack through it.",
 		Size = { 1, 1 },
 		Cost = { Wood = 3 },
+		Wall = true,
+	},
+	PalisadeGate = {
+		Display = "Palisade Gate",
+		Description = "A gateway in your wall: tall posts and a carved lintel. Your people walk through; walls join onto its sides.",
+		Size = { 1, 1 },
+		Cost = { Wood = 10 },
+		Wall = true,
+		Gate = true,
 	},
 	-- Decorations: cheap, one cell, no workers. A few cheer people up a little.
 	DecorTorch = {
@@ -271,14 +280,14 @@ Config.BuildCategories = {
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
-	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "PalisadeGate", "Watchtower", "Shipyard" } },
 	{ Name = "Decorations", Icon = "🪵", Buildings = { "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", PalisadeGate = "🚪", Watchtower = "🏹", Shipyard = "⛵",
 	DecorTorch = "🔥", DecorBrazier = "🔥", DecorRuneStone = "🪨", DecorBanner = "🚩", DecorShieldRack = "🛡️", DecorTotem = "🗿", DecorAntlers = "🦌", DecorWoodpile = "🪵",
 }
 

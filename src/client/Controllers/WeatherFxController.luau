@@ -119,7 +119,7 @@ function WeatherFxController:Start()
 		end
 
 		mistBox.CFrame = CFrame.new(cam.X, math.max(2, cam.Y - 30), cam.Z)
-		mist.Rate = fog * 14
+		mist.Rate = fog * 5
 
 		if storm > 0.6 and os.clock() > nextBolt then
 			lightning()

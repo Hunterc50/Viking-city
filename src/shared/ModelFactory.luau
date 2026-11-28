@@ -818,6 +818,63 @@ function Builders.DecorWoodpile(model, _w, _d)
 	addPart(model, { Name = "Axe", Size = V3(0.15, 0.15, 2.4), CFrame = CFrame.new(2.6, 0.8, 1.5) * CFrame.Angles(math.rad(50), 0, 0), Color = Colors.Wood, CanCollide = false })
 end
 
+-- A gateway: two thick posts, a lintel with carved dragon heads, and the
+-- doors swung open. The way through runs along local Z.
+function Builders.PalisadeGate(model, w, _d)
+	local half = w / 2
+	for _, x in { -half + 0.9, half - 0.9 } do
+		post(model, V3(x, 0, 0), 10.5, 1.8, Colors.DarkWood)
+		addPart(model, { Name = "Point", Size = V3(1.25, 1.25, 1.25), CFrame = CFrame.new(x, 10.6, 0) * CFrame.Angles(math.pi / 4, 0, math.pi / 4), Color = Colors.Weathered })
+	end
+	addPart(model, { Name = "Lintel", Size = V3(w + 0.6, 1, 1.2), Position = V3(0, 9.2, 0), Color = Colors.DarkWood, Material = Enum.Material.Wood })
+	for _, x in { -1, 1 } do
+		addPart(model, { Name = "Dragon", Size = V3(0.7, 0.7, 1.6), CFrame = CFrame.new(x * (half + 0.4), 9.9, 0) * CFrame.Angles(math.rad(35), 0, 0), Color = Color3.fromRGB(150, 40, 36), Material = Enum.Material.Wood, CanCollide = false })
+		-- a door swung back against the inside of each post
+		local door = addPart(model, { Name = "Door", Size = V3(0.4, 7.5, 2.8), CFrame = CFrame.new(x * (half - 1.4), 3.9, 2.4), Color = Colors.Wood, Material = Enum.Material.WoodPlanks, CanCollide = false })
+		addPart(model, { Name = "Band", Size = V3(0.45, 0.3, 2.9), CFrame = door.CFrame * CFrame.new(0, 2, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false })
+		addPart(model, { Name = "Band", Size = V3(0.45, 0.3, 2.9), CFrame = door.CFrame * CFrame.new(0, -2, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false })
+	end
+	-- a shield over the way through
+	addPart(model, { Name = "Shield", Shape = Enum.PartType.Cylinder, Size = V3(0.25, 1.8, 1.8), CFrame = CFrame.new(0, 9.2, -0.75) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(196, 160, 80), Material = Enum.Material.Wood, CanCollide = false })
+end
+
+-- A palisade piece shaped by its neighbours: `arms` says which sides join on
+-- ({ E, W, S, N } along +X, -X, +Z, -Z). A centre log and a run of logs out to
+-- each joined side, so straight walls, corners, T's and crossings all close up.
+-- A piece with nothing beside it runs along X. Built in world axes at the origin.
+function ModelFactory.palisadeJoined(arms: { boolean }, seed: number?): Model
+	local model = Instance.new("Model")
+	model.Name = "Palisade"
+	local rng = Random.new(seed or 1)
+	local half = CELL / 2
+	local dirs = { V3(1, 0, 0), V3(-1, 0, 0), V3(0, 0, 1), V3(0, 0, -1) }
+	local any = arms[1] or arms[2] or arms[3] or arms[4]
+	local use = any and arms or { true, true, false, false }
+	local function log(at: Vector3, i: number)
+		local h = 8 + rng:NextNumber(0, 1.2)
+		post(model, at, h, 1.55, i % 2 == 0 and Colors.Wood or Colors.Weathered)
+		addPart(model, { Name = "Point", Size = V3(1.05, 1.05, 1.05), CFrame = CFrame.new(at.X, h, at.Z) * CFrame.Angles(math.pi / 4, 0, math.pi / 4), Color = Colors.Weathered })
+	end
+	log(V3(0, 0, 0), 0)
+	for k, on in use do
+		if on then
+			local dir = dirs[k]
+			-- two more logs out to the edge; the neighbour's arm meets them there
+			for i, t in { 1.6, 3.2 } do
+				log(dir * t, i + k)
+			end
+			-- tie beams along the arm, on the inside face
+			local side = V3(-dir.Z, 0, dir.X) * 0.85
+			for _, y in { 3, 6 } do
+				local mid = dir * (half / 2) + side + V3(0, y, 0)
+				addPart(model, { Name = "Beam", Size = math.abs(dir.X) > 0 and V3(half, 0.5, 0.4) or V3(0.4, 0.5, half), Position = mid, Color = Colors.DarkWood })
+			end
+		end
+	end
+	model.WorldPivot = CFrame.new()
+	return model
+end
+
 function Builders.Watchtower(model, w, d)
 	-- four tall legs, a plank deck with a railing and a little shingle roof
 	local h = 14
@@ -2898,7 +2955,7 @@ function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 	-- is solid all the way down, so it looked swamped at the keel's depth
 	local _, refSize = reference:GetBoundingBox()
 	local keel = reference:GetPivot():PointToObjectSpace(reference:GetBoundingBox().Position).Y - refSize.Y / 2
-	fitTo(model, reference, "footprint", nil, keel + 0.9)
+	fitTo(model, reference, "footprint", nil, keel + 1.8)
 	reference:Destroy()
 	return model
 end

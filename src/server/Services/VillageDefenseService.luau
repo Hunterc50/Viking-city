@@ -219,7 +219,7 @@ end
 -- A palisade in the way gets hacked down for a while (never destroyed).
 local function breach(colony, near: Vector3): boolean
 	for _, b in colony.buildings do
-		if b.type == "Palisade" and not b.breached and flat(b.center - near).Magnitude < 9 then
+		if Config.Buildings[b.type].Wall and not b.breached and flat(b.center - near).Magnitude < 9 then
 			b.breached = true
 			for _, p in b.model:GetDescendants() do
 				if p:IsA("BasePart") then

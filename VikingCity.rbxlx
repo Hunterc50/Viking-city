@@ -347,9 +347,18 @@ Config.Buildings = {
 	},
 	Palisade = {
 		Display = "Palisade",
-		Description = "A section of sharpened-log wall. Raiders must hack through it, which slows them down. Place many in a row.",
+		Description = "Sharpened-log wall. Pieces join up by themselves into straight runs, corners and crossings. Raiders must hack through it.",
 		Size = { 1, 1 },
 		Cost = { Wood = 3 },
+		Wall = true,
+	},
+	PalisadeGate = {
+		Display = "Palisade Gate",
+		Description = "A gateway in your wall: tall posts and a carved lintel. Your people walk through; walls join onto its sides.",
+		Size = { 1, 1 },
+		Cost = { Wood = 10 },
+		Wall = true,
+		Gate = true,
 	},
 	-- Decorations: cheap, one cell, no workers. A few cheer people up a little.
 	DecorTorch = {
@@ -426,14 +435,14 @@ Config.BuildCategories = {
 	{ Name = "Production", Icon = "🌾", Buildings = { "Farm", "Fishery", "Woodcutter", "Quarry", "HuntingLodge", "Storehouse" } },
 	{ Name = "Lore & Craft", Icon = "📜", Buildings = { "LoreHall", "Smithy", "Brewhouse" } },
 	{ Name = "Faith", Icon = "🔥", Buildings = { "Shrine" } },
-	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "Watchtower", "Shipyard" } },
+	{ Name = "War & Sea", Icon = "⚔️", Buildings = { "Palisade", "PalisadeGate", "Watchtower", "Shipyard" } },
 	{ Name = "Decorations", Icon = "🪵", Buildings = { "DecorTorch", "DecorBrazier", "DecorRuneStone", "DecorBanner", "DecorShieldRack", "DecorTotem", "DecorAntlers", "DecorWoodpile" } },
 }
 
 Config.BuildingIcons = {
 	Longhouse = "🏠", Cottage = "🏡", GreatHall = "🏰",
 	Farm = "🌾", Fishery = "🐟", Woodcutter = "🪓", Quarry = "⛏️", HuntingLodge = "🦌", Storehouse = "📦",
-	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", Watchtower = "🏹", Shipyard = "⛵",
+	LoreHall = "📜", Smithy = "⚒️", Brewhouse = "🍯", Shrine = "🗿", Palisade = "🛡️", PalisadeGate = "🚪", Watchtower = "🏹", Shipyard = "⛵",
 	DecorTorch = "🔥", DecorBrazier = "🔥", DecorRuneStone = "🪨", DecorBanner = "🚩", DecorShieldRack = "🛡️", DecorTotem = "🗿", DecorAntlers = "🦌", DecorWoodpile = "🪵",
 }
 
@@ -1792,6 +1801,63 @@ function Builders.DecorWoodpile(model, _w, _d)
 		end
 	end
 	addPart(model, { Name = "Axe", Size = V3(0.15, 0.15, 2.4), CFrame = CFrame.new(2.6, 0.8, 1.5) * CFrame.Angles(math.rad(50), 0, 0), Color = Colors.Wood, CanCollide = false })
+end
+
+-- A gateway: two thick posts, a lintel with carved dragon heads, and the
+-- doors swung open. The way through runs along local Z.
+function Builders.PalisadeGate(model, w, _d)
+	local half = w / 2
+	for _, x in { -half + 0.9, half - 0.9 } do
+		post(model, V3(x, 0, 0), 10.5, 1.8, Colors.DarkWood)
+		addPart(model, { Name = "Point", Size = V3(1.25, 1.25, 1.25), CFrame = CFrame.new(x, 10.6, 0) * CFrame.Angles(math.pi / 4, 0, math.pi / 4), Color = Colors.Weathered })
+	end
+	addPart(model, { Name = "Lintel", Size = V3(w + 0.6, 1, 1.2), Position = V3(0, 9.2, 0), Color = Colors.DarkWood, Material = Enum.Material.Wood })
+	for _, x in { -1, 1 } do
+		addPart(model, { Name = "Dragon", Size = V3(0.7, 0.7, 1.6), CFrame = CFrame.new(x * (half + 0.4), 9.9, 0) * CFrame.Angles(math.rad(35), 0, 0), Color = Color3.fromRGB(150, 40, 36), Material = Enum.Material.Wood, CanCollide = false })
+		-- a door swung back against the inside of each post
+		local door = addPart(model, { Name = "Door", Size = V3(0.4, 7.5, 2.8), CFrame = CFrame.new(x * (half - 1.4), 3.9, 2.4), Color = Colors.Wood, Material = Enum.Material.WoodPlanks, CanCollide = false })
+		addPart(model, { Name = "Band", Size = V3(0.45, 0.3, 2.9), CFrame = door.CFrame * CFrame.new(0, 2, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false })
+		addPart(model, { Name = "Band", Size = V3(0.45, 0.3, 2.9), CFrame = door.CFrame * CFrame.new(0, -2, 0), Color = Colors.Iron, Material = Enum.Material.Metal, CanCollide = false })
+	end
+	-- a shield over the way through
+	addPart(model, { Name = "Shield", Shape = Enum.PartType.Cylinder, Size = V3(0.25, 1.8, 1.8), CFrame = CFrame.new(0, 9.2, -0.75) * CFrame.Angles(0, math.pi / 2, 0), Color = Color3.fromRGB(196, 160, 80), Material = Enum.Material.Wood, CanCollide = false })
+end
+
+-- A palisade piece shaped by its neighbours: `arms` says which sides join on
+-- ({ E, W, S, N } along +X, -X, +Z, -Z). A centre log and a run of logs out to
+-- each joined side, so straight walls, corners, T's and crossings all close up.
+-- A piece with nothing beside it runs along X. Built in world axes at the origin.
+function ModelFactory.palisadeJoined(arms: { boolean }, seed: number?): Model
+	local model = Instance.new("Model")
+	model.Name = "Palisade"
+	local rng = Random.new(seed or 1)
+	local half = CELL / 2
+	local dirs = { V3(1, 0, 0), V3(-1, 0, 0), V3(0, 0, 1), V3(0, 0, -1) }
+	local any = arms[1] or arms[2] or arms[3] or arms[4]
+	local use = any and arms or { true, true, false, false }
+	local function log(at: Vector3, i: number)
+		local h = 8 + rng:NextNumber(0, 1.2)
+		post(model, at, h, 1.55, i % 2 == 0 and Colors.Wood or Colors.Weathered)
+		addPart(model, { Name = "Point", Size = V3(1.05, 1.05, 1.05), CFrame = CFrame.new(at.X, h, at.Z) * CFrame.Angles(math.pi / 4, 0, math.pi / 4), Color = Colors.Weathered })
+	end
+	log(V3(0, 0, 0), 0)
+	for k, on in use do
+		if on then
+			local dir = dirs[k]
+			-- two more logs out to the edge; the neighbour's arm meets them there
+			for i, t in { 1.6, 3.2 } do
+				log(dir * t, i + k)
+			end
+			-- tie beams along the arm, on the inside face
+			local side = V3(-dir.Z, 0, dir.X) * 0.85
+			for _, y in { 3, 6 } do
+				local mid = dir * (half / 2) + side + V3(0, y, 0)
+				addPart(model, { Name = "Beam", Size = math.abs(dir.X) > 0 and V3(half, 0.5, 0.4) or V3(0.4, 0.5, half), Position = mid, Color = Colors.DarkWood })
+			end
+		end
+	end
+	model.WorldPivot = CFrame.new()
+	return model
 end
 
 function Builders.Watchtower(model, w, d)
@@ -3874,7 +3940,7 @@ function ModelFactory.longship(length: number?, sailColor: Color3?): Model
 	-- is solid all the way down, so it looked swamped at the keel's depth
 	local _, refSize = reference:GetBoundingBox()
 	local keel = reference:GetPivot():PointToObjectSpace(reference:GetBoundingBox().Position).Y - refSize.Y / 2
-	fitTo(model, reference, "footprint", nil, keel + 0.9)
+	fitTo(model, reference, "footprint", nil, keel + 1.8)
 	reference:Destroy()
 	return model
 end
@@ -5050,7 +5116,9 @@ local function launch(player: Player, dockIndex: number)
 	seat.Size = Vector3.new(2, 0.6, 2)
 	seat.Color = Color3.fromRGB(90, 64, 44)
 	seat.Material = Enum.Material.Wood
-	seat.CFrame = start * CFrame.new(0, 0.2, kind.length * 0.32)
+	-- on the deck: a mesh hull rides higher than the block-built one
+	local deckY = ship.model:FindFirstChildWhichIsA("MeshPart", true) and 1.1 or 0.2
+	seat.CFrame = start * CFrame.new(0, deckY, kind.length * 0.32)
 	seat:SetAttribute("Boat", true)
 	seat.Parent = ship.model
 	ship.seat = seat
@@ -5227,6 +5295,67 @@ local function raiseUp(model: Model, finalCFrame: CFrame)
 end
 
 -- Creates the building without any checks or cost. Returns the building record.
+-- Walls -------------------------------------------------------------------------
+-- Palisade pieces join their neighbours (walls and gates) into one closed wall.
+
+local SIDES = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } -- E, W, S, N in cells
+
+local function wallAt(colony, cx: number, cz: number)
+	for _, b in colony.buildings do
+		if b.cx == cx and b.cz == cz and Config.Buildings[b.type].Wall then
+			return b
+		end
+	end
+	return nil
+end
+
+-- Does the piece `b` join onto whatever is on side `k`?
+local function joins(colony, b, k: number): boolean
+	local n = wallAt(colony, b.cx + SIDES[k][1], b.cz + SIDES[k][2])
+	if not n then
+		return false
+	end
+	if Config.Buildings[n.type].Gate then
+		-- a gate takes walls only on its post sides, never across the way through
+		return (n.rot % 2 == 0) == (k <= 2)
+	end
+	return true
+end
+
+local function reshapeWall(colony, b)
+	if b.type ~= "Palisade" or not b.model.Parent then
+		return
+	end
+	local arms = { joins(colony, b, 1), joins(colony, b, 2), joins(colony, b, 3), joins(colony, b, 4) }
+	local fresh = ModelFactory.palisadeJoined(arms, b.id)
+	fresh:PivotTo(CFrame.new(b.center))
+	for _, child in b.model:GetChildren() do
+		if child:IsA("BasePart") or child:IsA("Model") then
+			child:Destroy()
+		end
+	end
+	for _, child in fresh:GetChildren() do
+		child.Parent = b.model
+	end
+	fresh:Destroy()
+	b.model.WorldPivot = CFrame.new(b.center)
+	services.SeasonService:ApplyTo(b.model)
+end
+
+-- Reshapes the wall at a cell and the four around it.
+local function refreshWallsAround(colony, cx: number, cz: number)
+	local here = wallAt(colony, cx, cz)
+	if here then
+		reshapeWall(colony, here)
+	end
+	for _, side in SIDES do
+		local n = wallAt(colony, cx + side[1], cz + side[2])
+		if n then
+			reshapeWall(colony, n)
+		end
+	end
+end
+
 function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number, animate: boolean?)
 	local ColonyService = services.ColonyService
 	local sx, sz = Grid.footprint(buildingType, rot)
@@ -5240,13 +5369,13 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
 	model:PivotTo(finalCFrame)
 	-- clear and level the ground under it (palisades are too small to bother)
-	if buildingType ~= "Palisade" and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
+	if not Config.Buildings[buildingType].Wall and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
 		services.WorldService:LevelUnder(finalCFrame, sx * Config.CELL, sz * Config.CELL)
 	end
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
 	services.ClanService:Apply(colony, model) -- banners in the clan's colours
 	model.Parent = colony.plot.Buildings
-	if animate then
+	if animate and not Config.Buildings[buildingType].Wall then
 		raiseUp(model, finalCFrame)
 	end
 
@@ -5266,6 +5395,9 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	Grid.eachCell(cx, cz, sx, sz, function(x, z)
 		ColonyService:Block(colony, x, z, "building")
 	end)
+	if Config.Buildings[buildingType].Wall then
+		refreshWallsAround(colony, cx, cz)
+	end
 	return building
 end
 
@@ -5348,6 +5480,9 @@ function BuildingService:TryDemolish(player: Player, id)
 		ColonyService:Add(colony, name, math.floor(amount * Config.DemolishRefund))
 	end
 	services.VillagerService:OnBuildingRemoved(colony, id)
+	if def.Wall then
+		refreshWallsAround(colony, building.cx, building.cz)
+	end
 	ColonyService:Sync(colony)
 	return true, def.Display .. " demolished"
 end
@@ -7999,7 +8134,7 @@ local function counts(colony)
 		pop += 1
 	end
 	for _, b in colony.buildings do
-		if b.type ~= "Palisade" and not Config.Buildings[b.type].Decor then
+		if not Config.Buildings[b.type].Wall and not Config.Buildings[b.type].Decor then
 			buildings += 1
 		end
 	end
@@ -10377,7 +10512,7 @@ end
 -- A palisade in the way gets hacked down for a while (never destroyed).
 local function breach(colony, near: Vector3): boolean
 	for _, b in colony.buildings do
-		if b.type == "Palisade" and not b.breached and flat(b.center - near).Magnitude < 9 then
+		if Config.Buildings[b.type].Wall and not b.breached and flat(b.center - near).Magnitude < 9 then
 			b.breached = true
 			for _, p in b.model:GetDescendants() do
 				if p:IsA("BasePart") then
@@ -12862,7 +12997,9 @@ local function buildTerrain()
 							occ = (h - y0) / VOXEL
 							mat = surface
 						elseif y0 + VOXEL <= wrow[k] + 0.01 then
-							occ = 1
+							-- the top layer of water is only partly full, so the surface
+							-- sits a little below 0: ships ride high and jetties stay dry
+							occ = (y0 + VOXEL > wrow[k] - VOXEL + 0.01) and 0.6 or 1
 							mat = M.Water
 						else
 							occ = 0
@@ -13179,8 +13316,8 @@ local function dayNightCycle()
 			atmosphere.Color = Color3.fromRGB(184, 196, 210):Lerp(Color3.fromRGB(214, 176, 140), golden * 0.35):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
 			atmosphere.Decay = Color3.fromRGB(88, 102, 124):Lerp(Color3.fromRGB(150, 158, 168), fog)
 			-- blue-grey haze that swallows the far mountains, thicker in winter
-			atmosphere.Haze = 2.3 + golden * 0.5 - night * 0.6 + winter * 0.6 + fog * 2.4 + storm * 1.2
-			atmosphere.Density = 0.43 + winter * 0.06 + fog * 0.4 + storm * 0.16
+			atmosphere.Haze = 2.1 + golden * 0.5 - night * 0.6 + winter * 0.4 + fog * 1.0 + storm * 0.6
+			atmosphere.Density = 0.36 + winter * 0.04 + fog * 0.14 + storm * 0.08 -- fog is a veil, never a wall
 		end
 		Lighting.OutdoorAmbient = Color3.fromRGB(116, 122, 134):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
 		Lighting.Brightness = 2.6 * (1 - storm * 0.45 - fog * 0.2)
@@ -13205,12 +13342,12 @@ local function setupLighting()
 	Lighting.GlobalShadows = true
 
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.43
+	atmosphere.Density = 0.36
 	atmosphere.Offset = 0.25
 	atmosphere.Color = Color3.fromRGB(184, 196, 210)
 	atmosphere.Decay = Color3.fromRGB(88, 102, 124)
 	atmosphere.Glare = 0.2
-	atmosphere.Haze = 2.3
+	atmosphere.Haze = 2.1
 	atmosphere.Parent = Lighting
 
 	local sky = Instance.new("Sky")
@@ -13356,7 +13493,7 @@ end
 
 -- Bump this whenever the valley's shape changes, so an old valley saved into
 -- the place file is rebuilt instead of fighting the new layout.
-local WORLD_VERSION = 3
+local WORLD_VERSION = 4
 
 -- Does a valley saved into the place still fit this version's layout?
 local function bakedValleyFits(): boolean
@@ -16836,8 +16973,8 @@ function SeasonFxController:Start()
 			local dusk = math.clamp(1 - math.abs(clock - 20.5) / 2, 0, 1) * 0.5
 			local fog = workspace:GetAttribute("FogLevel") or 0
 			local autumn = workspace:GetAttribute("Season") == "Autumn" and 0.3 or 0
-			local high = math.clamp((cam.Y - 60) / 120, 0, 1) -- from high up it would only blur the view
-			mist.Rate = math.max(dawn, dusk, fog, autumn) * 10 * (1 - high)
+			local high = math.clamp((cam.Y - 30) / 60, 0, 1) -- from high up it would only blur the view
+			mist.Rate = math.max(dawn, dusk, fog * 0.6, autumn) * 5 * (1 - high)
 		end
 	end)
 end
@@ -18186,7 +18323,7 @@ function WeatherFxController:Start()
 		end
 
 		mistBox.CFrame = CFrame.new(cam.X, math.max(2, cam.Y - 30), cam.Z)
-		mist.Rate = fog * 14
+		mist.Rate = fog * 5
 
 		if storm > 0.6 and os.clock() > nextBolt then
 			lightning()

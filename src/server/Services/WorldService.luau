@@ -475,7 +475,9 @@ local function buildTerrain()
 							occ = (h - y0) / VOXEL
 							mat = surface
 						elseif y0 + VOXEL <= wrow[k] + 0.01 then
-							occ = 1
+							-- the top layer of water is only partly full, so the surface
+							-- sits a little below 0: ships ride high and jetties stay dry
+							occ = (y0 + VOXEL > wrow[k] - VOXEL + 0.01) and 0.6 or 1
 							mat = M.Water
 						else
 							occ = 0
@@ -792,8 +794,8 @@ local function dayNightCycle()
 			atmosphere.Color = Color3.fromRGB(184, 196, 210):Lerp(Color3.fromRGB(214, 176, 140), golden * 0.35):Lerp(Color3.fromRGB(70, 80, 110), night):Lerp(Color3.fromRGB(196, 202, 206), fog * (1 - night * 0.7)):Lerp(Color3.fromRGB(96, 104, 114), storm * (1 - night * 0.5))
 			atmosphere.Decay = Color3.fromRGB(88, 102, 124):Lerp(Color3.fromRGB(150, 158, 168), fog)
 			-- blue-grey haze that swallows the far mountains, thicker in winter
-			atmosphere.Haze = 2.3 + golden * 0.5 - night * 0.6 + winter * 0.6 + fog * 2.4 + storm * 1.2
-			atmosphere.Density = 0.43 + winter * 0.06 + fog * 0.4 + storm * 0.16
+			atmosphere.Haze = 2.1 + golden * 0.5 - night * 0.6 + winter * 0.4 + fog * 1.0 + storm * 0.6
+			atmosphere.Density = 0.36 + winter * 0.04 + fog * 0.14 + storm * 0.08 -- fog is a veil, never a wall
 		end
 		Lighting.OutdoorAmbient = Color3.fromRGB(116, 122, 134):Lerp(Color3.fromRGB(60, 66, 92), night):Lerp(Color3.fromRGB(100, 104, 110), storm * 0.6)
 		Lighting.Brightness = 2.6 * (1 - storm * 0.45 - fog * 0.2)
@@ -818,12 +820,12 @@ local function setupLighting()
 	Lighting.GlobalShadows = true
 
 	local atmosphere = Instance.new("Atmosphere")
-	atmosphere.Density = 0.43
+	atmosphere.Density = 0.36
 	atmosphere.Offset = 0.25
 	atmosphere.Color = Color3.fromRGB(184, 196, 210)
 	atmosphere.Decay = Color3.fromRGB(88, 102, 124)
 	atmosphere.Glare = 0.2
-	atmosphere.Haze = 2.3
+	atmosphere.Haze = 2.1
 	atmosphere.Parent = Lighting
 
 	local sky = Instance.new("Sky")
@@ -969,7 +971,7 @@ end
 
 -- Bump this whenever the valley's shape changes, so an old valley saved into
 -- the place file is rebuilt instead of fighting the new layout.
-local WORLD_VERSION = 3
+local WORLD_VERSION = 4
 
 -- Does a valley saved into the place still fit this version's layout?
 local function bakedValleyFits(): boolean

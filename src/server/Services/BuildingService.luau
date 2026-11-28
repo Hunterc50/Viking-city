@@ -57,6 +57,67 @@ local function raiseUp(model: Model, finalCFrame: CFrame)
 end
 
 -- Creates the building without any checks or cost. Returns the building record.
+-- Walls -------------------------------------------------------------------------
+-- Palisade pieces join their neighbours (walls and gates) into one closed wall.
+
+local SIDES = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } -- E, W, S, N in cells
+
+local function wallAt(colony, cx: number, cz: number)
+	for _, b in colony.buildings do
+		if b.cx == cx and b.cz == cz and Config.Buildings[b.type].Wall then
+			return b
+		end
+	end
+	return nil
+end
+
+-- Does the piece `b` join onto whatever is on side `k`?
+local function joins(colony, b, k: number): boolean
+	local n = wallAt(colony, b.cx + SIDES[k][1], b.cz + SIDES[k][2])
+	if not n then
+		return false
+	end
+	if Config.Buildings[n.type].Gate then
+		-- a gate takes walls only on its post sides, never across the way through
+		return (n.rot % 2 == 0) == (k <= 2)
+	end
+	return true
+end
+
+local function reshapeWall(colony, b)
+	if b.type ~= "Palisade" or not b.model.Parent then
+		return
+	end
+	local arms = { joins(colony, b, 1), joins(colony, b, 2), joins(colony, b, 3), joins(colony, b, 4) }
+	local fresh = ModelFactory.palisadeJoined(arms, b.id)
+	fresh:PivotTo(CFrame.new(b.center))
+	for _, child in b.model:GetChildren() do
+		if child:IsA("BasePart") or child:IsA("Model") then
+			child:Destroy()
+		end
+	end
+	for _, child in fresh:GetChildren() do
+		child.Parent = b.model
+	end
+	fresh:Destroy()
+	b.model.WorldPivot = CFrame.new(b.center)
+	services.SeasonService:ApplyTo(b.model)
+end
+
+-- Reshapes the wall at a cell and the four around it.
+local function refreshWallsAround(colony, cx: number, cz: number)
+	local here = wallAt(colony, cx, cz)
+	if here then
+		reshapeWall(colony, here)
+	end
+	for _, side in SIDES do
+		local n = wallAt(colony, cx + side[1], cz + side[2])
+		if n then
+			reshapeWall(colony, n)
+		end
+	end
+end
+
 function BuildingService:Create(colony, buildingType: string, cx: number, cz: number, rot: number, animate: boolean?)
 	local ColonyService = services.ColonyService
 	local sx, sz = Grid.footprint(buildingType, rot)
@@ -70,13 +131,13 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	local finalCFrame = Grid.buildingCFrame(colony.origin, cx, cz, sx, sz, rot)
 	model:PivotTo(finalCFrame)
 	-- clear and level the ground under it (palisades are too small to bother)
-	if buildingType ~= "Palisade" and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
+	if not Config.Buildings[buildingType].Wall and not Config.Buildings[buildingType].Decor and services.WorldService.LevelUnder then
 		services.WorldService:LevelUnder(finalCFrame, sx * Config.CELL, sz * Config.CELL)
 	end
 	services.SeasonService:ApplyTo(model) -- e.g. snow on the roof in winter
 	services.ClanService:Apply(colony, model) -- banners in the clan's colours
 	model.Parent = colony.plot.Buildings
-	if animate then
+	if animate and not Config.Buildings[buildingType].Wall then
 		raiseUp(model, finalCFrame)
 	end
 
@@ -96,6 +157,9 @@ function BuildingService:Create(colony, buildingType: string, cx: number, cz: nu
 	Grid.eachCell(cx, cz, sx, sz, function(x, z)
 		ColonyService:Block(colony, x, z, "building")
 	end)
+	if Config.Buildings[buildingType].Wall then
+		refreshWallsAround(colony, cx, cz)
+	end
 	return building
 end
 
@@ -178,6 +242,9 @@ function BuildingService:TryDemolish(player: Player, id)
 		ColonyService:Add(colony, name, math.floor(amount * Config.DemolishRefund))
 	end
 	services.VillagerService:OnBuildingRemoved(colony, id)
+	if def.Wall then
+		refreshWallsAround(colony, building.cx, building.cz)
+	end
 	ColonyService:Sync(colony)
 	return true, def.Display .. " demolished"
 end

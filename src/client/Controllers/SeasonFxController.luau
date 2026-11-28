@@ -176,8 +176,8 @@ function SeasonFxController:Start()
 			local dusk = math.clamp(1 - math.abs(clock - 20.5) / 2, 0, 1) * 0.5
 			local fog = workspace:GetAttribute("FogLevel") or 0
 			local autumn = workspace:GetAttribute("Season") == "Autumn" and 0.3 or 0
-			local high = math.clamp((cam.Y - 60) / 120, 0, 1) -- from high up it would only blur the view
-			mist.Rate = math.max(dawn, dusk, fog, autumn) * 10 * (1 - high)
+			local high = math.clamp((cam.Y - 30) / 60, 0, 1) -- from high up it would only blur the view
+			mist.Rate = math.max(dawn, dusk, fog * 0.6, autumn) * 5 * (1 - high)
 		end
 	end)
 end

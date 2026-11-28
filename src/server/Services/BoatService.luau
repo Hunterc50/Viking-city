@@ -479,7 +479,9 @@ local function launch(player: Player, dockIndex: number)
 	seat.Size = Vector3.new(2, 0.6, 2)
 	seat.Color = Color3.fromRGB(90, 64, 44)
 	seat.Material = Enum.Material.Wood
-	seat.CFrame = start * CFrame.new(0, 0.2, kind.length * 0.32)
+	-- on the deck: a mesh hull rides higher than the block-built one
+	local deckY = ship.model:FindFirstChildWhichIsA("MeshPart", true) and 1.1 or 0.2
+	seat.CFrame = start * CFrame.new(0, deckY, kind.length * 0.32)
 	seat:SetAttribute("Boat", true)
 	seat.Parent = ship.model
 	ship.seat = seat
