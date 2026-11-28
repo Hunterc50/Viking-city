@@ -35,13 +35,20 @@ function WildlandsService:Init(all)
 	services = all
 end
 
+local adopt
+
 local function flat(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
 end
 
+-- Everything behind the plot fences is wild land anyone may harvest.
+local _, _, _, LAND_MAX_Z = Grid.maxBounds()
+local HARVEST_MIN_Z = LAND_MAX_Z * Config.CELL + 16
+local HARVEST_MAX_Z = 620
+
 -- True if (x, z) is in the wildlands.
 function WildlandsService:InWild(pos: Vector3): boolean
-	return pos.Z >= WL.MinZ and pos.Z <= WL.MaxZ and pos.X >= MIN_X and pos.X <= MAX_X
+	return pos.Z >= HARVEST_MIN_Z and pos.Z <= HARVEST_MAX_Z and pos.X >= MIN_X and pos.X <= MAX_X
 end
 
 -- A spot on open, walkable ground in the wildlands (not water, cliff or snow).
@@ -106,6 +113,24 @@ local function spawnNode(kind: string)
 	nodes[model] = { model = model, main = main, kind = kind == "Tree" and "Tree" or "Rock", vein = kind == "Vein", hp = hits, maxHp = hits }
 end
 
+-- The forest and boulders that the world grew behind the plots become
+-- harvestable too, so every tree out there can be chopped.
+local SCENERY_KINDS = { Pine = "Tree", Spruce = "Tree", Birch = "Tree", Boulder = "Rock" }
+adopt = function(model: Instance)
+	local kind = model:IsA("Model") and SCENERY_KINDS[model.Name]
+	if not kind or nodes[model] then
+		return
+	end
+	if not WildlandsService:InWild(model:GetPivot().Position) then
+		return
+	end
+	local main = model:FindFirstChild("Trunk") or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+	local hits = kind == "Tree" and 6 or 7
+	model:SetAttribute("NodeKind", kind)
+	model:SetAttribute("Wild", true)
+	nodes[model] = { model = model, main = main, kind = kind, vein = false, hp = hits, maxHp = hits, scenery = true }
+end
+
 local function harvest(colony, node)
 	local ColonyService = services.ColonyService
 	local got = {}
@@ -127,9 +152,16 @@ local function harvest(colony, node)
 	services.QuestService:Count(colony, node.kind == "Tree" and "chop" or "mine")
 	ColonyService:Notify(colony, (node.vein and "A silver vein! " or "") .. "+" .. Grid.costText(got), "gain")
 	ColonyService:Sync(colony)
-	-- it grows back, somewhere in the wilds
+	-- it grows back: scenery where it stood, our own nodes somewhere in the wilds
+	local regrow = node.scenery and node.model:Clone()
+	local parent = node.model.Parent
 	task.delay(WL.RegrowSeconds, function()
-		spawnNode(node.vein and "Vein" or node.kind)
+		if regrow then
+			regrow.Parent = parent
+			adopt(regrow)
+		else
+			spawnNode(node.vein and "Vein" or node.kind)
+		end
 	end)
 end
 
@@ -423,6 +455,13 @@ function WildlandsService:Start()
 	folder.Parent = workspace
 	-- wait for the valley to be built before looking for ground
 	task.wait(2)
+	local scenery = workspace:WaitForChild("Scenery", 60)
+	if scenery then
+		for _, model in scenery:GetChildren() do
+			adopt(model)
+		end
+		scenery.ChildAdded:Connect(adopt)
+	end
 	for _ = 1, WL.Trees do
 		spawnNode("Tree")
 	end
@@ -476,7 +515,7 @@ function WildlandsService:Start()
 				if colony then
 					services.ColonyService:Notify(colony, "You enter the wildlands. Rich timber, stone and silver here, but beware bandits, wolves and bears!", "raid")
 				end
-			elseif not inside and warned[player] and root and root.Position.Z < WL.MinZ - 60 then
+			elseif not inside and warned[player] and root and root.Position.Z < HARVEST_MIN_Z - 20 then
 				warned[player] = nil
 			end
 		end
